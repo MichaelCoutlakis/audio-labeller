@@ -42,7 +42,8 @@ public:
     using imgui_app::imgui_app;
 
 private:
-    project_model m_project;
+    project_model m_project{project_config{}};
+    app_state m_app_state;
 
     file_list_view m_file_list;
     waveform_view m_waveform;

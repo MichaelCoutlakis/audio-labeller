@@ -2,13 +2,4 @@
  * SPDX-License-Identifier: MIT
  * SPDX-FileCopyrightText: 2026 Michael Coutlakis
  *****************************************************************************/
-#include "../model/project_model.h"
-#include "../app/app_state.h"
-
-class file_list_view
-{
-public:
-    void render(project_model &project, app_state &state);
-
-    std::string m_window_name{"File List View"};
-};
+#include "app_state.h"

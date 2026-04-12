@@ -13,7 +13,7 @@ void audio_labeller_app::on_frame()
 {
     render_main_dockspace();
 
-    m_file_list.render(m_project);
+    m_file_list.render(m_project, m_app_state);
 
     m_waveform.render(m_project);
     m_applied_labels.render(m_project);
