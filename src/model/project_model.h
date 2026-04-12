@@ -63,7 +63,7 @@ struct project_config
     static project_config parse_from_file(std::string filename);
 
     std::vector<std::filesystem::path> m_wav_paths{
-        std::filesystem::current_path()}; //!< Directories to scan for wav files
+        std::filesystem::current_path() / "../../../../"}; //!< Directories to scan for wav files
     std::filesystem::path m_label_path;   //!< Path for pre-saved labels / labelling directory
 };
 
@@ -71,6 +71,7 @@ struct audio_file_entry
 {
     std::filesystem::path m_path;
 };
+
 class project_model
 {
 public:

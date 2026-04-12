@@ -6,7 +6,8 @@
 
 #include "backends/imgui_impl_opengl3.h"
 #include "backends/imgui_impl_sdl3.h"
-#include "imgui.h"
+#include <imgui.h>
+#include <implot.h>
 
 #include <stdexcept>
 
@@ -56,6 +57,8 @@ void imgui_app::init_imgui()
 {
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
+    if(m_config.m_bImPlotContext)
+        ImPlot::CreateContext();
 
     auto &io = ImGui::GetIO();
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
@@ -135,6 +138,8 @@ void imgui_app::shutdown()
 {
     ImGui_ImplOpenGL3_Shutdown();
     ImGui_ImplSDL3_Shutdown();
+    if(m_config.m_bImPlotContext)
+        ImPlot::DestroyContext();
     ImGui::DestroyContext();
 
     SDL_GL_DestroyContext(m_gl_context);

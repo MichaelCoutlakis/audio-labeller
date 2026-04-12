@@ -15,7 +15,7 @@ void audio_labeller_app::on_frame()
 
     m_file_list.render(m_project, m_app_state);
 
-    m_waveform.render(m_project);
+    m_waveform.render(m_project, m_app_state);
     m_applied_labels.render(m_project);
     m_label_controls.render(m_project);
 }

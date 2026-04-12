@@ -11,12 +11,13 @@
 /// App configuration, \sa imgui_app
 struct app_config
 {
-    std::string title{"ImGui Ap"};
+    std::string title{"ImGui App"};
     int m_width = 1600;
     int m_height = 900;
     bool m_docking = true;
     bool m_viewports = false;
     bool m_vsync = true;
+    bool m_bImPlotContext{true};
 };
 
 /// A generic ImGui app to hide the boiler-plate

@@ -19,18 +19,17 @@ void file_list_view::render(project_model &project, app_state &state)
     {
         for(auto &file : project.get_files())
         {
-            bool is_selected =
-                state.m_active_file.has_value() && state.m_active_file.value() == file.m_path;
-
+            bool is_selected = state.is_selected_file(file.m_path);
             ImGui::Selectable(file.m_path.string().c_str(), &is_selected);
 
-            // TODO: If selection changed, clear selected labels, etc
-
             if(is_selected)
-                state.m_active_file = file.m_path;
+                state.set_selected_file(file.m_path);
         }
         ImGui::EndListBox();
     }
     ImGui::PopItemWidth();
+
+    if(ImGui::Button("Rescan files"))
+        project.rescan_files();
     ImGui::End();
 }

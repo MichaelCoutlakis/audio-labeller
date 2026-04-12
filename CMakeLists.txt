@@ -37,6 +37,9 @@ find_package(OpenGL REQUIRED)
 # Nlohmann::json
 find_package(nlohmann_json CONFIG REQUIRED)
 
+# AudioFile
+find_package(AudioFile CONFIG REQUIRED)
+
 ################################################################################
 # Dependencies which are managed as submodules:
 ################################################################################
