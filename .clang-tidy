@@ -1,0 +1,25 @@
+Checks: >
+  readability-identifier-naming
+CheckOptions:
+  # General variable naming
+  - { key: readability-identifier-naming.VariableCase,         value: snake_case }
+
+  # Member variable naming
+  - { key: readability-identifier-naming.MemberCase,           value: snake_case }
+  - { key: readability-identifier-naming.MemberPrefix,         value: m_ }
+
+  # Static member variable naming
+  - { key: readability-identifier-naming.StaticMemberCase,     value: snake_case }
+  - { key: readability-identifier-naming.StaticMemberPrefix,   value: ms_ }
+
+  # Function naming (optional)
+  - { key: readability-identifier-naming.FunctionCase,         value: snake_case }
+
+  # Constant naming (optional)
+  - { key: readability-identifier-naming.ConstantCase,         value: lower_case }
+
+  # Local variable naming (optional; can override VariableCase)
+  - { key: readability-identifier-naming.LocalVariableCase,    value: snake_case }
+
+  # Private member variables only
+  - { key: readability-identifier-naming.PrivateMemberPrefix,  value: m_ }

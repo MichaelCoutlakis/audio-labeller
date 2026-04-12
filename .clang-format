@@ -1,0 +1,39 @@
+BasedOnStyle:                               WebKit
+
+AlignTrailingComments:                      true
+AlignAfterOpenBracket: DontAlign
+
+
+# Constructor() : newline (set false to get this)
+
+BreakConstructorInitializers: AfterColon
+PackConstructorInitializers: NextLineOnly
+ColumnLimit:                                100
+
+NamespaceIndentation:                       None
+PointerBindsToType:                         false
+Standard:                                   Cpp11
+BreakBeforeBinaryOperators:                 false
+BreakBeforeBraces:                          Allman
+IndentCaseLabels:                           false
+IndentWidth: 4
+Cpp11BracedListStyle:                       true
+#PenaltyBreakContainer: 0
+BinPackArguments: false
+
+# AfterAssignment: Puts the { on a new line after =
+BraceWrapping:
+  #AfterInitializerList: false
+  SplitEmptyRecord: false
+  SplitEmptyFunction: false
+  SplitEmptyNamespace: false
+
+SpaceBeforeCpp11BracedList:                 false
+SpaceBeforeParens : Never
+
+AlwaysBreakTemplateDeclarations:            Yes
+
+# Allow short stuff on single lines:
+AllowShortBlocksOnASingleLine:               true
+AllowShortLambdasOnASingleLine:             All
+AllowShortCaseLabelsOnASingleLine:           true
