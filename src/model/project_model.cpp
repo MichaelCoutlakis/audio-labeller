@@ -27,7 +27,10 @@ void project_model::rescan_files()
 }
 
 label_id project_model::add_label(
-    const std::filesystem::path &file, double start_s, double stop_s, std::string name)
+    const std::filesystem::path &file,
+    double start_s,
+    double stop_s,
+    std::string name)
 {
     return label_id();
 }

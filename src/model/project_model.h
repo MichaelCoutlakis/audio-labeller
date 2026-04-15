@@ -44,19 +44,7 @@ struct waveform_envelope
 
 using time_span = std::pair<double, double>;
 
-struct waveform_interaction
-{
-    void begin_drag(double time_s);
-    void update_drag(double time_s);
-    void end_drag();
 
-    bool is_dragging() const { return m_dragging; }
-
-private:
-    bool m_dragging{false};
-    double m_drag_start{};
-    double m_drag_current{};
-};
 
 struct project_config
 {
@@ -64,7 +52,7 @@ struct project_config
 
     std::vector<std::filesystem::path> m_wav_paths{
         std::filesystem::current_path() / "../../../../"}; //!< Directories to scan for wav files
-    std::filesystem::path m_label_path;   //!< Path for pre-saved labels / labelling directory
+    std::filesystem::path m_label_path; //!< Path for pre-saved labels / labelling directory
 };
 
 struct audio_file_entry
@@ -83,7 +71,11 @@ public:
     const std::vector<audio_file_entry> &get_files() const { return m_files; }
 
     label_id add_label(
-        const std::filesystem::path &file, double start_s, double stop_s, std::string name);
+        const std::filesystem::path &file,
+        double start_s,
+        double stop_s,
+        std::string name);
+
     void remove_label(const std::filesystem::path &file, label_id id);
 
 private:

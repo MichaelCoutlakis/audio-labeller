@@ -2,11 +2,13 @@
  * SPDX-License-Identifier: MIT
  * SPDX-FileCopyrightText: 2026 Michael Coutlakis
  *****************************************************************************/
-#include "app_state.h"
+#include <algorithm>
 #include <iostream>
 #include <stdexcept>
 
 #include <AudioFile/AudioFile.h>
+
+#include "app_state.h"
 
 audio_buffer load_audio(const std::filesystem::path &path)
 {
@@ -44,4 +46,50 @@ void app_state::set_selected_file(const std::filesystem::path &path)
     m_active_audio = load_audio(path);
     m_active_file = path;
     std::cout << "Loaded " << path.string() << ", SR = " << m_active_audio.m_sample_rate_hz << "\n";
+
+    m_audio_min_max_map = audio_min_max_pyramid_map(m_active_audio);
+}
+
+const audio_min_max_level *app_state::get_audio_min_max_level(size_t samples_per_px)
+{
+    return m_audio_min_max_map.get_level(samples_per_px);
+}
+
+audio_min_max_pyramid_map::audio_min_max_pyramid_map(const audio_buffer &buffer)
+{
+    for(size_t samples_per_bin = std::min<size_t>(64U, buffer.num_frames());
+        samples_per_bin < buffer.num_frames();
+        samples_per_bin *= 4)
+    {
+        audio_min_max_level lvl{samples_per_bin};
+        const size_t num_bins = (buffer.num_frames() + samples_per_bin - 1U) / samples_per_bin;
+
+        lvl.m_max_vals.resize(num_bins);
+        lvl.m_min_vals.resize(num_bins);
+        lvl.m_bin_times.resize(num_bins);
+
+        for(size_t bin = 0U; bin != num_bins; ++bin)
+        {
+            const size_t start = bin * samples_per_bin;
+            const size_t end = std::min(start + samples_per_bin, buffer.num_frames());
+
+            auto it =
+                std::minmax_element(buffer.m_samples.data() + start, buffer.m_samples.data() + end);
+
+            lvl.m_min_vals[bin] = *it.first;
+            lvl.m_max_vals[bin] = *it.second;
+            lvl.m_bin_times[bin] = float(samples_per_bin * bin) / buffer.m_sample_rate_hz;
+        }
+        m_levels.push_back(std::move(lvl));
+    }
+}
+
+const audio_min_max_level *audio_min_max_pyramid_map::get_level(size_t samples_per_px) const
+{
+    if(m_levels.empty())
+        return nullptr;
+    for(auto &lvl : m_levels)
+        if(lvl.m_samples_per_bin >= samples_per_px)
+            return &lvl;
+    return &m_levels.back();
 }
