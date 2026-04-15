@@ -10,19 +10,6 @@
 #include "../views/label_controls_view.h"
 #include "../views/waveform_view.h"
 
-class label_control_view
-{
-public:
-    void render(project_model &project)
-    {
-        ImGui::Begin(m_window_name.c_str());
-        ImGui::Button("This is the label controls view");
-        ImGui::End();
-    }
-
-    std::string m_window_name{"Label Controls"};
-};
-
 class applied_labels_view
 {
 public:

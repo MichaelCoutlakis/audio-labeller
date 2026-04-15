@@ -14,6 +14,9 @@
 
 #include <nlohmann/json.hpp>
 
+#include "label.h"
+#include "ordered_registry.h"
+
 struct audio_buffer
 {
     uint32_t m_sample_rate_hz{};
@@ -24,17 +27,6 @@ struct audio_buffer
     double duration_s() const { return double(num_frames()) / m_sample_rate_hz; }
 };
 
-using label_id = uint64_t;
-
-struct label
-{
-    label_id m_id;
-    double m_start_s{};
-    double m_stop_s{};
-    std::string m_label;
-    uint32_t m_color_rgba{};
-};
-
 struct waveform_envelope
 {
     std::vector<float> m_max_vals;
@@ -43,8 +35,6 @@ struct waveform_envelope
 };
 
 using time_span = std::pair<double, double>;
-
-
 
 struct project_config
 {
@@ -77,6 +67,8 @@ public:
         std::string name);
 
     void remove_label(const std::filesystem::path &file, label_id id);
+
+    label_dict m_label_dict;
 
 private:
     project_config m_cfg;

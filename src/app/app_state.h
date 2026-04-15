@@ -3,6 +3,9 @@
  * SPDX-FileCopyrightText: 2026 Michael Coutlakis
  *****************************************************************************/
 #pragma once
+#include <filesystem>
+#include <optional>
+
 #include "../model/project_model.h"
 
 audio_buffer load_audio(const std::filesystem::path &path);
@@ -105,6 +108,8 @@ public:
     waveform_interaction m_drag;
 
     size_t m_cursor_sample{0U};
+
+    std::optional<label_defn_id> m_active_label_defn;
 
 private:
     std::set<label_id> m_selected_labels;

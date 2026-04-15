@@ -10,7 +10,7 @@ add_executable(AudioLabeller main.cpp
     "model/project_model.h" "model/project_model.cpp" 
     "app/app_state.h" "app/app_state.cpp" 
     
-    "views/file_list_view.h" "views/file_list_view.cpp" "views/waveform_view.cpp")
+    "views/file_list_view.h" "views/file_list_view.cpp" "views/waveform_view.cpp" "views/label_controls_view.cpp" "model/ordered_registry.h" "model/label.h")
 
 
 target_link_libraries(${PROJECT_NAME} PRIVATE AudioLabeller::ImGuiApp nlohmann_json::nlohmann_json AudioFile::AudioFile)
