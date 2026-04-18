@@ -6,6 +6,7 @@
 
 #include <filesystem>
 #include <optional>
+#include <set>
 #include <variant>
 
 #include "../model/label.h"
@@ -31,5 +32,11 @@ struct select_labels
     double m_x;
 };
 
-using app_action = std::variant<add_label, select_labels>;
+struct assign_label_class
+{
+    std::set<label_id> m_ids;
+    label_defn_id m_defn_id;
+};
+
+using app_action = std::variant<add_label, select_labels, delete_label, assign_label_class>;
 }

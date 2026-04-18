@@ -6,6 +6,7 @@
 
 #include <imgui.h>
 #include <implot.h>
+#include <limits>
 
 #include "../app/colours.h"
 #include "waveform_view.h"
@@ -64,6 +65,10 @@ void waveform_view::render(project_model &project, app_state &state)
 
         render_annotations(project, state);
 
+        if(ImGui::IsKeyPressed(ImGuiKey_Delete, false))
+            for(auto &id : state.selected_labels())
+                state.add_action(actions::delete_label{id});
+
         ImPlot::PopPlotClipRect();
         ImPlot::EndPlot();
     }
@@ -121,10 +126,7 @@ void waveform_view::render_annotations(project_model &project, app_state &state)
         if(state.is_label_selected(label.m_id))
             col = colours::brighter(col);
 
-        auto *dl = ImPlot::GetPlotDrawList();
-        const ImVec2 p0 = ImPlot::PlotToPixels(label.m_start_s, -1.0);
-        const ImVec2 p1 = ImPlot::PlotToPixels(label.m_stop_s, 1.0);
-        dl->AddRectFilled(p0, p1, col);
+        render_resize_label_rect(label, col);
     }
     // Unclassified labels:
     for(auto &label : state.m_unlabelled)
@@ -133,10 +135,7 @@ void waveform_view::render_annotations(project_model &project, app_state &state)
         if(state.is_label_selected(label.m_id))
             col = colours::brighter(col);
 
-        auto *dl = ImPlot::GetPlotDrawList();
-        const ImVec2 p0 = ImPlot::PlotToPixels(label.m_start_s, -1.0);
-        const ImVec2 p1 = ImPlot::PlotToPixels(label.m_stop_s, 1.0);
-        dl->AddRectFilled(p0, p1, col);
+        render_resize_label_rect(label, col);
     }
 }
 
@@ -215,4 +214,13 @@ void waveform_view::process_selections(project_model &proj, app_state &state)
     // Hit test:
     if(ImGui::IsMouseClicked(ImGuiMouseButton_Left))
         state.add_action(actions::select_labels{ImPlot::GetPlotMousePos(ImAxis_X1, ImAxis_Y1).x});
+}
+
+void waveform_view::render_resize_label_rect(label &l, ImColor col)
+{
+    double y_min{-1}, y_max{1};
+    ImPlot::DragRect(static_cast<int>(l.m_id), &l.m_start_s, &y_min, &l.m_stop_s, &y_max, col);
+
+    if(l.m_start_s > l.m_stop_s)
+        std::swap(l.m_start_s, l.m_stop_s);
 }

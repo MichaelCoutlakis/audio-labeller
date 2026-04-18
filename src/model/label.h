@@ -25,7 +25,7 @@ inline label_id get_next_label_id()
 struct label_defn
 {
     label_defn_id m_id;
-    std::string m_label;
+    std::string m_class;
     uint32_t m_color_rgba{};
 };
 

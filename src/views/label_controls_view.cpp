@@ -44,13 +44,18 @@ void label_control_view::render_label_palette(const project_model &project, app_
             }
             ImGui::PushStyleColor(ImGuiCol_Button, col_v);
 
-            if(ImGui::Button(def.m_label.c_str(), {button_w, button_h}))
+            if(ImGui::Button(def.m_class.c_str(), {button_w, button_h}))
             {
                 // Allow state to be toggled:
                 if(active && state.m_active_label_defn.has_value())
                     state.m_active_label_defn.reset();
                 else
+                {
                     state.m_active_label_defn = def.m_id;
+                    // Any selected labels should be assigned this class:
+                    state.m_actions.push_back(
+                        actions::assign_label_class{state.selected_labels(), def.m_id});
+                }
             }
 
             if(active)

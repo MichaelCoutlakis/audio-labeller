@@ -35,11 +35,47 @@ void action_handler::operator()(const actions::select_labels &s)
 
     for(auto &l : m_state.m_unlabelled)
         if(hit(l))
+        {
+            if(!m_state.is_label_selected(l.m_id))
+                m_state.m_active_label_defn.reset();
+
             m_state.toggle_label_selection(l.m_id);
+        }
 
     if(!m_state.m_active_file)
         return;
     for(auto &l : m_proj.get_labels(m_state.m_active_file.value()))
         if(hit(l))
+        {
+            // Prevent the selected label palette from going out of sync with the selections:
+            if(!m_state.is_label_selected(l.m_id) && l.m_defn_id != m_state.m_active_label_defn)
+                m_state.m_active_label_defn.reset();
+
             m_state.toggle_label_selection(l.m_id);
+        }
+}
+void action_handler::operator()(const actions::delete_label &d)
+{
+    m_state.m_unlabelled.erase(d.m_id);
+
+    if(m_state.has_active_file())
+        m_proj.get_labels(m_state.m_active_file.value()).erase(d.m_id);
+}
+
+void action_handler::operator()(const actions::assign_label_class &a)
+{
+    if(!m_state.has_active_file())
+        return;
+    for(auto &id : a.m_ids)
+    {
+        if(auto unlabelled = m_state.m_unlabelled.find_ptr(id))
+        {
+            auto l = *unlabelled;
+            m_state.m_unlabelled.erase(unlabelled);
+            l.m_defn_id = a.m_defn_id;
+            m_proj.get_labels(m_state.m_active_file.value()).add(l);
+        }
+        if(auto l = m_proj.get_labels(m_state.m_active_file.value()).find_ptr(id))
+            l->m_defn_id = a.m_defn_id;
+    }
 }

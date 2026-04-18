@@ -114,13 +114,18 @@ public:
 
     bool is_label_selected(label_id id) { return m_selected_labels.count(id); }
 
-    void toggle_label_selection(label_id id)
+    void toggle_label_selection(label_id id, bool clear_others = false)
     {
         if(!m_selected_labels.erase(id))
+        {
+            if(clear_others)
+                m_selected_labels.clear();
             m_selected_labels.insert(id);
+        }
     }
 
     void clear_selections() { m_selected_labels.clear(); }
+    const std::set<label_id> &selected_labels() const { return m_selected_labels; }
 
     /* Actions: */
     void add_action(actions::app_action action) { m_actions.push_back(action); }

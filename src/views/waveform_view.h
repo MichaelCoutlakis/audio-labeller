@@ -6,6 +6,8 @@
 #include <chrono>
 #include <string>
 
+#include <imgui.h>
+
 #include "../app/app_state.h"
 #include "../model/project_model.h"
 
@@ -24,6 +26,8 @@ private:
     void upate_waveform_drag(project_model &proj, app_state &state);
 
     void process_selections(project_model &proj, app_state &state);
+
+    void render_resize_label_rect(label& l, ImColor col);
 
     coord_transform m_transform;
 

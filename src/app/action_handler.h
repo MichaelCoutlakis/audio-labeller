@@ -17,6 +17,9 @@ struct action_handler
 
     void operator()(const actions::select_labels &s);
 
+    void operator()(const actions::delete_label &d);
+
+    void operator()(const actions::assign_label_class &a);
     project_model &m_proj;
     app_state &m_state;
 };
