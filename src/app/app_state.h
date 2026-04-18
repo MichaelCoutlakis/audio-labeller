@@ -7,6 +7,7 @@
 #include <optional>
 
 #include "../model/project_model.h"
+#include "actions.h"
 
 audio_buffer load_audio(const std::filesystem::path &path);
 
@@ -66,7 +67,7 @@ struct waveform_interaction
     {
         m_dragging = false;
         if(commit)
-        m_pending_selection = get_drag_range();
+            m_pending_selection = get_drag_range();
     }
 
     bool is_dragging() const { return m_dragging; }
@@ -87,6 +88,30 @@ private:
 class app_state
 {
 public:
+    /* Active file: */
+    /// Currently loaded file active in the waveform veiwer
+    std::optional<std::filesystem::path> m_active_file;
+
+    /// Check if the specified file is the same as the currently active file
+    bool is_selected_file(const std::filesystem::path &path);
+
+    void set_selected_file(const std::filesystem::path &path);
+
+    bool has_active_file() const { return m_active_file.has_value(); }
+
+    const audio_buffer &get_audio_buffer() { return m_active_audio; }
+
+    const audio_min_max_level *get_audio_min_max_level(size_t samples_per_px);
+
+    /* Waveform drag and selections: */
+    waveform_interaction m_drag;
+
+    labels m_unlabelled; ///< Selections not labelled yet - use same format for id
+
+    size_t m_cursor_sample{0U};
+
+    std::optional<label_defn_id> m_active_label_defn;
+
     bool is_label_selected(label_id id) { return m_selected_labels.count(id); }
 
     void toggle_label_selection(label_id id)
@@ -95,21 +120,11 @@ public:
             m_selected_labels.insert(id);
     }
 
-    std::optional<std::filesystem::path> m_active_file;
+    void clear_selections() { m_selected_labels.clear(); }
 
-    bool is_selected_file(const std::filesystem::path &path);
-
-    void set_selected_file(const std::filesystem::path &path);
-
-    const audio_buffer &get_audio_buffer() { return m_active_audio; }
-
-    const audio_min_max_level *get_audio_min_max_level(size_t samples_per_px);
-
-    waveform_interaction m_drag;
-
-    size_t m_cursor_sample{0U};
-
-    std::optional<label_defn_id> m_active_label_defn;
+    /* Actions: */
+    void add_action(actions::app_action action) { m_actions.push_back(action); }
+    std::vector<actions::app_action> m_actions;
 
 private:
     std::set<label_id> m_selected_labels;

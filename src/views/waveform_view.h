@@ -21,7 +21,9 @@ private:
     void render_cursor(app_state &state);
     void render_waveform(project_model &project, app_state &state);
     void render_annotations(project_model &project, app_state &state);
-    void upate_waveform_drag(app_state &state);
+    void upate_waveform_drag(project_model &proj, app_state &state);
+
+    void process_selections(project_model &proj, app_state &state);
 
     coord_transform m_transform;
 

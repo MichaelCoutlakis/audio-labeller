@@ -22,11 +22,13 @@ public:
 
     auto size() const noexcept { return m_items.size(); }
 
+    void clear() { m_items.clear(); }
     bool add(T t)
     {
         if(find_ptr(get_reg_key(t)))
             return false;
         m_items.push_back(std::move(t));
+        return true;
     }
 
     T *find_ptr(key_type key)

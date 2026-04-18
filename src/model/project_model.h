@@ -16,6 +16,7 @@
 
 #include "label.h"
 #include "ordered_registry.h"
+#include "types.h"
 
 struct audio_buffer
 {
@@ -33,8 +34,6 @@ struct waveform_envelope
     std::vector<float> m_min_vals;
     size_t m_samples_per_bin{0U};
 };
-
-using time_span = std::pair<double, double>;
 
 struct project_config
 {
@@ -60,20 +59,22 @@ public:
 
     const std::vector<audio_file_entry> &get_files() const { return m_files; }
 
-    label_id add_label(
-        const std::filesystem::path &file,
-        double start_s,
-        double stop_s,
-        std::string name);
+    //label_id add_label(
+    //    const std::filesystem::path &file,
+    //    double start_s,
+    //    double stop_s,
+    //    std::string name);
 
-    void remove_label(const std::filesystem::path &file, label_id id);
+    //void remove_label(const std::filesystem::path &file, label_id id);
 
     label_dict m_label_dict;
+
+
+    labels &get_labels(const std::filesystem::path &file) { return m_file_labels[file]; }
 
 private:
     project_config m_cfg;
     std::vector<audio_file_entry> m_files; //!< Available files for labelling
-    std::optional<size_t> m_active_file;
 
-    std::map<std::filesystem::path, std::list<label>> m_file_labels; //!< Labels per file
+    std::map<std::filesystem::path, labels> m_file_labels; //!< Labels per file
 };

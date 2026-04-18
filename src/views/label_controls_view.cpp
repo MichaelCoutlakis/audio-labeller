@@ -46,6 +46,11 @@ void label_control_view::render_label_palette(const project_model &project, app_
 
             if(ImGui::Button(def.m_label.c_str(), {button_w, button_h}))
             {
+                // Allow state to be toggled:
+                if(active && state.m_active_label_defn.has_value())
+                    state.m_active_label_defn.reset();
+                else
+                    state.m_active_label_defn = def.m_id;
             }
 
             if(active)
@@ -55,34 +60,4 @@ void label_control_view::render_label_palette(const project_model &project, app_
         }
         ImGui::EndTable();
     }
-    // for(const auto &def : project.m_label_dict)
-    //{
-    //     const bool active = state.m_active_label_defn == def.m_id;
-
-    //    ImGui::PushID(static_cast<int>(def.m_id));
-
-    //    ImGui::PushStyleColor(ImGuiCol_Button, ImGui::ColorConvertU32ToFloat4(def.m_color_rgba));
-
-    //    if(active)
-    //    {
-    //        ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 2.0f);
-    //        ImGui::PushStyleColor(ImGuiCol_Border, IM_COL32_WHITE);
-    //    }
-
-    //    if(ImGui::Button(def.m_label.c_str(), {100.0f, 32.0f}))
-    //    {
-    //        // activate_label_definition(def.m_id, project, state);
-    //    }
-
-    //    if(active)
-    //    {
-    //        ImGui::PopStyleColor();
-    //        ImGui::PopStyleVar();
-    //    }
-
-    //    ImGui::PopStyleColor();
-    //    ImGui::PopID();
-
-    //    ImGui::SameLine();
-    //}
 }

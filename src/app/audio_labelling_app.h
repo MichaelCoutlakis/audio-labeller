@@ -9,6 +9,7 @@
 #include "../views/file_list_view.h"
 #include "../views/label_controls_view.h"
 #include "../views/waveform_view.h"
+#include "action_handler.h"
 
 class applied_labels_view
 {
@@ -36,6 +37,7 @@ private:
     waveform_view m_waveform;
     label_control_view m_label_controls;
     applied_labels_view m_applied_labels;
+    action_handler m_handler{m_project, m_app_state};
 
     bool m_layout_initialised{false};
 

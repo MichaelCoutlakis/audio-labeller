@@ -1,7 +1,7 @@
 BasedOnStyle:                               WebKit
 
 AlignTrailingComments:                      true
-AlignAfterOpenBracket: true
+AlignAfterOpenBracket: BlockIndent
 
 PenaltyBreakBeforeFirstCallParameter: 2
 
@@ -20,7 +20,7 @@ AllowAllParametersOfDeclarationOnNextLine: false
 # Constructor() : newline (set false to get this)
 
 BreakConstructorInitializers: AfterColon
-PackConstructorInitializers: NextLineOnly
+PackConstructorInitializers: Never
 ColumnLimit:                                100
 
 NamespaceIndentation:                       None
@@ -51,3 +51,4 @@ AllowShortBlocksOnASingleLine:               Never
 AllowShortLambdasOnASingleLine:             All
 AllowShortCaseLabelsOnASingleLine:           true
 AllowShortFunctionsOnASingleLine: true
+# coming in clang-format 23 AllowShortRecordOnASingleLine: SRS_Empty

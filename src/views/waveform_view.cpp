@@ -2,9 +2,12 @@
  * SPDX-License-Identifier: MIT
  * SPDX-FileCopyrightText: 2026 Michael Coutlakis
  *****************************************************************************/
+#include <iostream>
+
 #include <imgui.h>
 #include <implot.h>
 
+#include "../app/colours.h"
 #include "waveform_view.h"
 
 waveform_view::waveform_view() { }
@@ -51,7 +54,9 @@ void waveform_view::render(project_model &project, app_state &state)
         m_transform.m_view_end_s = plot_limits.X.Max;
         ImPlot::PushPlotClipRect();
         // Update drag:
-        upate_waveform_drag(state);
+        upate_waveform_drag(project, state);
+
+        process_selections(project, state);
 
         render_cursor(state);
 
@@ -101,12 +106,44 @@ void waveform_view::render_waveform(project_model &project, app_state &state)
             audio_level_buf->m_bin_times.size());
 }
 
-void waveform_view::render_annotations(project_model &project, app_state &state) { }
+void waveform_view::render_annotations(project_model &project, app_state &state)
+{
+    if(!state.m_active_file)
+        return;
+    for(auto &label : project.get_labels(state.m_active_file.value()))
+    {
+        auto defn = project.m_label_dict.find_ptr(label.m_defn_id);
 
-void waveform_view::upate_waveform_drag(app_state &state)
+        if(!defn)
+            throw std::runtime_error("Definition missing for label");
+
+        auto col = defn->m_color_rgba;
+        if(state.is_label_selected(label.m_id))
+            col = colours::brighter(col);
+
+        auto *dl = ImPlot::GetPlotDrawList();
+        const ImVec2 p0 = ImPlot::PlotToPixels(label.m_start_s, -1.0);
+        const ImVec2 p1 = ImPlot::PlotToPixels(label.m_stop_s, 1.0);
+        dl->AddRectFilled(p0, p1, col);
+    }
+    // Unclassified labels:
+    for(auto &label : state.m_unlabelled)
+    {
+        auto col = colours::grey;
+        if(state.is_label_selected(label.m_id))
+            col = colours::brighter(col);
+
+        auto *dl = ImPlot::GetPlotDrawList();
+        const ImVec2 p0 = ImPlot::PlotToPixels(label.m_start_s, -1.0);
+        const ImVec2 p1 = ImPlot::PlotToPixels(label.m_stop_s, 1.0);
+        dl->AddRectFilled(p0, p1, col);
+    }
+}
+
+void waveform_view::upate_waveform_drag(project_model &proj, app_state &state)
 {
 
-    if(!ImPlot::IsPlotHovered())
+    if(!state.has_active_file() || !ImPlot::IsPlotHovered())
         return;
 
     auto &drag = state.m_drag;
@@ -134,7 +171,16 @@ void waveform_view::upate_waveform_drag(app_state &state)
             std::abs(drag_range.second - drag_range.first) > 0.02;
         drag.end_drag(commit);
 
-        if(!commit && state.get_audio_buffer().m_sample_rate_hz != 0)
+        if(commit)
+        {
+            auto a = actions::add_label{
+                drag_range,
+                state.m_active_file.value(),
+                state.m_active_label_defn
+            };
+            state.add_action(a);
+        }
+        else if(!commit && state.get_audio_buffer().m_sample_rate_hz != 0)
         {
             size_t sample =
                 drag.get_drag_range().second * state.get_audio_buffer().m_sample_rate_hz;
@@ -147,10 +193,26 @@ void waveform_view::upate_waveform_drag(app_state &state)
     {
         auto span = drag.get_drag_range();
         auto *dl = ImPlot::GetPlotDrawList();
+        auto drag_colour = colours::drag_grey;
 
+        if(state.m_active_label_defn)
+        {
+            auto def = proj.m_label_dict.find_ptr(state.m_active_label_defn.value());
+            if(def)
+                drag_colour = def->m_color_rgba;
+        }
         const ImVec2 p0 = ImPlot::PlotToPixels(span.first, -1.0);
         const ImVec2 p1 = ImPlot::PlotToPixels(span.second, 1.0);
 
-        dl->AddRectFilled(p0, p1, IM_COL32(255, 255, 255, 40));
+        dl->AddRectFilled(p0, p1, drag_colour);
     }
+}
+void waveform_view::process_selections(project_model &proj, app_state &state)
+{
+    if(!state.has_active_file() || !ImPlot::IsPlotHovered())
+        return;
+
+    // Hit test:
+    if(ImGui::IsMouseClicked(ImGuiMouseButton_Left))
+        state.add_action(actions::select_labels{ImPlot::GetPlotMousePos(ImAxis_X1, ImAxis_Y1).x});
 }

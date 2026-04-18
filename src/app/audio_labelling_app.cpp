@@ -18,6 +18,11 @@ void audio_labeller_app::on_frame()
     m_waveform.render(m_project, m_app_state);
     m_applied_labels.render(m_project);
     m_label_controls.render(m_project, m_app_state);
+
+    // Dispatch the actions (controller):
+    for(auto &action : m_app_state.m_actions)
+        std::visit(m_handler, action);
+    m_app_state.m_actions.clear();
 }
 
 void audio_labeller_app::on_shutdown() { }
