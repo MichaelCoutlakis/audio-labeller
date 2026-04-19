@@ -33,6 +33,8 @@ void audio_labeller_app::on_frame()
 {
     render_main_dockspace();
 
+    m_app_state.m_playback_state = m_audio_engine.get_state();
+
     m_audio_control.render(m_project, m_app_state);
     m_file_list.render(m_project, m_app_state);
 

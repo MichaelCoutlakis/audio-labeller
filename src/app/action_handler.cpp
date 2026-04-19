@@ -46,6 +46,7 @@ void action_handler::operator()(const actions::add_label &r)
 void action_handler::operator()(const actions::select_labels &s)
 {
     auto hit = [x = s.m_x](const label &l) { return l.m_start_s <= x && x <= l.m_stop_s; };
+    std::vector<label *> hits;
 
     for(auto &l : m_state.m_unlabelled)
         if(hit(l))
@@ -53,7 +54,8 @@ void action_handler::operator()(const actions::select_labels &s)
             if(!m_state.is_label_selected(l.m_id))
                 m_state.m_active_label_defn.reset();
 
-            m_state.toggle_label_selection(l.m_id);
+            if(m_state.toggle_label_selection(l.m_id))
+                hits.push_back(&l);
         }
 
     if(!m_state.m_active_file)
@@ -65,8 +67,17 @@ void action_handler::operator()(const actions::select_labels &s)
             if(!m_state.is_label_selected(l.m_id) && l.m_defn_id != m_state.m_active_label_defn)
                 m_state.m_active_label_defn.reset();
 
-            m_state.toggle_label_selection(l.m_id);
+            if(m_state.toggle_label_selection(l.m_id))
+                hits.push_back(&l);
         }
+    // Set the playback selection to the most recently selected rection:
+    if(!hits.empty())
+    {
+        time_span t{hits.back()->m_start_s, hits.back()->m_stop_s};
+        m_audio_engine.select_region(t, m_state.m_loop);
+        if(m_state.m_auto_start)
+            m_audio_engine.play();
+    }
 }
 
 void action_handler::operator()(const actions::delete_label &d)
@@ -98,11 +109,14 @@ void action_handler::operator()(const actions::assign_label_class &a)
 void action_handler::operator()(const actions::select_playback_device &dev)
 {
     m_audio_engine.set_device(dev.dev);
+    m_state.settings.dev = dev.dev;
 }
 
 void action_handler::operator()(const actions::select_playback_region &r)
 {
     m_audio_engine.select_region(r.t, r.loop);
+    if(m_state.m_auto_start)
+        m_audio_engine.play();
 }
 
 void action_handler::operator()(const actions::toggle_playback &a)
@@ -111,4 +125,8 @@ void action_handler::operator()(const actions::toggle_playback &a)
         m_audio_engine.stop();
     else
         m_audio_engine.play();
+}
+void action_handler::operator()(const actions::playback_loop &p)
+{
+    m_audio_engine.set_playback_loop(p.loop);
 }

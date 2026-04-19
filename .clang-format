@@ -17,6 +17,8 @@ AllowAllArgumentsOnNextLine: false
 BinPackParameters: false
 AllowAllParametersOfDeclarationOnNextLine: false
 
+ExperimentalAutoDetectBinPacking: true
+
 # Constructor() : newline (set false to get this)
 
 BreakConstructorInitializers: AfterColon
@@ -32,6 +34,9 @@ IndentCaseLabels:                           false
 IndentWidth: 4
 Cpp11BracedListStyle:                       true
 #PenaltyBreakContainer: 0
+
+
+BreakBinaryOperations: RespectPrecedence
 
 # AfterAssignment: Puts the { on a new line after =
 BraceWrapping:

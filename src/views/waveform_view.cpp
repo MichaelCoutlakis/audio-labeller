@@ -3,6 +3,7 @@
  * SPDX-FileCopyrightText: 2026 Michael Coutlakis
  *****************************************************************************/
 
+#include <chrono>
 #include <imgui.h>
 #include <implot.h>
 
@@ -77,7 +78,16 @@ void waveform_view::render_cursor(app_state &state)
     if(state.get_audio_buffer().m_sample_rate_hz == 0)
         return;
 
-    double t = double(state.m_cursor_sample) / state.get_audio_buffer().m_sample_rate_hz;
+    // Ctrl click for now to place the cursor:
+    if(ImPlot::IsPlotHovered() &&
+       ImGui::IsMouseClicked(ImGuiMouseButton_Left) &&
+       ImGui::GetIO().KeyCtrl)
+    {
+        const double start_time = ImPlot::GetPlotMousePos(ImAxis_X1, ImAxis_Y1).x;
+        state.select_playback_region(start_time);
+    }
+
+    double t = state.m_playback_state.playhead_s;
     const ImVec2 p0 = ImPlot::PlotToPixels(t, -1.0);
     const ImVec2 p1 = ImPlot::PlotToPixels(t, 1.0);
 
@@ -121,7 +131,7 @@ void waveform_view::render_annotations(project_model &project, app_state &state)
         if(state.is_label_selected(label.m_id))
             col = colours::brighter(col);
 
-        render_resize_label_rect(label, col);
+        render_resize_label_rect(state, label, col);
     }
     // Unclassified labels:
     for(auto &label : state.m_unlabelled)
@@ -130,7 +140,7 @@ void waveform_view::render_annotations(project_model &project, app_state &state)
         if(state.is_label_selected(label.m_id))
             col = colours::brighter(col);
 
-        render_resize_label_rect(label, col);
+        render_resize_label_rect(state, label, col);
     }
 }
 
@@ -175,18 +185,6 @@ void waveform_view::upate_waveform_drag(project_model &proj, app_state &state)
             state.add_action(a);
             state.add_action(actions::select_playback_region{drag_range, state.m_loop});
         }
-        else if(!commit && state.get_audio_buffer().m_sample_rate_hz != 0)
-        {
-            size_t sample =
-                drag.get_drag_range().second * state.get_audio_buffer().m_sample_rate_hz;
-            state.m_cursor_sample = sample;
-
-            actions::select_playback_region r{
-                time_span{drag_range.first, state.get_audio_buffer().duration_s()},
-                state.m_loop
-            };
-            state.add_action(r);
-        }
     }
 
     // Render the drag:
@@ -218,11 +216,22 @@ void waveform_view::process_selections(project_model &proj, app_state &state)
         state.add_action(actions::select_labels{ImPlot::GetPlotMousePos(ImAxis_X1, ImAxis_Y1).x});
 }
 
-void waveform_view::render_resize_label_rect(label &l, ImColor col)
+bool waveform_view::render_resize_label_rect(app_state &state, label &l, ImColor col)
 {
     double y_min{-1}, y_max{1};
-    ImPlot::DragRect(static_cast<int>(l.m_id), &l.m_start_s, &y_min, &l.m_stop_s, &y_max, col);
+    bool was_resized =
+        ImPlot::DragRect(static_cast<int>(l.m_id), &l.m_start_s, &y_min, &l.m_stop_s, &y_max, col);
 
     if(l.m_start_s > l.m_stop_s)
         std::swap(l.m_start_s, l.m_stop_s);
+
+    if(was_resized)
+        m_drag_arm_id = l.m_id;
+
+    if(l.m_id == m_drag_arm_id && ImGui::IsMouseReleased(ImGuiMouseButton_Left))
+    {
+        m_drag_arm_id.reset();
+        state.select_playback_region(l.m_start_s, l.m_stop_s);
+    }
+    return was_resized;
 }

@@ -4,6 +4,7 @@
  *****************************************************************************/
 #pragma once
 #include <chrono>
+#include <optional>
 #include <string>
 
 #include <imgui.h>
@@ -27,12 +28,13 @@ private:
 
     void process_selections(project_model &proj, app_state &state);
 
-    void render_resize_label_rect(label& l, ImColor col);
+    bool render_resize_label_rect(app_state &state, label &l, ImColor col);
 
     coord_transform m_transform;
 
     using tp = std::chrono::steady_clock::time_point;
     using ms = std::chrono::milliseconds;
     tp m_drag_start;
+    std::optional<label_id> m_drag_arm_id;
     std::optional<std::filesystem::path> m_last_active_file;
 };

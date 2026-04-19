@@ -12,7 +12,9 @@
 
 #include <AudioFile/AudioFile.h>
 
+#include "actions.h"
 #include "app_state.h"
+
 
 app_settings app_settings::load()
 {
@@ -87,6 +89,10 @@ void app_state::set_selected_file(const std::filesystem::path &path)
 const audio_min_max_level *app_state::get_audio_min_max_level(size_t samples_per_px)
 {
     return m_audio_min_max_map.get_level(samples_per_px);
+}
+void app_state::select_playback_region(double start_time, double stop_time)
+{
+    add_action(actions::select_playback_region({start_time, stop_time}, m_loop));
 }
 
 audio_min_max_pyramid_map::audio_min_max_pyramid_map(const audio_buffer &buffer)

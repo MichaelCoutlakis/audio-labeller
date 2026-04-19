@@ -5,3 +5,4 @@ CMakeUserPresets.json
 *.wav
 *.ini
 *.json
+*.bat

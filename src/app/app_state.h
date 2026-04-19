@@ -4,6 +4,7 @@
  *****************************************************************************/
 #pragma once
 #include <filesystem>
+#include <limits>
 #include <optional>
 
 #include "../model/project_model.h"
@@ -118,20 +119,26 @@ public:
 
     labels m_unlabelled; ///< Selections not labelled yet - use same format for id
 
-    size_t m_cursor_sample{0U};
+    // size_t m_cursor_sample{0U};
 
     std::optional<label_defn_id> m_active_label_defn;
 
     bool is_label_selected(label_id id) { return m_selected_labels.count(id); }
 
-    void toggle_label_selection(label_id id, bool clear_others = false)
+    /// Toggle whether the specified label is selected
+    /// @param clear_others if true and the label becomes selected, unselect other previously
+    /// selected labels
+    /// @return the resultant selection state
+    bool toggle_label_selection(label_id id, bool clear_others = false)
     {
         if(!m_selected_labels.erase(id))
         {
             if(clear_others)
                 m_selected_labels.clear();
             m_selected_labels.insert(id);
+            return true;
         }
+        return false;
     }
 
     void clear_selections() { m_selected_labels.clear(); }
@@ -146,10 +153,13 @@ public:
     bool m_auto_start{true};             ///< Start playing a segment as soon as it's created
     std::vector<audio_dev> m_audio_devs; ///< Available playback audio devices
     audio_dev audio_default_dev;
-    playback_state  m_playback_state;
+    playback_state m_playback_state;
+
+    void select_playback_region(double start_time, double stop_time = std::numeric_limits<double>::max());
 
     // Settings between program runs
     app_settings settings;
+
 private:
     std::set<label_id> m_selected_labels;
 

@@ -10,7 +10,67 @@
 
 #include "audio_engine.h"
 
-audio_engine::audio_engine() { Pa_Initialize(); }
+struct audio_engine::buffer_state
+{
+    buffer_state(audio_buffer buffer) :
+        m_buffer(std::move(buffer))
+    {
+        m_region_end_frame = m_buffer.num_frames();
+    }
+
+    bool playable() const
+    {
+        return m_region_end_frame > m_region_start_frame &&
+            m_buffer.m_sample_rate_hz > 0 &&
+            !m_buffer.m_samples.empty();
+    }
+
+    void select_region(time_span t, bool loop)
+    {
+        double t0 = std::clamp(t.first, 0., m_buffer.duration_s());
+        double t1 = std::clamp(t.second, t0, m_buffer.duration_s());
+        m_playhead = t0 * m_buffer.m_sample_rate_hz;
+        m_region_start_frame = m_playhead;
+        m_region_end_frame =
+            std::clamp<uint64_t>(t1 * m_buffer.m_sample_rate_hz, m_playhead, m_buffer.num_frames());
+        m_loop = loop;
+    }
+
+    void play()
+    {
+        if(m_region_end_frame > m_region_start_frame)
+        {
+            m_playhead = m_region_start_frame;
+            m_playing = true;
+            spdlog::info("audio: play started");
+        }
+        else
+            spdlog::info("audio: cannot play empty buffer");
+    }
+    void stop()
+    {
+        m_playing = false;
+        spdlog::info("audio: stopped");
+    }
+
+    playback_state get_state() const
+    {
+        return playback_state{m_playing, m_playhead * 1.0 / m_buffer.m_sample_rate_hz};
+    }
+    audio_buffer m_buffer;
+
+    uint64_t m_playhead{};
+    uint64_t m_region_start_frame{};
+    uint64_t m_region_end_frame{};
+    bool m_loop = false;
+    bool m_playing{false};
+};
+
+audio_engine::audio_engine() :
+    m_buf(std::make_shared<buffer_state>(audio_buffer{}))
+{
+    Pa_Initialize();
+}
 audio_engine::~audio_engine() { Pa_Terminate(); }
 
 std::vector<audio_dev> audio_engine::get_playback_devices(audio_dev *default_dev)
@@ -39,7 +99,7 @@ void audio_engine::set_device(audio_dev device)
 {
     close_stream();
 
-    std::scoped_lock lock(m_control_mutex);
+    std::scoped_lock lock(m_mx_buf);
     m_device = device;
     spdlog::info("audio: set device to {}", device.name);
 
@@ -51,47 +111,40 @@ void audio_engine::set_audio_clip(audio_buffer clip)
 {
     spdlog::info("setting audio buffer");
     close_stream(); // Sample rate could change
-    std::scoped_lock lock(m_control_mutex);
+    std::scoped_lock lock(m_mx_buf);
     m_buf = std::make_shared<buffer_state>(std::move(clip));
     open_stream();
 }
 
 void audio_engine::select_region(time_span t, bool loop)
 {
-    std::scoped_lock lock(m_control_mutex);
-
-    if(m_buf)
-        m_buf->select_region(t, loop);
+    std::scoped_lock lock(m_mx_buf);
+    m_buf->select_region(t, loop);
 }
+void audio_engine::set_playback_loop(bool loop) { m_buf->m_loop = loop; }
 
 void audio_engine::play()
 {
-    std::scoped_lock lock(m_control_mutex);
-    if(m_buf)
-        m_buf->m_playing = true;
+    std::scoped_lock lock(m_mx_buf);
+    m_buf->play();
 }
 
 void audio_engine::stop()
 {
-    std::scoped_lock lock(m_control_mutex);
-    if(m_buf)
-        m_buf->m_playing = false;
+    std::scoped_lock lock(m_mx_buf);
+    m_buf->stop();
 }
 
 playback_state audio_engine::get_state() const
 {
-    std::scoped_lock lock(m_control_mutex);
-
-    playback_state s{false, 0.};
-    if(m_buf)
-        s = m_buf->get_state();
-    return s;
+    std::scoped_lock lock(m_mx_buf);
+    return m_buf->get_state();
 }
 
 void audio_engine::open_stream()
 {
     spdlog::info("audio: opening stream");
-    if(!m_buf || m_device.index == paNoDevice)
+    if(!m_buf->playable() || m_device.index == paNoDevice)
         return;
 
     const PaDeviceInfo *info = Pa_GetDeviceInfo(m_device.index);
@@ -145,12 +198,12 @@ int audio_engine::render(float *out, unsigned long frames)
 {
     std::shared_ptr<buffer_state> buf;
     {
-        std::scoped_lock lock(m_control_mutex);
+        std::scoped_lock lock(m_mx_buf);
         buf = m_buf;
     }
     auto channels = m_stream_params.channelCount;
 
-    if(!buf || !buf->m_playing)
+    if(!buf->m_playing)
     {
         std::fill(out, out + frames * channels, 0.0f);
         return paContinue;
@@ -181,4 +234,9 @@ int audio_engine::render(float *out, unsigned long frames)
         ++state.m_playhead;
     }
     return paContinue;
+}
+void audio_engine::check_error(PaError c, std::string msg)
+{
+    if(c != paNoError)
+        throw std::runtime_error(msg + ": " + Pa_GetErrorText(c));
 }

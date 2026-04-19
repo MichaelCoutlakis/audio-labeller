@@ -13,7 +13,8 @@ void audio_view::render(project_model &proj, app_state &state)
 {
     ImGui::Begin(m_window_name.c_str());
 
-    ImGui::Checkbox("Loop", &state.m_loop);
+    if(ImGui::Checkbox("Loop", &state.m_loop))
+        state.add_action(actions::playback_loop{state.m_loop});
     ImGui::Checkbox("Auto play", &state.m_auto_start);
 
     std::vector<const char *> names;
@@ -28,13 +29,10 @@ void audio_view::render(project_model &proj, app_state &state)
     }
     m_index = std::clamp<int>(m_index, 0, names.size() - 1);
     if(ImGui::Combo("Playback Device", &m_index, names.data(), names.size()))
-    {
-        state.m_actions.push_back(actions::select_playback_device{state.m_audio_devs.at(m_index)});
-        state.settings.dev = state.m_audio_devs.at(m_index);
-    }
+        state.add_action(actions::select_playback_device{state.m_audio_devs.at(m_index)});
 
     if(ImGui::IsKeyPressed(ImGuiKey_Space, false))
-        state.m_actions.push_back(actions::toggle_playback{});
+        state.add_action(actions::toggle_playback{});
 
     ImGui::End();
 }

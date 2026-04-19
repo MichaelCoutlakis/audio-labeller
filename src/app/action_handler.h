@@ -29,6 +29,8 @@ struct action_handler
 
     void operator()(const actions::toggle_playback &a);
 
+    void operator()(const actions::playback_loop &p);
+
 private:
     audio_engine &m_audio_engine;
     project_model &m_proj;
