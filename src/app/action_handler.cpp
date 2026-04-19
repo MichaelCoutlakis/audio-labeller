@@ -3,13 +3,27 @@
  * SPDX-FileCopyrightText: 2026 Michael Coutlakis
  *****************************************************************************/
 
+#include <spdlog/spdlog.h>
+
 #include "action_handler.h"
 #include "actions.h"
 
-action_handler::action_handler(project_model &project, app_state &state) :
+action_handler::action_handler(audio_engine &aud_eng, project_model &project, app_state &state) :
+    m_audio_engine(aud_eng),
     m_proj(project),
     m_state(state)
 {
+}
+
+void action_handler::operator()(const actions::load_file &f)
+{
+    spdlog::info("loading file {}", f.file_path.string());
+    m_state.set_selected_file(f.file_path);
+
+    m_audio_engine.set_audio_clip(m_state.get_audio_buffer());
+    m_audio_engine.select_region(
+        time_span{0, m_state.get_audio_buffer().duration_s()},
+        m_state.m_loop);
 }
 
 void action_handler::operator()(const actions::add_label &r)
@@ -54,6 +68,7 @@ void action_handler::operator()(const actions::select_labels &s)
             m_state.toggle_label_selection(l.m_id);
         }
 }
+
 void action_handler::operator()(const actions::delete_label &d)
 {
     m_state.m_unlabelled.erase(d.m_id);
@@ -78,4 +93,22 @@ void action_handler::operator()(const actions::assign_label_class &a)
         if(auto l = m_proj.get_labels(m_state.m_active_file.value()).find_ptr(id))
             l->m_defn_id = a.m_defn_id;
     }
+}
+
+void action_handler::operator()(const actions::select_playback_device &dev)
+{
+    m_audio_engine.set_device(dev.dev);
+}
+
+void action_handler::operator()(const actions::select_playback_region &r)
+{
+    m_audio_engine.select_region(r.t, r.loop);
+}
+
+void action_handler::operator()(const actions::toggle_playback &a)
+{
+    if(m_audio_engine.get_state().playing)
+        m_audio_engine.stop();
+    else
+        m_audio_engine.play();
 }

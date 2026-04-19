@@ -9,6 +9,9 @@ add_executable(AudioLabeller main.cpp
     "app/audio_labelling_app.h" "app/audio_labelling_app.cpp"
     "app/colours.h"
 
+    "audio/audio_engine.h" "audio/audio_engine.cpp"
+
+    "views/audio_view.h" "views/audio_view.cpp"
     "views/waveform_view.h" "views/waveform_view.cpp" 
     "views/labels_view.h" "views/labels_view.cpp"
     "views/label_controls_view.h" "views/label_controls_view.cpp"
@@ -23,4 +26,7 @@ add_executable(AudioLabeller main.cpp
 target_link_libraries(${PROJECT_NAME} PRIVATE 
     AudioLabeller::ImGuiApp 
     nlohmann_json::nlohmann_json 
-    AudioFile::AudioFile)
+    AudioFile::AudioFile
+    portaudio_static
+    spdlog::spdlog
+)

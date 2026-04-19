@@ -9,6 +9,16 @@
 #include "../model/project_model.h"
 #include "actions.h"
 
+struct app_settings
+{
+    static inline std::string m_filename{"audio-labelling-app-settings.json"};
+    static app_settings load();
+    void save();
+
+    std::optional<audio_dev> dev; ///< Previously used audio device
+    std::string current_file;
+};
+
 audio_buffer load_audio(const std::filesystem::path &path);
 
 class coord_transform
@@ -131,6 +141,15 @@ public:
     void add_action(actions::app_action action) { m_actions.push_back(action); }
     std::vector<actions::app_action> m_actions;
 
+    /* Audio related: */
+    bool m_loop{false};                  ///< Whether to loop the playback segment
+    bool m_auto_start{true};             ///< Start playing a segment as soon as it's created
+    std::vector<audio_dev> m_audio_devs; ///< Available playback audio devices
+    audio_dev audio_default_dev;
+    playback_state  m_playback_state;
+
+    // Settings between program runs
+    app_settings settings;
 private:
     std::set<label_id> m_selected_labels;
 

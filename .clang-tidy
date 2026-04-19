@@ -23,3 +23,6 @@ CheckOptions:
 
   # Private member variables only
   - { key: readability-identifier-naming.PrivateMemberPrefix,  value: m_ }
+
+  # Public member variables - POD don't use m_ prefix, e.g. see std::pair
+  - { key: readability-identifier-naming.PublicMemberPrefix,  value: "" }

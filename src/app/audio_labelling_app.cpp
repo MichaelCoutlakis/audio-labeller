@@ -2,17 +2,38 @@
  * SPDX-License-Identifier: MIT
  * SPDX-FileCopyrightText: 2026 Michael Coutlakis
  *****************************************************************************/
+#include <algorithm>
 
 #include <imgui_internal.h> // docking
 
+#include "app_state.h"
 #include "audio_labelling_app.h"
 
-void audio_labeller_app::on_init() { }
+audio_labeller_app::~audio_labeller_app() { m_app_state.settings.save(); }
+
+void audio_labeller_app::on_init()
+{
+    m_app_state.settings = app_settings::load();
+    m_app_state.m_audio_devs = m_audio_engine.get_playback_devices(&m_app_state.audio_default_dev);
+
+    if(!m_app_state.m_audio_devs.empty())
+    {
+        // Restore or select default audio device
+        if(!m_app_state.settings.dev ||
+           !std::ranges::contains(m_app_state.m_audio_devs, m_app_state.settings.dev.value()))
+        {
+            m_app_state.settings.dev = m_app_state.audio_default_dev;
+        }
+        actions::select_playback_device a{m_app_state.settings.dev.value()};
+        m_app_state.m_actions.push_back(a);
+    }
+}
 
 void audio_labeller_app::on_frame()
 {
     render_main_dockspace();
 
+    m_audio_control.render(m_project, m_app_state);
     m_file_list.render(m_project, m_app_state);
 
     m_waveform.render(m_project, m_app_state);

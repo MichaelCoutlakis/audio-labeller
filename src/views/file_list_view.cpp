@@ -7,8 +7,6 @@
 
 #include "file_list_view.h"
 
-#include <iostream>
-
 void file_list_view::render(project_model &project, app_state &state)
 {
     ImGui::Begin(m_window_name.c_str());
@@ -20,10 +18,8 @@ void file_list_view::render(project_model &project, app_state &state)
         for(auto &file : project.get_files())
         {
             bool is_selected = state.is_selected_file(file.m_path);
-            ImGui::Selectable(file.m_path.string().c_str(), &is_selected);
-
-            if(is_selected)
-                state.set_selected_file(file.m_path);
+            if(ImGui::Selectable(file.m_path.string().c_str(), &is_selected) && is_selected)
+                state.m_actions.push_back(actions::load_file{file.m_path});
         }
         ImGui::EndListBox();
     }

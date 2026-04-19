@@ -13,7 +13,7 @@ project(AudioLabeller
 ################################################################################
 # Global settings
 ################################################################################
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 26)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
@@ -39,6 +39,12 @@ find_package(nlohmann_json CONFIG REQUIRED)
 
 # AudioFile
 find_package(AudioFile CONFIG REQUIRED)
+
+# portaudio
+find_package(portaudio CONFIG REQUIRED)
+
+# spdlog
+find_package(spdlog CONFIG REQUIRED)
 
 ################################################################################
 # Dependencies which are managed as submodules:

@@ -14,6 +14,12 @@
 
 namespace actions
 {
+
+struct load_file
+{
+    std::filesystem::path file_path;
+};
+
 struct add_label
 {
     /// The time span
@@ -38,5 +44,29 @@ struct assign_label_class
     label_defn_id m_defn_id;
 };
 
-using app_action = std::variant<add_label, select_labels, delete_label, assign_label_class>;
+struct select_playback_device
+{
+    audio_dev dev;
+};
+
+struct select_playback_region
+{
+    time_span t;
+    bool loop{false};
+};
+
+struct toggle_playback
+{
+};
+
+using app_action = std::variant<
+    load_file,
+    add_label,
+    select_labels,
+    delete_label,
+    assign_label_class,
+    select_playback_device,
+    select_playback_region,
+    toggle_playback>;
+
 }

@@ -3,12 +3,46 @@
  * SPDX-FileCopyrightText: 2026 Michael Coutlakis
  *****************************************************************************/
 #include <algorithm>
+#include <filesystem>
+#include <fstream>
 #include <iostream>
 #include <stdexcept>
+
+#include <nlohmann/json.hpp>
 
 #include <AudioFile/AudioFile.h>
 
 #include "app_state.h"
+
+app_settings app_settings::load()
+{
+    app_settings s{};
+
+    if(!std::filesystem::exists(m_filename))
+        return s;
+
+    std::ifstream settings_file(m_filename);
+    if(!settings_file)
+        return s;
+    auto j = nlohmann::json::parse(settings_file);
+    s.current_file = j.value("current_file", std::string{});
+    if(auto dev = j.find("audio_device"); dev != j.end())
+    {
+        s.dev = audio_dev{};
+        s.dev->index = dev->value("index", 0);
+        s.dev->name = dev->value("name", std::string{});
+    }
+    return s;
+}
+
+void app_settings::save()
+{
+    nlohmann::json j{{"current_file", current_file}};
+    if(dev)
+        j["audio_device"] = {{"index", dev->index}, {"name", dev->name}};
+    std::ofstream f(m_filename);
+    f << j.dump(2);
+}
 
 audio_buffer load_audio(const std::filesystem::path &path)
 {

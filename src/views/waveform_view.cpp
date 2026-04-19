@@ -2,11 +2,9 @@
  * SPDX-License-Identifier: MIT
  * SPDX-FileCopyrightText: 2026 Michael Coutlakis
  *****************************************************************************/
-#include <iostream>
 
 #include <imgui.h>
 #include <implot.h>
-#include <limits>
 
 #include "../app/colours.h"
 #include "waveform_view.h"
@@ -19,7 +17,6 @@ constexpr static auto as_ms = [](auto t)
 void waveform_view::render(project_model &project, app_state &state)
 {
     ImGui::Begin(m_window_name.c_str());
-    ImGui::Button("This is the waveform view");
 
     // Rezoom the time axis if the active file changes
     if(state.m_active_file != m_last_active_file)
@@ -34,8 +31,6 @@ void waveform_view::render(project_model &project, app_state &state)
         wheel = zoom
         RMB drag = zoom selection
     */
-
-    ImGui::Text("Ctrl: %d", ImGui::GetIO().KeyCtrl);
     // Don't use left click to pan - we want it to select label
     ImPlot::GetInputMap().Pan = ImGuiMouseButton_Middle;
     ImPlot::GetInputMap().Fit = ImGuiMouseButton_Middle; // Double click middle to zoom to fit
@@ -178,12 +173,19 @@ void waveform_view::upate_waveform_drag(project_model &proj, app_state &state)
                 state.m_active_label_defn
             };
             state.add_action(a);
+            state.add_action(actions::select_playback_region{drag_range, state.m_loop});
         }
         else if(!commit && state.get_audio_buffer().m_sample_rate_hz != 0)
         {
             size_t sample =
                 drag.get_drag_range().second * state.get_audio_buffer().m_sample_rate_hz;
             state.m_cursor_sample = sample;
+
+            actions::select_playback_region r{
+                time_span{drag_range.first, state.get_audio_buffer().duration_s()},
+                state.m_loop
+            };
+            state.add_action(r);
         }
     }
 
