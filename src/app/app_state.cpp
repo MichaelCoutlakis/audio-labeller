@@ -6,6 +6,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <spdlog/spdlog.h>
 #include <stdexcept>
 
 #include <nlohmann/json.hpp>
@@ -85,9 +86,11 @@ void app_state::set_selected_file(const std::filesystem::path &path)
     // File not yet selected - select it and load the audio
     m_active_audio = load_audio(path);
     m_active_file = path;
-    std::cout << "Loaded " << path.string() << ", SR = " << m_active_audio.m_sample_rate_hz << "\n";
+    spdlog::info("Loaded {}, SR={} Hz", path.string(), m_active_audio.m_sample_rate_hz);
 
     m_audio_min_max_map = audio_min_max_pyramid_map(m_active_audio);
+    m_selected_labels.clear();
+    m_unlabelled.clear();
 }
 
 const audio_min_max_level *app_state::get_audio_min_max_level(size_t samples_per_px)

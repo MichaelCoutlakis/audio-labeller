@@ -39,10 +39,14 @@ struct project_config
 {
     static project_config parse_from_file(std::string filename);
 
+    /// Resolve a project related path (label, export) relative to the project location, according
+    /// to settings
+    std::filesystem::path resolve_proj(std::filesystem::path &p);
     std::filesystem::path m_filename;                 ///< This structure on disk
     std::vector<std::filesystem::path> m_wav_paths{}; ///< Directories to scan for wav files
-    std::filesystem::path m_label_path;  //!< Path for pre-saved labels / labelling directory
-    std::filesystem::path m_export_path; ///< Where to save exported artifacts
+    std::filesystem::path m_palette;                  ///< Classification dictionary
+    std::filesystem::path m_labels;        ///< Path for pre-saved labels / labelling directory
+    std::filesystem::path m_export_prefix; ///< Where to save exported artifacts
 };
 
 struct audio_file_entry
@@ -54,19 +58,15 @@ class project_model
 {
 public:
     project_model(const project_config &cfg);
+    ~project_model();
 
     // Rescans files - will reset the active file
     void rescan_files();
 
+    /// Export CSV (to the path defined in the project settings)
+    void export_csv();
+
     const std::vector<audio_file_entry> &get_files() const { return m_files; }
-
-    // label_id add_label(
-    //     const std::filesystem::path &file,
-    //     double start_s,
-    //     double stop_s,
-    //     std::string name);
-
-    // void remove_label(const std::filesystem::path &file, label_id id);
 
     label_dict m_label_dict;
 
@@ -77,4 +77,7 @@ private:
     std::vector<audio_file_entry> m_files; //!< Available files for labelling
 
     std::map<std::filesystem::path, labels> m_file_labels; //!< Labels per file
+
+    void load_labels();
+    void save_labels();
 };

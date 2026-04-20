@@ -1,0 +1,44 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "label.schema.json",
+    "title": "Labels",
+    "description": "Saves labels of the data set",
+    "type": "object",
+    "properties": {
+        "labels": {
+            "type": "array",
+            "description": "List of the labels",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "filename": {
+                        "description": "data set audio filename (and path)",
+                        "type": "string"
+                    },
+                    "label-id": {
+                        "description": "Unique label identifier",
+                        "type": "integer"
+                    },
+                    "start [s]": {
+                        "description": "Label start time in seconds",
+                        "type": "number"
+                    },
+                    "stop [s]": {
+                        "description": "Label stop time in seconds",
+                        "type": "number"
+                    },
+                    "class-id": {
+                        "description": "Class identifier for the label class",
+                        "type": "integer"
+                    },
+                    "class-name": {
+                        "description": "Class name included for readability / processing: The class-id should be considered authoritative",
+                        "type": "string"
+                    }
+                },
+                "required": [ "filename", "label-id", "start [s]", "stop [s]", "class-id", "class-name" ]
+            }
+        }
+    },
+    "required": [ "labels" ]
+}

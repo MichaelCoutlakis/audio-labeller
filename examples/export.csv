@@ -1,0 +1,4 @@
+filename,start_s,stop_s,class_label,class_id
+"..\..\..\..\Dog goes woof.wav",-0.009465,0.307616,Dog,0
+"..\..\..\..\Dog goes woof.wav",1.523882,1.987673,Pig,2
+"..\..\..\..\The Fox.wav",1.291212,1.481563,Fox,1

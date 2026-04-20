@@ -27,5 +27,8 @@ void file_list_view::render(project_model &project, app_state &state)
 
     if(ImGui::Button("Rescan files"))
         project.rescan_files();
+
+    if(ImGui::Button("Export CSV"))
+        project.export_csv();
     ImGui::End();
 }

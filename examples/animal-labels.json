@@ -1,0 +1,21 @@
+{
+  "$schema": "../schemas/labels.schema.json",
+  "labels": [
+    {
+      "class-id": 2,
+      "class-name": "Pig",
+      "filename": "..\\..\\..\\..\\The Fox.wav",
+      "label-id": 1,
+      "start [s]": 0.7709203257950915,
+      "stop [s]": 1.145276697991885
+    },
+    {
+      "class-id": 1,
+      "class-name": "Fox",
+      "filename": "..\\..\\..\\..\\The Fox.wav",
+      "label-id": 2,
+      "start [s]": 1.7670889772340164,
+      "stop [s]": 2.1414453494308097
+    }
+  ]
+}

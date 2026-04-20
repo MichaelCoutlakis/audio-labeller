@@ -4,15 +4,37 @@
  *****************************************************************************/
 #pragma once
 #include <atomic>
+#include <cstdint>
+#include <limits>
 #include <string>
 
 #include "ordered_registry.h"
 using label_id = uint64_t;
-using label_defn_id = uint32_t;
+
+struct label_defn_id
+{
+    // label_defn_id(uint32_t id) :
+    //     m_id(id)
+    // {
+    // }
+    label_defn_id &operator=(const label_defn_id &other)
+    {
+        m_id = other.m_id;
+        return *this;
+    }
+    operator uint32_t() const { return m_id; }
+    label_defn_id &operator++()
+    {
+        ++m_id;
+        return *this;
+    }
+
+    uint32_t m_id{std::numeric_limits<uint32_t>::max()};
+};
 
 inline label_defn_id get_next_label_defn_id()
 {
-    static std::atomic<label_defn_id> id{};
+    static label_defn_id id{};
     return ++id;
 }
 

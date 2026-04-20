@@ -16,10 +16,14 @@
                 "type": "string"
             }
         },
-        "export-path": {
-            "description": "Path to export output files",
+        "label-file": {
+            "description": "The applied labels",
+            "type": "string"
+        },
+        "export-prefix": {
+            "description": "Prefix path to export output files, including filename minus extension",
             "type": "string"
         }
     },
-    "required": ["label-palette", "dataset-roots", "export-path"]
+    "required": [ "label-palette", "dataset-roots", "label-file", "export-prefix" ]
 }
