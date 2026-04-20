@@ -1,0 +1,8 @@
+{
+    "$schema": "../schemas/label-palette.schema.json",
+    "label-palette": [
+        { "class-id": 0, "class": "Dog", "colour": "#ccb42aab" },
+        { "class-id": 2, "class": "Pig", "colour": "#bd5ccabe" },
+        { "class-id": 1, "class": "Fox", "colour": "#bd3a3aa6" }
+    ]
+}

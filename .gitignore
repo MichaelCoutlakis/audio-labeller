@@ -4,5 +4,8 @@ CMakeUserPresets.json
 *.7z
 *.wav
 *.ini
-*.json
+.vscode
+.cache
+.vs
 *.bat
+compile_commands.json

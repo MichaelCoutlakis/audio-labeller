@@ -6,7 +6,9 @@
 #include <imgui.h>
 #include <implot.h>
 
+#include "imgui_internal.h"
 #include "label_controls_view.h"
+
 
 void label_control_view::render(project_model &project, app_state &state)
 {
@@ -64,5 +66,8 @@ void label_control_view::render_label_palette(const project_model &project, app_
             ImGui::PopID();
         }
         ImGui::EndTable();
+
+        if(ImGui::IsKeyPressed(ImGuiKey_Escape, false))
+            state.m_active_label_defn.reset();
     }
 }

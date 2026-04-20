@@ -1,0 +1,6 @@
+{
+    "$schema": "../schemas/project.schema.json",
+    "dataset-roots": ["../"],
+    "export-path": "",
+    "label-palette": "animal-palette.json"
+}

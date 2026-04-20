@@ -13,7 +13,6 @@ audio_labeller_app::~audio_labeller_app() { m_app_state.settings.save(); }
 
 void audio_labeller_app::on_init()
 {
-    m_app_state.settings = app_settings::load();
     m_app_state.m_audio_devs = m_audio_engine.get_playback_devices(&m_app_state.audio_default_dev);
 
     if(!m_app_state.m_audio_devs.empty())

@@ -17,7 +17,7 @@ struct app_settings
     void save();
 
     std::optional<audio_dev> dev; ///< Previously used audio device
-    std::string current_file;
+    std::string project_file;
 };
 
 audio_buffer load_audio(const std::filesystem::path &path);
@@ -99,6 +99,7 @@ private:
 class app_state
 {
 public:
+    app_state();
     /* Active file: */
     /// Currently loaded file active in the waveform veiwer
     std::optional<std::filesystem::path> m_active_file;

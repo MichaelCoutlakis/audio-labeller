@@ -1,0 +1,31 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "label-palette.schema.json",
+    "title": "Label Palette",
+    "description": "Definition of a label palette for classification",
+    "type": "object",
+    "properties": {
+        "label-palette": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "class-id": {
+                        "description": "Unique and immutable identifier for the class label",
+                        "type": "integer"
+                    },
+                    "class": {
+                        "description": "classification label",
+                        "type": "string"
+                    },
+                    "colour": {
+                        "description": "Hex RGBA",
+                        "type": "string",
+                        "format": "color-hex"
+                    }
+                },
+                "required": [ "class-id", "class", "colour" ]
+            }
+        }
+    }
+}

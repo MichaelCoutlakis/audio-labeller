@@ -39,9 +39,10 @@ struct project_config
 {
     static project_config parse_from_file(std::string filename);
 
-    std::vector<std::filesystem::path> m_wav_paths{
-        std::filesystem::current_path() / "../../../../"}; //!< Directories to scan for wav files
-    std::filesystem::path m_label_path; //!< Path for pre-saved labels / labelling directory
+    std::filesystem::path m_filename;                 ///< This structure on disk
+    std::vector<std::filesystem::path> m_wav_paths{}; ///< Directories to scan for wav files
+    std::filesystem::path m_label_path;  //!< Path for pre-saved labels / labelling directory
+    std::filesystem::path m_export_path; ///< Where to save exported artifacts
 };
 
 struct audio_file_entry
@@ -59,16 +60,15 @@ public:
 
     const std::vector<audio_file_entry> &get_files() const { return m_files; }
 
-    //label_id add_label(
-    //    const std::filesystem::path &file,
-    //    double start_s,
-    //    double stop_s,
-    //    std::string name);
+    // label_id add_label(
+    //     const std::filesystem::path &file,
+    //     double start_s,
+    //     double stop_s,
+    //     std::string name);
 
-    //void remove_label(const std::filesystem::path &file, label_id id);
+    // void remove_label(const std::filesystem::path &file, label_id id);
 
     label_dict m_label_dict;
-
 
     labels &get_labels(const std::filesystem::path &file) { return m_file_labels[file]; }
 

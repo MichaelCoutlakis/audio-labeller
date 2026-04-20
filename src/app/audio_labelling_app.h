@@ -22,8 +22,8 @@ public:
     ~audio_labeller_app();
 
 private:
-    project_model m_project{project_config{}};
     app_state m_app_state;
+    project_model m_project{project_config::parse_from_file(m_app_state.settings.project_file)};
 
     audio_view m_audio_control;
     file_list_view m_file_list;

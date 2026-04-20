@@ -15,7 +15,6 @@
 #include "actions.h"
 #include "app_state.h"
 
-
 app_settings app_settings::load()
 {
     app_settings s{};
@@ -27,7 +26,7 @@ app_settings app_settings::load()
     if(!settings_file)
         return s;
     auto j = nlohmann::json::parse(settings_file);
-    s.current_file = j.value("current_file", std::string{});
+    s.project_file = j.value("project", std::string{});
     if(auto dev = j.find("audio_device"); dev != j.end())
     {
         s.dev = audio_dev{};
@@ -39,7 +38,7 @@ app_settings app_settings::load()
 
 void app_settings::save()
 {
-    nlohmann::json j{{"current_file", current_file}};
+    nlohmann::json j{{"project", project_file}};
     if(dev)
         j["audio_device"] = {{"index", dev->index}, {"name", dev->name}};
     std::ofstream f(m_filename);
@@ -63,6 +62,11 @@ audio_buffer load_audio(const std::filesystem::path &path)
     buffer.m_sample_rate_hz = audio_file.getSampleRate();
     buffer.m_samples = audio_file.samples[0];
     return buffer;
+}
+
+app_state::app_state() :
+    settings(app_settings::load())
+{
 }
 
 bool app_state::is_selected_file(const std::filesystem::path &path)

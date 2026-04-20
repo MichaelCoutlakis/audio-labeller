@@ -16,6 +16,17 @@ Finally, with short sounds the playback render omitts the sound on some systems.
 
 At the time, it seemed easier to make my own application rather than forking / editing existing similar tools.
 
+## Project definition and files
+
+1. Create your projects label palette according to the schema in `schemas/label-palette.json`
+2. Define your projects paths (data set, export path etc) according to the schema in `schemas/project.json`
+3. Run the app, this should produce an app settings .json file in the working directory.
+4. In the app settings, set the project to point to your project .json
+
+Note that if paths in the project .json are relative then they are taken
+to be relative to the project.json location on disk rather than the app
+working directory.
+
 ## Controls:
 
 ### Waveform
@@ -37,6 +48,6 @@ The label palette uses a "paint class" style:
 - Single click selects only that label
 
 ### Hot keys:
-- Escape: deselect all labels / selections
+- Escape: deselect all labels / selections and the active palette brush
 - Delete: delete all selections
 - Spacebar: toggle play/stop

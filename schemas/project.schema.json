@@ -1,0 +1,25 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "project.schema.json",
+    "title": "Audio Labelling App Project",
+    "description": "Project definition",
+    "type": "object",
+    "properties": {
+        "label-palette": {
+            "type": "string",
+            "description": "Path to the label palette file. Note that it may be edited and over-written - make sure it is backed up / under version control."
+        },
+        "dataset-roots": {
+            "description": "List of read only data set root paths (each root will be searched recursively for audio files",
+            "type": "array",
+            "items": {
+                "type": "string"
+            }
+        },
+        "export-path": {
+            "description": "Path to export output files",
+            "type": "string"
+        }
+    },
+    "required": ["label-palette", "dataset-roots", "export-path"]
+}
