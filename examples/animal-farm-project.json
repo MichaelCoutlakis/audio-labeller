@@ -3,5 +3,5 @@
     "dataset-roots": ["../"],
     "export-prefix": "export",
     "label-palette": "animal-palette.json",
-    "label-file": "animals-labels.json"
+    "label-file": "animal-labels.json"
 }

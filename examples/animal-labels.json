@@ -2,6 +2,14 @@
   "$schema": "../schemas/labels.schema.json",
   "labels": [
     {
+      "class-id": 0,
+      "class-name": "Dog",
+      "filename": "..\\..\\..\\..\\Dog goes woof.wav",
+      "label-id": 1,
+      "start [s]": 0.023662770339203693,
+      "stop [s]": 0.2650230277990814
+    },
+    {
       "class-id": 2,
       "class-name": "Pig",
       "filename": "..\\..\\..\\..\\The Fox.wav",
@@ -13,9 +21,9 @@
       "class-id": 1,
       "class-name": "Fox",
       "filename": "..\\..\\..\\..\\The Fox.wav",
-      "label-id": 2,
-      "start [s]": 1.7670889772340164,
-      "stop [s]": 2.1414453494308097
+      "label-id": 3,
+      "start [s]": 1.3116599021125168,
+      "stop [s]": 1.7203655237852575
     }
   ]
 }
