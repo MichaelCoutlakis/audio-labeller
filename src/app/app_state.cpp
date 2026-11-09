@@ -26,19 +26,30 @@ app_settings app_settings::load()
     std::ifstream settings_file(m_filename);
     if(!settings_file)
         return s;
-    auto j = nlohmann::json::parse(settings_file);
-    s.project_file = j.value("project", std::string{});
-    if(auto dev = j.find("audio_device"); dev != j.end())
+    try
     {
-        s.dev = audio_dev{};
-        s.dev->index = dev->value("index", 0);
-        s.dev->name = dev->value("name", std::string{});
+        auto j = nlohmann::json::parse(settings_file);
+        s.project_file = j.value("project", std::string{});
+        if(auto dev = j.find("audio_device"); dev != j.end())
+        {
+            s.dev = audio_dev{};
+            s.dev->index = dev->value("index", 0);
+            s.dev->name = dev->value("name", std::string{});
+        }
+    }
+    catch(const nlohmann::json::exception &e)
+    {
+        s = app_settings{};
+        s.m_load_error = "Could not read " + m_filename + ":\n" + e.what();
     }
     return s;
 }
 
 void app_settings::save()
 {
+    if(!m_load_error.empty())
+        return;
+
     nlohmann::json j{{"project", project_file}};
     if(dev)
         j["audio_device"] = {{"index", dev->index}, {"name", dev->name}};
@@ -56,13 +67,30 @@ audio_buffer load_audio(const std::filesystem::path &path)
     if(audio_file.getNumChannels() < 1)
         throw std::runtime_error("Must have at least one channel");
 
-    // TODO: Only loading first channel for now:
+    const size_t num_frames = audio_file.getNumSamplesPerChannel();
+    if(audio_file.getSampleRate() == 0 || num_frames == 0)
+        throw std::runtime_error("No audio in file " + path.string());
 
+    // Mix down to mono so that sounds on any channel can be seen and heard:
     audio_buffer buffer;
     buffer.m_channels = 1;
     buffer.m_sample_rate_hz = audio_file.getSampleRate();
-    buffer.m_samples = audio_file.samples[0];
+    buffer.m_samples.assign(num_frames, 0.f);
+
+    const auto num_channels = static_cast<float>(audio_file.getNumChannels());
+    for(const auto &channel : audio_file.samples)
+        for(size_t frame = 0U; frame != std::min(num_frames, channel.size()); ++frame)
+            buffer.m_samples[frame] += channel[frame] / num_channels;
+
     return buffer;
+}
+
+void app_state::report_error(const std::string &message)
+{
+    spdlog::error("{}", message);
+    if(!m_error_message.empty())
+        m_error_message += "\n\n";
+    m_error_message += message;
 }
 
 app_state::app_state() :

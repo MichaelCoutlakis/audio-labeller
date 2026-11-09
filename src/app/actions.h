@@ -64,6 +64,14 @@ struct playback_loop
     bool loop{false};
 };
 
+struct rescan_files
+{
+};
+
+struct export_csv
+{
+};
+
 using app_action = std::variant<
     load_file,
     add_label,
@@ -73,6 +81,8 @@ using app_action = std::variant<
     select_playback_device,
     select_playback_region,
     toggle_playback,
-    playback_loop>;
+    playback_loop,
+    rescan_files,
+    export_csv>;
 
 }

@@ -130,3 +130,7 @@ void action_handler::operator()(const actions::playback_loop &p)
 {
     m_audio_engine.set_playback_loop(p.loop);
 }
+
+void action_handler::operator()(const actions::rescan_files &r) { m_proj.rescan_files(); }
+
+void action_handler::operator()(const actions::export_csv &e) { m_proj.export_csv(); }

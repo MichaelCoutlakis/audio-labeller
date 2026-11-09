@@ -86,7 +86,9 @@ void imgui_app::end_frame()
 {
     ImGui::Render();
 
-    glViewport(0, 0, m_config.m_width, m_config.m_height);
+    int width{}, height{};
+    SDL_GetWindowSizeInPixels(m_window, &width, &height);
+    glViewport(0, 0, width, height);
     glClear(GL_COLOR_BUFFER_BIT);
 
     ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());

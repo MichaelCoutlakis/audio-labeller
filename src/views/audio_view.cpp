@@ -27,7 +27,7 @@ void audio_view::render(project_model &proj, app_state &state)
         if(it != state.m_audio_devs.end())
             m_index = std::distance(state.m_audio_devs.begin(), it);
     }
-    m_index = std::clamp<int>(m_index, 0, names.size() - 1);
+    m_index = std::clamp<int>(m_index, 0, std::max<int>(0, names.size() - 1));
     if(ImGui::Combo("Playback Device", &m_index, names.data(), names.size()))
         state.add_action(actions::select_playback_device{state.m_audio_devs.at(m_index)});
 

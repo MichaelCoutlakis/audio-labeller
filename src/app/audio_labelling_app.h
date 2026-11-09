@@ -4,6 +4,8 @@
  *****************************************************************************/
 #include "../imgui_app/imgui_app.h"
 
+#include <chrono>
+
 #include <imgui.h>
 
 #include "../audio/audio_engine.h"
@@ -23,7 +25,7 @@ public:
 
 private:
     app_state m_app_state;
-    project_model m_project{project_config::parse_from_file(m_app_state.settings.project_file)};
+    project_model m_project = open_project(m_app_state);
 
     audio_view m_audio_control;
     file_list_view m_file_list;
@@ -36,6 +38,17 @@ private:
     action_handler m_handler{m_audio_engine, m_project, m_app_state};
 
     bool m_layout_initialised{false};
+
+    std::chrono::steady_clock::time_point m_last_autosave{std::chrono::steady_clock::now()};
+    bool m_autosave_failed{false}; ///< To report a persistent failure once rather than every time
+
+    /// Opens the project from the settings. On failure, reports the error and returns an empty
+    /// model so that the app still starts and can't overwrite whatever it failed to read.
+    static project_model open_project(app_state &state);
+
+    void autosave();
+
+    void render_error_popup();
 
     void on_init() override;
 

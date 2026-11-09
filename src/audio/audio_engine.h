@@ -54,6 +54,7 @@ private:
     PaStream *m_stream{nullptr};
     audio_dev m_device{audio_dev{paNoDevice, ""}};
     PaStreamParameters m_stream_params;
+    double m_stream_rate_hz{}; ///< May differ from the clip's rate, in which case render resamples
 
     struct buffer_state;
     std::shared_ptr<buffer_state> m_buf; ///< Always valid but may be default

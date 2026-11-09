@@ -3,6 +3,7 @@
  * SPDX-FileCopyrightText: 2026 Michael Coutlakis
  *****************************************************************************/
 
+#include <algorithm>
 #include <chrono>
 #include <imgui.h>
 #include <implot.h>
@@ -124,10 +125,7 @@ void waveform_view::render_annotations(project_model &project, app_state &state)
     {
         auto defn = project.m_label_dict.find_ptr(label.m_defn_id);
 
-        if(!defn)
-            throw std::runtime_error("Definition missing for label");
-
-        auto col = defn->m_color_rgba;
+        ImU32 col = defn ? defn->m_color_rgba : colours::grey;
         if(state.is_label_selected(label.m_id))
             col = colours::brighter(col);
 
@@ -170,7 +168,10 @@ void waveform_view::upate_waveform_drag(project_model &proj, app_state &state)
     {
         // Only commit the drag selection if the drag duration and range exceeded some amount,
         // otherwise likely a cursor click:
-        const auto drag_range = drag.get_drag_range();
+        auto drag_range = drag.get_drag_range();
+        const double duration_s = state.get_audio_buffer().duration_s();
+        drag_range.first = std::clamp(drag_range.first, 0., duration_s);
+        drag_range.second = std::clamp(drag_range.second, 0., duration_s);
         bool commit = as_ms(t_now - m_drag_start) > ms(100) &&
             std::abs(drag_range.second - drag_range.first) > 0.02;
         drag.end_drag(commit);
@@ -224,6 +225,10 @@ bool waveform_view::render_resize_label_rect(app_state &state, label &l, ImColor
 
     if(l.m_start_s > l.m_stop_s)
         std::swap(l.m_start_s, l.m_stop_s);
+
+    const double duration_s = state.get_audio_buffer().duration_s();
+    l.m_start_s = std::clamp(l.m_start_s, 0., duration_s);
+    l.m_stop_s = std::clamp(l.m_stop_s, 0., duration_s);
 
     if(was_resized)
         m_drag_arm_id = l.m_id;

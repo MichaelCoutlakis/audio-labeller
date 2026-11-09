@@ -18,6 +18,9 @@ struct app_settings
 
     std::optional<audio_dev> dev; ///< Previously used audio device
     std::string project_file;
+
+    /// Set if the settings file exists but is unreadable, in which case it's left as is on save
+    std::string m_load_error;
 };
 
 audio_buffer load_audio(const std::filesystem::path &path);
@@ -160,6 +163,11 @@ public:
 
     // Settings between program runs
     app_settings settings;
+
+    /* Errors: */
+    /// Log an error and queue it to be shown to the user
+    void report_error(const std::string &message);
+    std::string m_error_message; ///< Errors waiting to be acknowledged, empty if none
 
 private:
     std::set<label_id> m_selected_labels;

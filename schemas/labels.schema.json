@@ -12,7 +12,11 @@
                 "type": "object",
                 "properties": {
                     "filename": {
-                        "description": "data set audio filename (and path)",
+                        "description": "Audio file path relative to dataset-root, using forward slashes",
+                        "type": "string"
+                    },
+                    "dataset-root": {
+                        "description": "The entry in the project's dataset-roots which contains the file. Absent in older label files, where filename was relative to the working directory",
                         "type": "string"
                     },
                     "label-id": {

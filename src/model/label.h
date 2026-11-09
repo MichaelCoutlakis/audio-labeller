@@ -38,10 +38,20 @@ inline label_defn_id get_next_label_defn_id()
     return ++id;
 }
 
-inline label_id get_next_label_id()
+inline std::atomic<label_id> &last_label_id()
 {
     static std::atomic<label_id> id{};
-    return ++id;
+    return id;
+}
+
+inline label_id get_next_label_id() { return ++last_label_id(); }
+
+/// Ensure that IDs handed out from now on are greater than the specified one
+inline void reserve_label_ids(label_id id)
+{
+    auto &last = last_label_id();
+    if(last < id)
+        last = id;
 }
 
 struct label_defn

@@ -27,6 +27,10 @@ Note that if paths in the project .json are relative then they are taken
 to be relative to the project.json location on disk rather than the app
 working directory.
 
+Labels are saved automatically every few seconds and on exit. Each label stores its audio file
+relative to its dataset root, so a project can be moved or shared. Labels whose audio file can't be
+found are kept in the label file, and are picked up again once the file is available.
+
 ## Controls:
 
 ### Waveform

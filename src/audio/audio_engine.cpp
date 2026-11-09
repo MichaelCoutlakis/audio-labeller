@@ -2,8 +2,10 @@
  * SPDX-License-Identifier: MIT
  * SPDX-FileCopyrightText: 2026 Michael Coutlakis
  *****************************************************************************/
+#include <algorithm>
 #include <memory>
 #include <mutex>
+#include <utility>
 
 #include <portaudio.h>
 #include <spdlog/spdlog.h>
@@ -30,6 +32,7 @@ struct audio_engine::buffer_state
         double t0 = std::clamp(t.first, 0., m_buffer.duration_s());
         double t1 = std::clamp(t.second, t0, m_buffer.duration_s());
         m_playhead = t0 * m_buffer.m_sample_rate_hz;
+        m_playhead_frac = 0.;
         m_region_start_frame = m_playhead;
         m_region_end_frame =
             std::clamp<uint64_t>(t1 * m_buffer.m_sample_rate_hz, m_playhead, m_buffer.num_frames());
@@ -41,6 +44,7 @@ struct audio_engine::buffer_state
         if(m_region_end_frame > m_region_start_frame)
         {
             m_playhead = m_region_start_frame;
+            m_playhead_frac = 0.;
             m_playing = true;
             spdlog::info("audio: play started");
         }
@@ -60,6 +64,7 @@ struct audio_engine::buffer_state
     audio_buffer m_buffer;
 
     uint64_t m_playhead{};
+    double m_playhead_frac{}; ///< Position between m_playhead and the next frame when resampling
     uint64_t m_region_start_frame{};
     uint64_t m_region_end_frame{};
     bool m_loop = false;
@@ -69,7 +74,8 @@ struct audio_engine::buffer_state
 audio_engine::audio_engine() :
     m_buf(std::make_shared<buffer_state>(audio_buffer{}))
 {
-    Pa_Initialize();
+    if(const PaError err = Pa_Initialize(); err != paNoError)
+        spdlog::error("audio: could not initialise: {}", Pa_GetErrorText(err));
 }
 audio_engine::~audio_engine() { Pa_Terminate(); }
 
@@ -78,9 +84,11 @@ std::vector<audio_dev> audio_engine::get_playback_devices(audio_dev *default_dev
     std::vector<audio_dev> devs;
 
     int count = Pa_GetDeviceCount();
-    for(int i = 0; i != count; ++i)
+    for(int i = 0; i < count; ++i) // Count is negative on error
     {
         const PaDeviceInfo *info = Pa_GetDeviceInfo(i);
+        if(!info)
+            continue;
         const PaHostApiInfo *host_api = Pa_GetHostApiInfo(info->hostApi);
 
         if(info->maxOutputChannels > 0)
@@ -89,8 +97,12 @@ std::vector<audio_dev> audio_engine::get_playback_devices(audio_dev *default_dev
 
     if(default_dev)
     {
-        int default_idx = Pa_GetDefaultOutputDevice();
-        *default_dev = devs.at(default_idx);
+        // PortAudio's index is into all devices, whereas devs only holds the output devices
+        const auto it = std::ranges::find(devs, Pa_GetDefaultOutputDevice(), &audio_dev::index);
+        if(it != devs.end())
+            *default_dev = *it;
+        else
+            *default_dev = devs.empty() ? audio_dev{paNoDevice, ""} : devs.front();
     }
     return devs;
 }
@@ -121,7 +133,11 @@ void audio_engine::select_region(time_span t, bool loop)
     std::scoped_lock lock(m_mx_buf);
     m_buf->select_region(t, loop);
 }
-void audio_engine::set_playback_loop(bool loop) { m_buf->m_loop = loop; }
+void audio_engine::set_playback_loop(bool loop)
+{
+    std::scoped_lock lock(m_mx_buf);
+    m_buf->m_loop = loop;
+}
 
 void audio_engine::play()
 {
@@ -148,6 +164,8 @@ void audio_engine::open_stream()
         return;
 
     const PaDeviceInfo *info = Pa_GetDeviceInfo(m_device.index);
+    if(!info)
+        throw std::runtime_error("Audio device is no longer available: " + m_device.name);
 
     m_stream_params = PaStreamParameters{};
     m_stream_params.device = m_device.index;
@@ -155,19 +173,36 @@ void audio_engine::open_stream()
     m_stream_params.sampleFormat = paFloat32;
     m_stream_params.suggestedLatency = info->defaultHighOutputLatency;
 
+    // Devices such as WASAPI in shared mode only accept their own rate:
+    m_stream_rate_hz = m_buf->m_buffer.m_sample_rate_hz;
+    if(Pa_IsFormatSupported(nullptr, &m_stream_params, m_stream_rate_hz) != paFormatIsSupported)
+    {
+        spdlog::info(
+            "audio: {} Hz not supported by device, resampling to {} Hz",
+            m_stream_rate_hz,
+            info->defaultSampleRate);
+        m_stream_rate_hz = info->defaultSampleRate;
+    }
+
+    PaStream *stream{nullptr};
     check_error(
         Pa_OpenStream(
-            &m_stream,
+            &stream,
             nullptr,
             &m_stream_params,
-            m_buf->m_buffer.m_sample_rate_hz,
+            m_stream_rate_hz,
             paFramesPerBufferUnspecified,
             paNoFlag,
             &audio_engine::pa_callback,
             this),
         "open port audio stream");
 
-    check_error(Pa_StartStream(m_stream), "start port audio stream");
+    if(const PaError err = Pa_StartStream(stream); err != paNoError)
+    {
+        Pa_CloseStream(stream);
+        check_error(err, "start port audio stream");
+    }
+    m_stream = stream;
     spdlog::info("stream opened");
 }
 
@@ -176,9 +211,13 @@ void audio_engine::close_stream()
     if(m_stream)
     {
         spdlog::info("closing stream");
-        check_error(Pa_StopStream(m_stream), "stop port audio stream");
-        check_error(Pa_CloseStream(m_stream), "close port audio stream");
-        m_stream = nullptr;
+
+        // Failures are logged only: The stream is gone either way and the next open must proceed
+        PaStream *stream = std::exchange(m_stream, nullptr);
+        if(const PaError err = Pa_StopStream(stream); err != paNoError)
+            spdlog::error("audio: stop stream: {}", Pa_GetErrorText(err));
+        if(const PaError err = Pa_CloseStream(stream); err != paNoError)
+            spdlog::error("audio: close stream: {}", Pa_GetErrorText(err));
     }
 }
 
@@ -196,21 +235,22 @@ int audio_engine::pa_callback(
 
 int audio_engine::render(float *out, unsigned long frames)
 {
-    std::shared_ptr<buffer_state> buf;
-    {
-        std::scoped_lock lock(m_mx_buf);
-        buf = m_buf;
-    }
     auto channels = m_stream_params.channelCount;
 
-    if(!buf->m_playing)
+    // The lock also guards the playback state below. It's only ever held briefly by other threads
+    // but the audio thread must not block on it, so output silence in the unlikely event of
+    // contention.
+    std::unique_lock lock(m_mx_buf, std::try_to_lock);
+    if(!lock.owns_lock() || !m_buf->m_playing)
     {
         std::fill(out, out + frames * channels, 0.0f);
         return paContinue;
     }
 
-    auto &state = *buf;
-    auto &buffer = buf->m_buffer;
+    auto &state = *m_buf;
+    auto &buffer = state.m_buffer;
+    const uint64_t last_frame = buffer.num_frames() - 1U;
+    const double step = buffer.m_sample_rate_hz / m_stream_rate_hz;
 
     for(unsigned long frame = 0; frame != frames; ++frame)
     {
@@ -226,12 +266,20 @@ int audio_engine::render(float *out, unsigned long frames)
             }
         }
 
+        const uint64_t next = std::min(state.m_playhead + 1U, last_frame);
+        const auto frac = static_cast<float>(state.m_playhead_frac);
         for(int c = 0; c != channels; ++c)
         {
-            out[frame * channels + c] = buffer.m_samples[state.m_playhead * channels + c];
+            const float s0 = buffer.m_samples[state.m_playhead * channels + c];
+            const float s1 = buffer.m_samples[next * channels + c];
+            out[frame * channels + c] = s0 + frac * (s1 - s0);
         }
 
-        ++state.m_playhead;
+        // With matching rates the step is exactly 1 and this is a plain copy
+        state.m_playhead_frac += step;
+        const auto whole_frames = static_cast<uint64_t>(state.m_playhead_frac);
+        state.m_playhead += whole_frames;
+        state.m_playhead_frac -= static_cast<double>(whole_frames);
     }
     return paContinue;
 }

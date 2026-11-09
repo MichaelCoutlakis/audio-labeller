@@ -3,13 +3,44 @@
  * SPDX-FileCopyrightText: 2026 Michael Coutlakis
  *****************************************************************************/
 #include <algorithm>
+#include <exception>
 
 #include <imgui_internal.h> // docking
+#include <spdlog/spdlog.h>
 
 #include "app_state.h"
 #include "audio_labelling_app.h"
 
-audio_labeller_app::~audio_labeller_app() { m_app_state.settings.save(); }
+static constexpr auto autosave_interval = std::chrono::seconds(5);
+
+audio_labeller_app::~audio_labeller_app()
+{
+    try
+    {
+        m_app_state.settings.save();
+    }
+    catch(const std::exception &e)
+    {
+        spdlog::error("Could not save settings: {}", e.what());
+    }
+}
+
+project_model audio_labeller_app::open_project(app_state &state)
+{
+    if(!state.settings.m_load_error.empty())
+        state.report_error(state.settings.m_load_error);
+
+    try
+    {
+        return project_model(project_config::parse_from_file(state.settings.project_file));
+    }
+    catch(const std::exception &e)
+    {
+        state.report_error(
+            "Could not open project " + state.settings.project_file + ":\n" + e.what());
+        return project_model(project_config{});
+    }
+}
 
 void audio_labeller_app::on_init()
 {
@@ -26,6 +57,9 @@ void audio_labeller_app::on_init()
         actions::select_playback_device a{m_app_state.settings.dev.value()};
         m_app_state.m_actions.push_back(a);
     }
+
+    // Written up front so that on a first run there's a file for the user to point at a project
+    m_app_state.settings.save();
 }
 
 void audio_labeller_app::on_frame()
@@ -43,11 +77,67 @@ void audio_labeller_app::on_frame()
 
     // Dispatch the actions (controller):
     for(auto &action : m_app_state.m_actions)
-        std::visit(m_handler, action);
+    {
+        // A bad audio file or device shouldn't take the session down with it
+        try
+        {
+            std::visit(m_handler, action);
+        }
+        catch(const std::exception &e)
+        {
+            m_app_state.report_error(e.what());
+        }
+    }
     m_app_state.m_actions.clear();
+
+    autosave();
+
+    render_error_popup();
 }
 
 void audio_labeller_app::on_shutdown() { }
+
+void audio_labeller_app::autosave()
+{
+    const auto now = std::chrono::steady_clock::now();
+    if(now - m_last_autosave < autosave_interval)
+        return;
+    m_last_autosave = now;
+
+    try
+    {
+        m_project.save_if_changed();
+        m_autosave_failed = false;
+    }
+    catch(const std::exception &e)
+    {
+        if(!m_autosave_failed)
+            m_app_state.report_error(std::string{"Could not save labels: "} + e.what());
+        m_autosave_failed = true;
+    }
+}
+
+void audio_labeller_app::render_error_popup()
+{
+    static constexpr auto popup_name = "Error";
+
+    if(!m_app_state.m_error_message.empty() && !ImGui::IsPopupOpen(popup_name))
+        ImGui::OpenPopup(popup_name);
+
+    if(ImGui::BeginPopupModal(popup_name, nullptr, ImGuiWindowFlags_AlwaysAutoResize))
+    {
+        ImGui::PushTextWrapPos(600.f);
+        ImGui::TextUnformatted(m_app_state.m_error_message.c_str());
+        ImGui::PopTextWrapPos();
+
+        if(ImGui::Button("OK"))
+        {
+            m_app_state.m_error_message.clear();
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::EndPopup();
+    }
+}
 
 void audio_labeller_app::render_main_dockspace()
 {
