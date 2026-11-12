@@ -149,6 +149,26 @@ public:
     /* Undo: */
     history m_history;
 
+    /// A new number for each edit gesture (a drag, a burst of nudges), so that its changes merge
+    /// into one undo step
+    uint64_t next_edit_seq() { return ++m_edit_seq; }
+
+    /* File list: */
+    enum class file_filter
+    {
+        all,
+        todo,
+        done,
+        skip
+    };
+    file_filter m_file_filter{file_filter::all};
+
+    /// The project's files that pass the filter, in list order
+    std::vector<const audio_file_entry *> filtered_files(const project_model &project) const;
+
+    /* Display: */
+    bool m_class_lanes{true}; ///< Each class in its own band of the waveform
+
     /* Actions: */
     void add_action(actions::app_action action) { m_actions.push_back(std::move(action)); }
     std::vector<actions::app_action> m_actions;
@@ -173,6 +193,7 @@ public:
 
 private:
     std::set<label_id> m_selected_labels;
+    uint64_t m_edit_seq{};
 
     std::shared_ptr<const audio_buffer> m_active_audio{std::make_shared<audio_buffer>()};
 

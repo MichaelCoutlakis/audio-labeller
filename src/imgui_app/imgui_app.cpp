@@ -66,7 +66,8 @@ void imgui_app::init_imgui()
         ImPlot::CreateContext();
 
     auto &io = ImGui::GetIO();
-    io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
+    if(m_config.m_nav_keyboard)
+        io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
 
     if(m_config.m_docking)
         io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;

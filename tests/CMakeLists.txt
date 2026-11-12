@@ -4,6 +4,7 @@ add_executable(audio_labeller_tests
     "test_audio_engine.cpp"
     "test_audio_source.cpp"
     "test_history.cpp"
+    "test_lanes.cpp"
     "test_playback_cursor.cpp"
     "test_project_model.cpp"
 

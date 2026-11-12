@@ -89,6 +89,22 @@ void app_state::set_selected_file(const std::filesystem::path &path)
     m_unlabelled.clear();
 }
 
+std::vector<const audio_file_entry *> app_state::filtered_files(const project_model &project) const
+{
+    std::vector<const audio_file_entry *> files;
+    for(const auto &file : project.get_files())
+    {
+        const auto status = project.get_status(file.m_path);
+        const bool pass = m_file_filter == file_filter::all ||
+            (m_file_filter == file_filter::todo && status == file_status::todo) ||
+            (m_file_filter == file_filter::done && status == file_status::done) ||
+            (m_file_filter == file_filter::skip && status == file_status::skip);
+        if(pass)
+            files.push_back(&file);
+    }
+    return files;
+}
+
 const audio_min_max_level *app_state::get_audio_min_max_level(size_t samples_per_px) const
 {
     return m_audio_min_max_map.get_level(samples_per_px);

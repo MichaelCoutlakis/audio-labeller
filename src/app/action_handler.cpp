@@ -10,6 +10,7 @@
 #include "../model/paths.h"
 #include "action_handler.h"
 #include "actions.h"
+#include "lanes.h"
 
 action_handler::action_handler(audio_engine &aud_eng, project_model &project, app_state &state) :
     m_audio_engine(aud_eng),
@@ -78,7 +79,12 @@ void action_handler::operator()(const actions::add_label &r)
 
 void action_handler::operator()(const actions::select_labels &s)
 {
-    auto hit = [x = s.m_x](const label &l) { return l.m_start_s <= x && x <= l.m_stop_s; };
+    auto hit = [&](const label &l)
+    {
+        return l.m_start_s <= s.m_x &&
+            s.m_x <= l.m_stop_s &&
+            lane_of(m_proj.m_label_dict, l.m_defn_id, m_state.m_class_lanes).contains(s.m_y);
+    };
     std::vector<const label *> hits;
 
     for(const auto &l : m_state.m_unlabelled)
@@ -198,7 +204,7 @@ void action_handler::operator()(const actions::move_label &m)
                 m_proj.update_label(file, l);
             }
         },
-        history::merge_key{m.m_drag_seq, m.m_id});
+        history::merge_key{m.m_drag_seq, 0U});
 }
 
 void action_handler::operator()(const actions::undo &u)

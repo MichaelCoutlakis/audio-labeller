@@ -9,6 +9,7 @@
 #include <implot.h>
 
 #include "../app/colours.h"
+#include "../app/lanes.h"
 #include "waveform_view.h"
 
 constexpr static auto as_ms = [](auto t)
@@ -35,7 +36,7 @@ void waveform_view::render(const project_model &project, app_state &state)
     ImPlot::GetInputMap().Pan = ImGuiMouseButton_Middle;
     ImPlot::GetInputMap().Fit = ImGuiMouseButton_Middle; // Double click middle to zoom to fit
 
-    if(ImPlot::BeginPlot("Waveform"))
+    if(ImPlot::BeginPlot("Waveform", ImVec2{-1.f, -1.f}, ImPlotFlags_NoLegend))
     {
         ImPlot::SetupAxes(
             "Time",
@@ -50,7 +51,7 @@ void waveform_view::render(const project_model &project, app_state &state)
         m_transform.m_view_end_s = plot_limits.X.Max;
 
         if(ImPlot::IsPlotHovered() && ImGui::IsMouseClicked(ImGuiMouseButton_Left))
-            ++m_drag_seq;
+            m_drag_seq = state.next_edit_seq();
 
         ImPlot::PushPlotClipRect();
         update_waveform_drag(project, state);
@@ -125,7 +126,14 @@ void waveform_view::render_annotations(const project_model &project, app_state &
         if(state.is_label_selected(label.m_id))
             col = colours::brighter(col);
 
-        render_resize_label_rect(state, label, col);
+        const auto band = lane_of(project.m_label_dict, label.m_defn_id, state.m_class_lanes);
+        render_resize_label_rect(
+            state,
+            label,
+            col,
+            defn ? defn->m_class.c_str() : "",
+            band.m_y_min,
+            band.m_y_max);
     }
     // Unclassified labels:
     for(const auto &label : state.m_unlabelled)
@@ -134,7 +142,7 @@ void waveform_view::render_annotations(const project_model &project, app_state &
         if(state.is_label_selected(label.m_id))
             col = colours::brighter(col);
 
-        render_resize_label_rect(state, label, col);
+        render_resize_label_rect(state, label, col, "", -1., 1.);
     }
 }
 
@@ -209,16 +217,35 @@ void waveform_view::process_selections(app_state &state)
 
     // Hit test:
     if(ImGui::IsMouseClicked(ImGuiMouseButton_Left))
-        state.add_action(actions::select_labels{ImPlot::GetPlotMousePos(ImAxis_X1, ImAxis_Y1).x});
+    {
+        const auto pos = ImPlot::GetPlotMousePos(ImAxis_X1, ImAxis_Y1);
+        state.add_action(actions::select_labels{pos.x, pos.y});
+    }
 }
 
-void waveform_view::render_resize_label_rect(app_state &state, const label &l, ImColor col)
+void waveform_view::render_resize_label_rect(
+    app_state &state,
+    const label &l,
+    ImColor col,
+    const char *name,
+    double y_min,
+    double y_max)
 {
-    // ImPlot edits the values in place, so it gets a copy and any change becomes an action:
+    // ImPlot edits the values in place, so it gets a copy and any change becomes an action. The
+    // vertical extent is fixed by the label's lane.
     double start{l.m_start_s}, stop{l.m_stop_s};
-    double y_min{-1}, y_max{1};
+    double top{y_max}, bottom{y_min};
     const bool was_resized =
-        ImPlot::DragRect(static_cast<int>(l.m_id), &start, &y_min, &stop, &y_max, col);
+        ImPlot::DragRect(static_cast<int>(l.m_id), &start, &bottom, &stop, &top, col);
+
+    if(name && *name)
+    {
+        const ImVec2 corner = ImPlot::PlotToPixels(l.m_start_s, y_max);
+        ImPlot::GetPlotDrawList()->AddText(
+            ImVec2{corner.x + 3.f, corner.y + 1.f},
+            IM_COL32(255, 255, 255, 200),
+            name);
+    }
 
     if(was_resized)
     {

@@ -52,8 +52,28 @@ The label palette uses a "paint class" style:
 - Single click selects only that label
 
 ### Hot keys:
-- Escape: deselect all labels / selections and the active palette brush
-- Delete: delete all selections
+The list is also in the app, under Audio Control > Keyboard shortcuts.
+
+- 1-9: choose a palette class, which also applies it to the selected labels
 - Spacebar: toggle play/stop
+- Tab / Shift+Tab: select and play the next / previous label
+- Left / Right: move the selected labels by 10 ms
+- Ctrl+Left / Ctrl+Right: move their start edges
+- Shift+Left / Shift+Right: move their stop edges
+- Delete: delete the selected labels
+- Escape: deselect all labels / selections and the active palette brush
 - Ctrl+Z: undo label changes
 - Ctrl+Y or Ctrl+Shift+Z: redo
+- N / P: next / previous file in the file list (as filtered)
+- D: mark the file done and open the next one to do. A done file with no
+  labels is taken to contain none of the classes.
+- S: mark the file skipped and open the next one to do
+
+### Files
+Each file is to do, done or skipped. The file list shows this, and the number
+of labels in each file, and can be filtered by it.
+
+### Class lanes
+By default each palette class gets its own horizontal band in the waveform, so
+overlapping sounds of different classes can be seen and clicked separately.
+Turn this off under Audio Control.

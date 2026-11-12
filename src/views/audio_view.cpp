@@ -15,6 +15,7 @@ void audio_view::render(const project_model &proj, app_state &state)
     if(ImGui::Checkbox("Loop", &state.m_loop))
         state.add_action(actions::playback_loop{state.m_loop});
     ImGui::Checkbox("Auto play", &state.m_auto_start);
+    ImGui::Checkbox("Class lanes", &state.m_class_lanes);
 
     std::vector<const char *> names;
     for(auto &dev : state.m_audio_devs)
@@ -28,6 +29,35 @@ void audio_view::render(const project_model &proj, app_state &state)
 
     if(ImGui::Combo("Playback Device", &m_index, names.data(), static_cast<int>(names.size())))
         state.add_action(actions::select_playback_device{state.m_audio_devs.at(m_index)});
+
+    if(ImGui::CollapsingHeader("Keyboard shortcuts"))
+    {
+        static constexpr const char *keys[][2] = {
+            {"1-9", "Choose a palette class (applies to the selection)"},
+            {"Space", "Play / stop"},
+            {"Tab, Shift+Tab", "Select and play the next / previous label"},
+            {"Left, Right", "Move the selected labels"},
+            {"Ctrl+Left, Ctrl+Right", "Move their start edges"},
+            {"Shift+Left, Shift+Right", "Move their stop edges"},
+            {"Delete", "Delete the selected labels"},
+            {"Escape", "Clear the selection and palette class"},
+            {"Ctrl+Z, Ctrl+Y", "Undo, redo"},
+            {"N, P", "Next / previous file in the list"},
+            {"D", "Mark the file done and open the next one to do"},
+            {"S", "Mark the file skipped and open the next one to do"},
+        };
+        if(ImGui::BeginTable("##Keys", 2, ImGuiTableFlags_SizingFixedFit))
+        {
+            for(const auto &[key, what] : keys)
+            {
+                ImGui::TableNextColumn();
+                ImGui::TextUnformatted(key);
+                ImGui::TableNextColumn();
+                ImGui::TextUnformatted(what);
+            }
+            ImGui::EndTable();
+        }
+    }
 
     ImGui::End();
 }

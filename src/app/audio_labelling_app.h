@@ -34,6 +34,7 @@ private:
     waveform_view m_waveform;
     label_control_view m_label_controls;
     labels_view m_applied_labels;
+    keyboard_controller m_keyboard;
 
     audio_engine m_audio_engine;
 

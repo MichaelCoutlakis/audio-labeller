@@ -29,6 +29,7 @@ add_executable(AudioLabeller main.cpp
     "app/app_state.h" "app/app_state.cpp"
     "app/audio_labelling_app.h" "app/audio_labelling_app.cpp"
     "app/colours.h"
+    "app/lanes.h"
 
     "audio/audio_engine.h" "audio/audio_engine.cpp"
     "audio/playback_cursor.h"

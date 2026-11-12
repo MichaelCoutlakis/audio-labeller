@@ -17,6 +17,7 @@ struct app_config
     bool m_docking = true;
     bool m_viewports = false;
     bool m_vsync = true;
+    bool m_nav_keyboard = true; ///< ImGui keyboard navigation, which claims arrows, Tab and Space
     bool m_bImPlotContext{true};
 };
 

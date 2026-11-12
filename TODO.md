@@ -11,14 +11,11 @@ per-file state, content-based source IDs, and SDL3 playback replacing PortAudio.
 
 ## Phase 2: Labelling flow
 
-- [ ] Per-file status: to do, done or skip, shown and filterable in the file
-      list. A done file with no labels contains none of the classes.
-- [ ] Keyboard-first flow: number keys for classes, next/previous file and
-      label, nudging edges, a key to mark a file done.
-- [ ] One lane per class for overlapping sounds. Labels currently stack at full
-      height and a click toggles all of them.
-- [ ] Show why labels are hidden in the UI: labels whose audio can't be found
-      are currently only reported in the log.
+Done: per-file status with a filter, keyboard-first controls (see README), one
+lane per class, and a notice for labels whose audio is missing.
+
+- [ ] Configurable nudge step, and a finer step with a modifier.
+- [ ] Remember the class lanes setting and file filter between runs.
 
 ## Phase 3: Export
 

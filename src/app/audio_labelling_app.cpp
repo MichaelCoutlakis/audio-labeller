@@ -61,7 +61,7 @@ void audio_labeller_app::on_frame()
 
     m_app_state.m_playback_state = m_audio_engine.get_state();
 
-    handle_shortcuts(m_project, m_app_state);
+    m_keyboard.handle(m_project, m_app_state);
 
     m_audio_control.render(m_project, m_app_state);
     m_file_list.render(m_project, m_app_state);
@@ -148,15 +148,18 @@ void audio_labeller_app::render_main_dockspace()
         ImGuiID centre_id{};
         ImGuiID right_id{};
         ImGuiID bottom_centre_id{};
+        ImGuiID bottom_left_id{};
 
         ImGui::DockBuilderSplitNode(dockspace_id, ImGuiDir_Left, 0.2f, &left_id, &centre_id);
         ImGui::DockBuilderSplitNode(centre_id, ImGuiDir_Right, 0.2f, &right_id, &centre_id);
-        ImGui::DockBuilderSplitNode(centre_id, ImGuiDir_Up, 0.5f, &centre_id, &bottom_centre_id);
+        ImGui::DockBuilderSplitNode(centre_id, ImGuiDir_Up, 0.7f, &centre_id, &bottom_centre_id);
+        ImGui::DockBuilderSplitNode(left_id, ImGuiDir_Up, 0.65f, &left_id, &bottom_left_id);
 
         ImGui::DockBuilderDockWindow(m_file_list.m_window_name.c_str(), left_id);
         ImGui::DockBuilderDockWindow(m_waveform.m_window_name.c_str(), centre_id);
         ImGui::DockBuilderDockWindow(m_label_controls.m_window_name.c_str(), bottom_centre_id);
         ImGui::DockBuilderDockWindow(m_applied_labels.m_window_name.c_str(), right_id);
+        ImGui::DockBuilderDockWindow(m_audio_control.m_window_name.c_str(), bottom_left_id);
 
         ImGui::DockBuilderFinish(dockspace_id);
     }

@@ -16,6 +16,7 @@ int main()
         app_config cfg;
         cfg.title = "Audio Labeller Tool";
         cfg.m_docking = true;
+        cfg.m_nav_keyboard = false; // The app's own shortcuts use the arrows, Tab and Space
         audio_labeller_app app(cfg);
         return app.run();
     }

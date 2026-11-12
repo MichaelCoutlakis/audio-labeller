@@ -36,6 +36,7 @@ struct add_label
 struct select_labels
 {
     double m_x;
+    double m_y; ///< Only labels whose lane contains this are hit
 };
 
 struct toggle_label_selection
