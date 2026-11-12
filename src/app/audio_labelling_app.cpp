@@ -44,19 +44,12 @@ project_model audio_labeller_app::open_project(app_state &state)
 
 void audio_labeller_app::on_init()
 {
-    m_app_state.m_audio_devs = m_audio_engine.get_playback_devices(&m_app_state.audio_default_dev);
+    m_app_state.m_audio_devs = m_audio_engine.get_playback_devices();
 
-    if(!m_app_state.m_audio_devs.empty())
-    {
-        // Restore or select default audio device
-        if(!m_app_state.settings.dev ||
-           !std::ranges::contains(m_app_state.m_audio_devs, m_app_state.settings.dev.value()))
-        {
-            m_app_state.settings.dev = m_app_state.audio_default_dev;
-        }
-        actions::select_playback_device a{m_app_state.settings.dev.value()};
-        m_app_state.m_actions.push_back(a);
-    }
+    // Restore the previous device by name, or use the system default (always first):
+    const auto &devs = m_app_state.m_audio_devs;
+    auto it = std::ranges::find(devs, m_app_state.settings.m_device_name, &audio_dev::name);
+    m_app_state.add_action(actions::select_playback_device{it != devs.end() ? *it : devs.front()});
 
     // Written up front so that on a first run there's a file for the user to point at a project
     m_app_state.settings.save();
@@ -67,6 +60,8 @@ void audio_labeller_app::on_frame()
     render_main_dockspace();
 
     m_app_state.m_playback_state = m_audio_engine.get_state();
+
+    handle_shortcuts(m_project, m_app_state);
 
     m_audio_control.render(m_project, m_app_state);
     m_file_list.render(m_project, m_app_state);
@@ -95,7 +90,7 @@ void audio_labeller_app::on_frame()
     render_error_popup();
 }
 
-void audio_labeller_app::on_shutdown() { }
+void audio_labeller_app::on_shutdown() { m_audio_engine.close(); }
 
 void audio_labeller_app::autosave()
 {
@@ -106,7 +101,7 @@ void audio_labeller_app::autosave()
 
     try
     {
-        m_project.save_if_changed();
+        m_project.save_if_dirty();
         m_autosave_failed = false;
     }
     catch(const std::exception &e)

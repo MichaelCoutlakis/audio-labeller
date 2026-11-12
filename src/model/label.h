@@ -13,30 +13,16 @@ using label_id = uint64_t;
 
 struct label_defn_id
 {
-    // label_defn_id(uint32_t id) :
-    //     m_id(id)
-    // {
-    // }
     label_defn_id &operator=(const label_defn_id &other)
     {
         m_id = other.m_id;
         return *this;
     }
     operator uint32_t() const { return m_id; }
-    label_defn_id &operator++()
-    {
-        ++m_id;
-        return *this;
-    }
+    bool operator==(const label_defn_id &other) const = default;
 
     uint32_t m_id{std::numeric_limits<uint32_t>::max()};
 };
-
-inline label_defn_id get_next_label_defn_id()
-{
-    static label_defn_id id{};
-    return ++id;
-}
 
 inline std::atomic<label_id> &last_label_id()
 {
@@ -58,7 +44,7 @@ struct label_defn
 {
     label_defn_id m_id;
     std::string m_class;
-    uint32_t m_color_rgba{};
+    uint32_t m_color_rgba{}; ///< See colour.h
 };
 
 struct label
@@ -67,6 +53,8 @@ struct label
     label_defn_id m_defn_id; //!< ID of the label definition in the dictionary
     double m_start_s{};
     double m_stop_s{};
+
+    bool operator==(const label &other) const = default;
 };
 
 /// Used to extract the label definition id from a label definition to be used as a registry key in

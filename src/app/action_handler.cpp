@@ -3,8 +3,11 @@
  * SPDX-FileCopyrightText: 2026 Michael Coutlakis
  *****************************************************************************/
 
+#include <algorithm>
+
 #include <spdlog/spdlog.h>
 
+#include "../model/paths.h"
 #include "action_handler.h"
 #include "actions.h"
 
@@ -15,12 +18,35 @@ action_handler::action_handler(audio_engine &aud_eng, project_model &project, ap
 {
 }
 
+label_snapshot action_handler::snapshot(const std::filesystem::path &file) const
+{
+    label_snapshot s{m_proj.get_labels(file)};
+    if(m_state.is_selected_file(file))
+    {
+        s.m_unlabelled = m_state.m_unlabelled;
+        s.m_selection = m_state.selected_labels();
+    }
+    return s;
+}
+
+void action_handler::restore(const std::filesystem::path &file, const label_snapshot &s)
+{
+    m_proj.set_labels(file, s.m_labels);
+
+    // Selections only exist for the active file:
+    if(m_state.is_selected_file(file))
+    {
+        m_state.m_unlabelled = s.m_unlabelled;
+        m_state.set_selection(s.m_selection);
+    }
+}
+
 void action_handler::operator()(const actions::load_file &f)
 {
-    spdlog::info("loading file {}", f.file_path.string());
+    spdlog::info("loading file {}", generic_utf8(f.file_path));
     m_state.set_selected_file(f.file_path);
 
-    m_audio_engine.set_audio_clip(m_state.get_audio_buffer());
+    m_audio_engine.set_audio_clip(m_state.get_audio_buffer_ptr());
     m_audio_engine.select_region(
         time_span{0, m_state.get_audio_buffer().duration_s()},
         m_state.m_loop);
@@ -28,27 +54,34 @@ void action_handler::operator()(const actions::load_file &f)
 
 void action_handler::operator()(const actions::add_label &r)
 {
-    label l{get_next_label_id(), r.m_defn_id.value_or(label_defn_id{}), r.m_t.first, r.m_t.second};
-    // If a class was selected in the label palette, apply that
-    if(r.m_defn_id)
-        m_proj.get_labels(r.m_file).add(l);
+    undoable(
+        r.m_file,
+        [&]
+        {
+            label l{
+                get_next_label_id(),
+                r.m_defn_id.value_or(label_defn_id{}),
+                r.m_t.first,
+                r.m_t.second
+            };
+            // If a class was selected in the label palette, apply that, otherwise leave it as an
+            // unlabelled selection:
+            if(r.m_defn_id)
+                m_proj.add_label(r.m_file, l);
+            else
+                m_state.m_unlabelled.add(l);
 
-    // Otherwise leave it as an unlabeled selection:
-    else
-        m_state.m_unlabelled.add(l);
-
-    // In either case, addition of a label / selection clears previous selections and adds the new
-    // selection to the selection set:
-    m_state.clear_selections();
-    m_state.toggle_label_selection(l.m_id);
+            // Addition of a label / selection replaces the selection:
+            m_state.set_selection({l.m_id});
+        });
 }
 
 void action_handler::operator()(const actions::select_labels &s)
 {
     auto hit = [x = s.m_x](const label &l) { return l.m_start_s <= x && x <= l.m_stop_s; };
-    std::vector<label *> hits;
+    std::vector<const label *> hits;
 
-    for(auto &l : m_state.m_unlabelled)
+    for(const auto &l : m_state.m_unlabelled)
         if(hit(l))
         {
             if(!m_state.is_label_selected(l.m_id))
@@ -60,7 +93,7 @@ void action_handler::operator()(const actions::select_labels &s)
 
     if(!m_state.m_active_file)
         return;
-    for(auto &l : m_proj.get_labels(m_state.m_active_file.value()))
+    for(const auto &l : m_proj.get_labels(m_state.m_active_file.value()))
         if(hit(l))
         {
             // Prevent the selected label palette from going out of sync with the selections:
@@ -70,7 +103,7 @@ void action_handler::operator()(const actions::select_labels &s)
             if(m_state.toggle_label_selection(l.m_id))
                 hits.push_back(&l);
         }
-    // Set the playback selection to the most recently selected rection:
+    // Set the playback selection to the most recently selected region:
     if(!hits.empty())
     {
         time_span t{hits.back()->m_start_s, hits.back()->m_stop_s};
@@ -80,36 +113,115 @@ void action_handler::operator()(const actions::select_labels &s)
     }
 }
 
-void action_handler::operator()(const actions::delete_label &d)
+void action_handler::operator()(const actions::toggle_label_selection &t)
 {
-    m_state.m_unlabelled.erase(d.m_id);
-
-    if(m_state.has_active_file())
-        m_proj.get_labels(m_state.m_active_file.value()).erase(d.m_id);
+    m_state.toggle_label_selection(t.m_id, t.m_clear_others);
 }
 
-void action_handler::operator()(const actions::assign_label_class &a)
+void action_handler::operator()(const actions::clear_selection &c) { m_state.clear_selections(); }
+
+void action_handler::assign_class(const std::set<label_id> &ids, label_defn_id defn_id)
 {
-    if(!m_state.has_active_file())
-        return;
-    for(auto &id : a.m_ids)
+    const auto &file = m_state.m_active_file.value();
+    for(auto id : ids)
     {
         if(auto unlabelled = m_state.m_unlabelled.find_ptr(id))
         {
             auto l = *unlabelled;
             m_state.m_unlabelled.erase(unlabelled);
-            l.m_defn_id = a.m_defn_id;
-            m_proj.get_labels(m_state.m_active_file.value()).add(l);
+            l.m_defn_id = defn_id;
+            m_proj.add_label(file, l);
         }
-        if(auto l = m_proj.get_labels(m_state.m_active_file.value()).find_ptr(id))
-            l->m_defn_id = a.m_defn_id;
+        else if(auto existing = m_proj.get_labels(file).find_ptr(id))
+        {
+            auto l = *existing;
+            l.m_defn_id = defn_id;
+            m_proj.update_label(file, l);
+        }
     }
+}
+
+void action_handler::operator()(const actions::set_active_class &a)
+{
+    m_state.m_active_label_defn = a.m_defn_id;
+    if(!a.m_defn_id || !m_state.has_active_file())
+        return;
+
+    undoable(
+        m_state.m_active_file.value(),
+        [&] { assign_class(m_state.selected_labels(), a.m_defn_id.value()); });
+}
+
+void action_handler::operator()(const actions::delete_labels &d)
+{
+    if(!m_state.has_active_file())
+        return;
+
+    const auto &file = m_state.m_active_file.value();
+    undoable(
+        file,
+        [&]
+        {
+            for(auto id : d.m_ids)
+            {
+                m_state.m_unlabelled.erase(id);
+                m_proj.erase_label(file, id);
+                m_state.deselect(id);
+            }
+        });
+}
+
+void action_handler::operator()(const actions::move_label &m)
+{
+    if(!m_state.has_active_file())
+        return;
+
+    const auto &file = m_state.m_active_file.value();
+    const double duration_s = m_state.get_audio_buffer().duration_s();
+    const double start = std::clamp(std::min(m.m_start_s, m.m_stop_s), 0., duration_s);
+    const double stop = std::clamp(std::max(m.m_start_s, m.m_stop_s), 0., duration_s);
+
+    undoable(
+        file,
+        [&]
+        {
+            if(auto *l = m_state.m_unlabelled.find_ptr(m.m_id))
+            {
+                l->m_start_s = start;
+                l->m_stop_s = stop;
+            }
+            else if(auto *existing = m_proj.get_labels(file).find_ptr(m.m_id))
+            {
+                auto l = *existing;
+                l.m_start_s = start;
+                l.m_stop_s = stop;
+                m_proj.update_label(file, l);
+            }
+        },
+        history::merge_key{m.m_drag_seq, m.m_id});
+}
+
+void action_handler::operator()(const actions::undo &u)
+{
+    if(auto entry = m_state.m_history.undo())
+        restore(entry->m_file, entry->m_before);
+}
+
+void action_handler::operator()(const actions::redo &r)
+{
+    if(auto entry = m_state.m_history.redo())
+        restore(entry->m_file, entry->m_after);
+}
+
+void action_handler::operator()(const actions::set_file_status &s)
+{
+    m_proj.set_status(s.m_file, s.m_status);
 }
 
 void action_handler::operator()(const actions::select_playback_device &dev)
 {
     m_audio_engine.set_device(dev.dev);
-    m_state.settings.dev = dev.dev;
+    m_state.settings.m_device_name = dev.dev.name;
 }
 
 void action_handler::operator()(const actions::select_playback_region &r)
@@ -126,6 +238,7 @@ void action_handler::operator()(const actions::toggle_playback &a)
     else
         m_audio_engine.play();
 }
+
 void action_handler::operator()(const actions::playback_loop &p)
 {
     m_audio_engine.set_playback_loop(p.loop);

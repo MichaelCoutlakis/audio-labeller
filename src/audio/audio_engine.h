@@ -4,28 +4,33 @@
  *****************************************************************************/
 #pragma once
 
-#include <algorithm>
-#include <cstdint>
 #include <memory>
-#include <mutex>
-#include <stdexcept>
-#include <string>
 #include <vector>
 
-#include <portaudio.h>
+#include <SDL3/SDL_audio.h>
 
-#include "../model/project_model.h"
+#include "../model/audio_buffer.h"
+#include "../model/types.h"
+#include "playback_cursor.h"
 
+/// Plays a mono clip through an SDL audio stream, which converts it to the device's sample rate and
+/// format. The stream stays open while a device is selected, so that very short sounds aren't cut
+/// off by device start-up.
 class audio_engine
 {
 public:
     audio_engine();
     ~audio_engine();
-    std::vector<audio_dev> get_playback_devices(audio_dev *default_dev = nullptr);
+    audio_engine(const audio_engine &) = delete;
+    audio_engine &operator=(const audio_engine &) = delete;
 
-    void set_device(audio_dev device);
+    /// Needs SDL's audio subsystem to be initialised. The first entry is the system default, which
+    /// follows changes to the default device.
+    std::vector<audio_dev> get_playback_devices() const;
 
-    void set_audio_clip(audio_buffer clip);
+    void set_device(const audio_dev &device);
+
+    void set_audio_clip(std::shared_ptr<const audio_buffer> clip);
 
     void select_region(time_span t, bool loop);
     void set_playback_loop(bool loop);
@@ -35,28 +40,19 @@ public:
 
     playback_state get_state() const;
 
+    /// Release the device. Must be called before SDL is shut down.
+    void close();
+
 private:
-    void open_stream();
-    void close_stream();
+    static void SDLCALL feed(void *user_data, SDL_AudioStream *stream, int additional_bytes, int);
 
-    static int pa_callback(
-        const void *input,
-        void *output,
-        unsigned long num_frames,
-        const PaStreamCallbackTimeInfo *,
-        PaStreamCallbackFlags,
-        void *user_data);
+    SDL_AudioSpec clip_spec() const;
 
-    int render(float *out, unsigned long frames);
+    /// The stream's lock guards the members below. SDL holds it while calling feed().
+    class stream_lock;
 
-    void check_error(PaError c, std::string msg);
-
-    PaStream *m_stream{nullptr};
-    audio_dev m_device{audio_dev{paNoDevice, ""}};
-    PaStreamParameters m_stream_params;
-    double m_stream_rate_hz{}; ///< May differ from the clip's rate, in which case render resamples
-
-    struct buffer_state;
-    std::shared_ptr<buffer_state> m_buf; ///< Always valid but may be default
-    mutable std::mutex m_mx_buf;
+    SDL_AudioStream *m_stream{nullptr};
+    std::shared_ptr<const audio_buffer> m_clip{std::make_shared<audio_buffer>()};
+    playback_cursor m_cursor;
+    std::vector<float> m_scratch;
 };

@@ -7,7 +7,7 @@
 
 #include "file_list_view.h"
 
-void file_list_view::render(project_model &project, app_state &state)
+void file_list_view::render(const project_model &project, app_state &state)
 {
     ImGui::Begin(m_window_name.c_str());
 

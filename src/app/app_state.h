@@ -5,8 +5,14 @@
 #pragma once
 #include <filesystem>
 #include <limits>
+#include <memory>
 #include <optional>
+#include <set>
+#include <string>
+#include <vector>
 
+#include "../model/audio_buffer.h"
+#include "../model/history.h"
 #include "../model/project_model.h"
 #include "actions.h"
 
@@ -16,14 +22,12 @@ struct app_settings
     static app_settings load();
     void save();
 
-    std::optional<audio_dev> dev; ///< Previously used audio device
+    std::string m_device_name; ///< Previously used playback device, empty for the default
     std::string project_file;
 
     /// Set if the settings file exists but is unreadable, in which case it's left as is on save
     std::string m_load_error;
 };
-
-audio_buffer load_audio(const std::filesystem::path &path);
 
 class coord_transform
 {
@@ -74,15 +78,10 @@ struct waveform_interaction
     {
         m_dragging = true;
         m_drag_start = time_s;
-        m_pending_selection.reset();
+        m_drag_current = time_s;
     }
     void update_drag(double time_s) { m_drag_current = time_s; }
-    void end_drag(bool commit)
-    {
-        m_dragging = false;
-        if(commit)
-            m_pending_selection = get_drag_range();
-    }
+    void end_drag() { m_dragging = false; }
 
     bool is_dragging() const { return m_dragging; }
 
@@ -90,13 +89,11 @@ struct waveform_interaction
     {
         return {std::min(m_drag_start, m_drag_current), std::max(m_drag_start, m_drag_current)};
     }
-    std::optional<time_span> pending_selection() const { return m_pending_selection; }
 
 private:
     bool m_dragging{false};
     double m_drag_start{};
     double m_drag_current{};
-    std::optional<time_span> m_pending_selection;
 };
 
 class app_state
@@ -108,26 +105,25 @@ public:
     std::optional<std::filesystem::path> m_active_file;
 
     /// Check if the specified file is the same as the currently active file
-    bool is_selected_file(const std::filesystem::path &path);
+    bool is_selected_file(const std::filesystem::path &path) const;
 
     void set_selected_file(const std::filesystem::path &path);
 
     bool has_active_file() const { return m_active_file.has_value(); }
 
-    const audio_buffer &get_audio_buffer() { return m_active_audio; }
+    const audio_buffer &get_audio_buffer() const { return *m_active_audio; }
+    std::shared_ptr<const audio_buffer> get_audio_buffer_ptr() const { return m_active_audio; }
 
-    const audio_min_max_level *get_audio_min_max_level(size_t samples_per_px);
+    const audio_min_max_level *get_audio_min_max_level(size_t samples_per_px) const;
 
     /* Waveform drag and selections: */
     waveform_interaction m_drag;
 
     labels m_unlabelled; ///< Selections not labelled yet - use same format for id
 
-    // size_t m_cursor_sample{0U};
-
     std::optional<label_defn_id> m_active_label_defn;
 
-    bool is_label_selected(label_id id) { return m_selected_labels.count(id); }
+    bool is_label_selected(label_id id) const { return m_selected_labels.contains(id); }
 
     /// Toggle whether the specified label is selected
     /// @param clear_others if true and the label becomes selected, unselect other previously
@@ -146,20 +142,26 @@ public:
     }
 
     void clear_selections() { m_selected_labels.clear(); }
+    void set_selection(std::set<label_id> ids) { m_selected_labels = std::move(ids); }
+    void deselect(label_id id) { m_selected_labels.erase(id); }
     const std::set<label_id> &selected_labels() const { return m_selected_labels; }
 
+    /* Undo: */
+    history m_history;
+
     /* Actions: */
-    void add_action(actions::app_action action) { m_actions.push_back(action); }
+    void add_action(actions::app_action action) { m_actions.push_back(std::move(action)); }
     std::vector<actions::app_action> m_actions;
 
     /* Audio related: */
     bool m_loop{false};                  ///< Whether to loop the playback segment
     bool m_auto_start{true};             ///< Start playing a segment as soon as it's created
     std::vector<audio_dev> m_audio_devs; ///< Available playback audio devices
-    audio_dev audio_default_dev;
     playback_state m_playback_state;
 
-    void select_playback_region(double start_time, double stop_time = std::numeric_limits<double>::max());
+    void select_playback_region(
+        double start_time,
+        double stop_time = std::numeric_limits<double>::max());
 
     // Settings between program runs
     app_settings settings;
@@ -172,7 +174,7 @@ public:
 private:
     std::set<label_id> m_selected_labels;
 
-    audio_buffer m_active_audio;
+    std::shared_ptr<const audio_buffer> m_active_audio{std::make_shared<audio_buffer>()};
 
     audio_min_max_pyramid_map m_audio_min_max_map;
 };

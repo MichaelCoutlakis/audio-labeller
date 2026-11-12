@@ -3,14 +3,13 @@
  * SPDX-FileCopyrightText: 2026 Michael Coutlakis
  *****************************************************************************/
 
-#include <imgui.h>
-#include <implot.h>
+#include <algorithm>
 
-#include "imgui_internal.h"
+#include <imgui.h>
+
 #include "label_controls_view.h"
 
-
-void label_control_view::render(project_model &project, app_state &state)
+void label_control_view::render(const project_model &project, app_state &state)
 {
     ImGui::Begin(m_window_name.c_str());
     render_label_palette(project, state);
@@ -46,19 +45,12 @@ void label_control_view::render_label_palette(const project_model &project, app_
             }
             ImGui::PushStyleColor(ImGuiCol_Button, col_v);
 
+            // Toggles. Selecting a class also applies it to the selected labels.
             if(ImGui::Button(def.m_class.c_str(), {button_w, button_h}))
-            {
-                // Allow state to be toggled:
-                if(active && state.m_active_label_defn.has_value())
-                    state.m_active_label_defn.reset();
-                else
-                {
-                    state.m_active_label_defn = def.m_id;
-                    // Any selected labels should be assigned this class:
-                    state.m_actions.push_back(
-                        actions::assign_label_class{state.selected_labels(), def.m_id});
-                }
-            }
+                state.add_action(
+                    actions::set_active_class{
+                        active ? std::nullopt : std::optional<label_defn_id>{def.m_id}
+                    });
 
             if(active)
                 ImGui::PopStyleVar();
@@ -66,8 +58,5 @@ void label_control_view::render_label_palette(const project_model &project, app_
             ImGui::PopID();
         }
         ImGui::EndTable();
-
-        if(ImGui::IsKeyPressed(ImGuiKey_Escape, false))
-            state.m_active_label_defn.reset();
     }
 }

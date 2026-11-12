@@ -15,23 +15,24 @@ training ML models in Python.
       ^                             |                    |
       |                             v                    v
       +------- read state ---- audio_engine        label file (autosave)
-                               (PortAudio)
+                               (SDL3 audio)
 ```
 
 ## Layers
 
 | Layer | Code | Depends on |
 |---|---|---|
-| Core | `src/model`, audio file I/O, export | std, nlohmann/json, dr_wav, spdlog |
+| Core | `src/model`, `src/io` (audio files, source IDs), export | std, nlohmann/json, dr_wav, spdlog |
 | App | `src/app`: state, actions, handler, undo history | Core |
-| Audio playback | `src/audio` | Core, PortAudio |
+| Audio playback | `src/audio` | Core, SDL3 audio |
 | Views | `src/views` | App, ImGui, ImPlot |
 | Shell | `src/imgui_app`, `src/main.cpp` | SDL3, OpenGL, ImGui |
 
-**(planned)** Core becomes its own static library, `audio_labeller_core`, with
-no ImGui or PortAudio dependency, so it can be unit tested on its own. Colours
-are stored as plain RGBA `uint32_t` there, and only converted for ImGui in the
-views. Tests use doctest and live in `tests/`.
+Core is its own static library, `audio_labeller_core`, with no ImGui or audio
+device dependency, so it can be unit tested on its own. Colours are plain RGBA
+`uint32_t` there, packed the same way as ImGui's (checked at compile time in
+`app/colours.h`). Tests use doctest and live in `tests/`; playback is tested
+against SDL's dummy audio driver.
 
 ## Data flow and actions
 
@@ -43,11 +44,11 @@ Each dispatch is an error boundary: an exception from one action (a corrupt
 audio file, a missing device) is reported in an error popup and the session
 carries on.
 
-**(planned)** Every change goes through an action, including dragging label
-edges. `DragRect` edits a copy, and a `move_label` action is sent when it
-changes.
+Every change goes through an action, including dragging label edges: `DragRect`
+edits a copy, and a `move_label` action is sent when it changes. Keyboard
+shortcuts are turned into actions in `views/shortcuts.cpp`.
 
-### Undo/redo (planned)
+### Undo/redo
 
 Undo uses snapshots rather than inverse commands, because snapshots can't get
 out of step with the code that changes labels. Each undoable action records the
@@ -55,8 +56,12 @@ active file's labels and the selection before and after the change. Repeated
 `move_label` actions on the same label within one drag merge into one undo step.
 Label sets per file are small (kilobytes), so the memory cost is negligible.
 
-The history also gives a dirty flag, which replaces autosave's current
-"serialize every 5 s and compare".
+Undo covers label changes only, not per-file status or playback. Entries for a
+file other than the active one restore its labels but not the selection.
+
+The model counts revisions: every change goes through its mutating functions,
+which increment the count, and autosave writes only when it differs from the
+revision last saved.
 
 ## Files
 
@@ -69,7 +74,7 @@ never leave a truncated file. A file that can't be read is never overwritten.
 | `audio-labelling-app-settings.json` | App | Current project and audio device. In the working directory. |
 | Project (`schemas/project.schema.json`) | User | Dataset roots, palette path, label file path, export settings. |
 | Palette (`schemas/label-palette.schema.json`) | User | Classes: stable integer ID, name, colour. |
-| Label file (`schemas/labels.schema.json`) | App | Labels, and **(planned)** per-file status and export records. |
+| Label file (`schemas/labels.schema.json`) | App | Labels, per-file status, source IDs and export records. |
 
 ### File identity
 
@@ -82,14 +87,14 @@ that's taken to be a moved dataset.
 Labels whose audio file can't be found are kept verbatim in the label file, so
 an unplugged drive or deleted original never loses labels.
 
-**(planned)** Each file also gets a **source ID**: the first 12 hex digits of a
-64-bit FNV-1a hash of the file's bytes. It's computed once and cached in the
+Each file also has a **source ID**: the first 12 hex digits of a
+64-bit FNV-1a hash of the file's bytes. It's computed when first needed and cached in the
 label file along with the file's size and modification time. Because it depends
 on content rather than location, it's stable across renames and moves, and the
 same recording copied twice is detected. It names exported clips and links them
 back to their source.
 
-### Label file version 2 (planned)
+### Label file version 2
 
 Version 1 files are migrated on load. Version 2 adds:
 
@@ -104,13 +109,13 @@ Version 1 files are migrated on load. Version 2 adds:
 
 ## Audio
 
-### Reading files (planned)
+### Reading files
 
-An `audio_source` class wraps dr_wav. It opens a file without reading it,
+The `audio_source` class wraps dr_wav. It opens a file without reading it,
 reports sample rate, channels, frame count and sample format, and reads any
 range of frames. Export reads only the ranges it needs, so long recordings don't
-have to fit in memory. It replaces AudioFile, which reads the whole file, and
-later FLAC and MP3 can be added with dr_flac and dr_mp3 from the same family.
+have to fit in memory. FLAC and MP3 can be added later with dr_flac and dr_mp3
+from the same family.
 
 The view gets a mono mix and a min/max pyramid of the file for drawing the
 waveform. **(planned)** Loading moves to a background thread and the pyramid
@@ -119,15 +124,16 @@ high zoom.
 
 ### Playback
 
-`audio_engine` keeps a PortAudio stream open while a file is loaded, so very
-short sounds aren't cut off by stream start-up. If the device rejects the file's
-sample rate (for example WASAPI in shared mode) it plays at the device's rate,
-resampling with linear interpolation.
+`audio_engine` plays the mono clip through an SDL audio stream bound to the
+device, which converts it to the device's sample rate and format. The stream
+stays open while a device is selected, so very short sounds aren't cut off by
+device start-up. Devices are remembered by name, with "System default" first.
 
-Threads: the UI thread owns everything. The audio callback reads the playback
-state under a `try_lock` and outputs silence on contention, so it never blocks.
-**(planned)** This becomes lock-free (atomics or a small command queue), with a
-better resampler for slowed-down playback.
+Threads: the UI thread owns everything except the `playback_cursor`, which SDL's
+audio thread advances in the stream callback. SDL holds the stream's lock
+during the callback, and the engine takes the same lock for its brief changes,
+so no separate mutex is needed. The clip is shared (`shared_ptr<const
+audio_buffer>`) rather than copied.
 
 ### Spectrogram (planned)
 
@@ -221,12 +227,10 @@ All are permissively licensed, per `CONTRIBUTING.md`.
 
 | Dependency | Licence | Use | Status |
 |---|---|---|---|
-| SDL3 | Zlib | Window, input, GL context | Current |
+| SDL3 | Zlib | Window, input, GL context, audio playback | Current |
 | Dear ImGui, ImPlot | MIT | UI, waveform plot | Current |
-| PortAudio | MIT | Playback | Current |
 | nlohmann/json | MIT | JSON | Current |
 | spdlog (fmt) | MIT | Logging | Current |
-| AudioFile | MIT | WAV reading | To be replaced by dr_wav |
-| dr_wav (dr_libs) | Public domain / MIT-0 | WAV reading and writing | Planned |
-| doctest | MIT | Unit tests | Planned |
+| dr_wav (dr_libs) | Public domain / MIT-0 | WAV reading and writing | Current |
+| doctest | MIT | Unit tests | Current |
 | pocketfft | BSD-3-Clause | Spectrogram | Planned |

@@ -11,12 +11,10 @@
 #include "../app/colours.h"
 #include "waveform_view.h"
 
-waveform_view::waveform_view() { }
-
 constexpr static auto as_ms = [](auto t)
 { return std::chrono::duration_cast<std::chrono::milliseconds>(t); };
 
-void waveform_view::render(project_model &project, app_state &state)
+void waveform_view::render(const project_model &project, app_state &state)
 {
     ImGui::Begin(m_window_name.c_str());
 
@@ -50,21 +48,20 @@ void waveform_view::render(project_model &project, app_state &state)
 
         m_transform.m_view_start_s = plot_limits.X.Min;
         m_transform.m_view_end_s = plot_limits.X.Max;
-        ImPlot::PushPlotClipRect();
-        // Update drag:
-        upate_waveform_drag(project, state);
 
-        process_selections(project, state);
+        if(ImPlot::IsPlotHovered() && ImGui::IsMouseClicked(ImGuiMouseButton_Left))
+            ++m_drag_seq;
+
+        ImPlot::PushPlotClipRect();
+        update_waveform_drag(project, state);
+
+        process_selections(state);
 
         render_cursor(state);
 
-        render_waveform(project, state);
+        render_waveform(state);
 
         render_annotations(project, state);
-
-        if(ImGui::IsKeyPressed(ImGuiKey_Delete, false))
-            for(auto &id : state.selected_labels())
-                state.add_action(actions::delete_label{id});
 
         ImPlot::PopPlotClipRect();
         ImPlot::EndPlot();
@@ -95,14 +92,14 @@ void waveform_view::render_cursor(app_state &state)
     dl->AddLine(p0, p1, IM_COL32(127, 0, 0, 255), 4.f);
 }
 
-void waveform_view::render_waveform(project_model &project, app_state &state)
+void waveform_view::render_waveform(app_state &state)
 {
     auto &audio_buf = state.get_audio_buffer();
 
     if(audio_buf.num_frames() == 0)
         return;
 
-    const auto plot_width = static_cast<size_t>(ImPlot::GetPlotSize().x);
+    const auto plot_width = std::max<size_t>(1U, static_cast<size_t>(ImPlot::GetPlotSize().x));
     const auto visible_frames =
         static_cast<size_t>(m_transform.view_duration() * audio_buf.m_sample_rate_hz);
     const size_t frames_per_px = std::max<size_t>(1U, visible_frames / plot_width);
@@ -117,14 +114,13 @@ void waveform_view::render_waveform(project_model &project, app_state &state)
             audio_level_buf->m_bin_times.size());
 }
 
-void waveform_view::render_annotations(project_model &project, app_state &state)
+void waveform_view::render_annotations(const project_model &project, app_state &state)
 {
     if(!state.m_active_file)
         return;
-    for(auto &label : project.get_labels(state.m_active_file.value()))
+    for(const auto &label : project.get_labels(state.m_active_file.value()))
     {
         auto defn = project.m_label_dict.find_ptr(label.m_defn_id);
-
         ImU32 col = defn ? defn->m_color_rgba : colours::grey;
         if(state.is_label_selected(label.m_id))
             col = colours::brighter(col);
@@ -132,7 +128,7 @@ void waveform_view::render_annotations(project_model &project, app_state &state)
         render_resize_label_rect(state, label, col);
     }
     // Unclassified labels:
-    for(auto &label : state.m_unlabelled)
+    for(const auto &label : state.m_unlabelled)
     {
         auto col = colours::grey;
         if(state.is_label_selected(label.m_id))
@@ -142,9 +138,8 @@ void waveform_view::render_annotations(project_model &project, app_state &state)
     }
 }
 
-void waveform_view::upate_waveform_drag(project_model &proj, app_state &state)
+void waveform_view::update_waveform_drag(const project_model &proj, app_state &state)
 {
-
     if(!state.has_active_file() || !ImPlot::IsPlotHovered())
         return;
 
@@ -166,24 +161,25 @@ void waveform_view::upate_waveform_drag(project_model &proj, app_state &state)
     // End drag
     if(drag.is_dragging() && ImGui::IsMouseReleased(ImGuiMouseButton_Left))
     {
-        // Only commit the drag selection if the drag duration and range exceeded some amount,
-        // otherwise likely a cursor click:
         auto drag_range = drag.get_drag_range();
         const double duration_s = state.get_audio_buffer().duration_s();
         drag_range.first = std::clamp(drag_range.first, 0., duration_s);
         drag_range.second = std::clamp(drag_range.second, 0., duration_s);
-        bool commit = as_ms(t_now - m_drag_start) > ms(100) &&
+
+        // Only commit the drag selection if the drag duration and range exceeded some amount,
+        // otherwise likely a cursor click:
+        const bool commit = as_ms(t_now - m_drag_start) > ms(100) &&
             std::abs(drag_range.second - drag_range.first) > 0.02;
-        drag.end_drag(commit);
+        drag.end_drag();
 
         if(commit)
         {
-            auto a = actions::add_label{
-                drag_range,
-                state.m_active_file.value(),
-                state.m_active_label_defn
-            };
-            state.add_action(a);
+            state.add_action(
+                actions::add_label{
+                    drag_range,
+                    state.m_active_file.value(),
+                    state.m_active_label_defn
+                });
             state.add_action(actions::select_playback_region{drag_range, state.m_loop});
         }
     }
@@ -193,21 +189,20 @@ void waveform_view::upate_waveform_drag(project_model &proj, app_state &state)
     {
         auto span = drag.get_drag_range();
         auto *dl = ImPlot::GetPlotDrawList();
-        auto drag_colour = colours::drag_grey;
+        ImU32 drag_colour = colours::drag_grey;
 
         if(state.m_active_label_defn)
-        {
-            auto def = proj.m_label_dict.find_ptr(state.m_active_label_defn.value());
-            if(def)
+            if(auto def = proj.m_label_dict.find_ptr(state.m_active_label_defn.value()))
                 drag_colour = def->m_color_rgba;
-        }
+
         const ImVec2 p0 = ImPlot::PlotToPixels(span.first, -1.0);
         const ImVec2 p1 = ImPlot::PlotToPixels(span.second, 1.0);
 
         dl->AddRectFilled(p0, p1, drag_colour);
     }
 }
-void waveform_view::process_selections(project_model &proj, app_state &state)
+
+void waveform_view::process_selections(app_state &state)
 {
     if(!state.has_active_file() || !ImPlot::IsPlotHovered())
         return;
@@ -217,26 +212,23 @@ void waveform_view::process_selections(project_model &proj, app_state &state)
         state.add_action(actions::select_labels{ImPlot::GetPlotMousePos(ImAxis_X1, ImAxis_Y1).x});
 }
 
-bool waveform_view::render_resize_label_rect(app_state &state, label &l, ImColor col)
+void waveform_view::render_resize_label_rect(app_state &state, const label &l, ImColor col)
 {
+    // ImPlot edits the values in place, so it gets a copy and any change becomes an action:
+    double start{l.m_start_s}, stop{l.m_stop_s};
     double y_min{-1}, y_max{1};
-    bool was_resized =
-        ImPlot::DragRect(static_cast<int>(l.m_id), &l.m_start_s, &y_min, &l.m_stop_s, &y_max, col);
-
-    if(l.m_start_s > l.m_stop_s)
-        std::swap(l.m_start_s, l.m_stop_s);
-
-    const double duration_s = state.get_audio_buffer().duration_s();
-    l.m_start_s = std::clamp(l.m_start_s, 0., duration_s);
-    l.m_stop_s = std::clamp(l.m_stop_s, 0., duration_s);
+    const bool was_resized =
+        ImPlot::DragRect(static_cast<int>(l.m_id), &start, &y_min, &stop, &y_max, col);
 
     if(was_resized)
+    {
         m_drag_arm_id = l.m_id;
+        state.add_action(actions::move_label{l.m_id, start, stop, m_drag_seq});
+    }
 
     if(l.m_id == m_drag_arm_id && ImGui::IsMouseReleased(ImGuiMouseButton_Left))
     {
         m_drag_arm_id.reset();
         state.select_playback_region(l.m_start_s, l.m_stop_s);
     }
-    return was_resized;
 }

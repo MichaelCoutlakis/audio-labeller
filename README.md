@@ -55,3 +55,5 @@ The label palette uses a "paint class" style:
 - Escape: deselect all labels / selections and the active palette brush
 - Delete: delete all selections
 - Spacebar: toggle play/stop
+- Ctrl+Z: undo label changes
+- Ctrl+Y or Ctrl+Shift+Z: redo

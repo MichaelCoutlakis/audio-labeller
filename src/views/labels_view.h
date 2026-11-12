@@ -10,7 +10,7 @@
 class labels_view
 {
 public:
-    void render(project_model &proj, app_state &state);
+    void render(const project_model &proj, app_state &state);
 
     std::string m_window_name{"Annotations"};
 };

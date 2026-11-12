@@ -4,6 +4,7 @@
  *****************************************************************************/
 
 #include <algorithm>
+#include <chrono>
 #include <cstdint>
 #include <cstdio>
 #include <filesystem>
@@ -12,28 +13,23 @@
 #include <ios>
 #include <iterator>
 #include <map>
-#include <nlohmann/json_fwd.hpp>
 #include <stdexcept>
-
-#include <AudioFile/AudioFile.h>
-#include <imgui.h>
-#include <nlohmann/json.hpp>
-#include <spdlog/spdlog.h>
 #include <string>
 
+#include <nlohmann/json.hpp>
+#include <spdlog/spdlog.h>
+
+#include "../io/source_id.h"
+#include "colour.h"
 #include "label.h"
+#include "paths.h"
 #include "project_model.h"
 
 namespace fs = std::filesystem;
+using nlohmann::json;
 
 namespace
 {
-std::string to_utf8(const std::u8string &s) { return std::string(s.begin(), s.end()); }
-
-std::string generic_utf8(const fs::path &p) { return to_utf8(p.generic_u8string()); }
-
-fs::path path_from_utf8(const std::string &s) { return fs::path(std::u8string(s.begin(), s.end())); }
-
 /// Replace the target in one step, so that a failure part way through a write can never leave a
 /// truncated file in place of the previous good one.
 void write_file_atomically(const fs::path &target, const std::string &contents)
@@ -51,47 +47,103 @@ void write_file_atomically(const fs::path &target, const std::string &contents)
     }
     fs::rename(tmp, target);
 }
+
+std::optional<file_status> status_from_string(const std::string &s)
+{
+    for(auto status : {file_status::todo, file_status::done, file_status::skip})
+        if(s == to_string(status))
+            return status;
+    return std::nullopt;
+}
+
+std::int64_t mtime_of(const fs::path &p)
+{
+    const auto t = fs::last_write_time(p).time_since_epoch();
+    return std::chrono::duration_cast<std::chrono::seconds>(t).count();
+}
+
+/// Times are under different keys in version 1 label files
+double get_time(const json &record, const char *key, const char *v1_key)
+{
+    if(auto it = record.find(key); it != record.end())
+        return it->get<double>();
+    return record.at(v1_key).get<double>();
+}
+
+/// Upgrade the keys of a version 1 label record that's being kept verbatim
+json upgrade_label_record(json record)
+{
+    for(auto [v1_key, key] : {std::pair{"start [s]", "start_s"}, std::pair{"stop [s]", "stop_s"}})
+    {
+        if(auto it = record.find(v1_key); it != record.end())
+        {
+            record[key] = *it;
+            record.erase(v1_key);
+        }
+    }
+    return record;
+}
+
+/// The array under a key, or an empty one if absent
+const json &array_at(const json &j, const char *key)
+{
+    static const json empty = json::array();
+    auto it = j.find(key);
+    if(it == j.end() || it->is_null())
+        return empty;
+    if(!it->is_array())
+        throw std::runtime_error(std::string{"Expected an array for "} + key);
+    return *it;
+}
+}
+
+const char *to_string(file_status status)
+{
+    switch(status)
+    {
+    case file_status::done: return "done";
+    case file_status::skip: return "skip";
+    case file_status::todo:
+    default: return "todo";
+    }
 }
 
 std::string to_hex(uint32_t u)
 {
-    uint8_t r = (u >> IM_COL32_R_SHIFT) & 0xFF;
-    uint8_t g = (u >> IM_COL32_G_SHIFT) & 0xFF;
-    uint8_t b = (u >> IM_COL32_B_SHIFT) & 0xFF;
-    uint8_t a = (u >> IM_COL32_A_SHIFT) & 0xFF;
-    return fmt::format("#{:02x}{:02x}{:02x}{:02x}", r, g, b, a);
+    return fmt::format(
+        "#{:02x}{:02x}{:02x}{:02x}",
+        colour_channel(u, 0),
+        colour_channel(u, 1),
+        colour_channel(u, 2),
+        colour_channel(u, 3));
 }
 
 uint32_t from_hex(std::string col)
 {
     unsigned r{}, g{}, b{}, a{};
     std::sscanf(col.c_str(), "#%2x%2x%2x%2x", &r, &g, &b, &a);
-    return IM_COL32(r, g, b, a);
+    return pack_rgba(r, g, b, a);
 }
 
-void to_json(nlohmann::json &j, const label_defn &d)
+void to_json(json &j, const label_defn &d)
 {
-    j = nlohmann::json{
-        {"class-id", d.m_id.m_id},
-        {"class", d.m_class},
-        {"colour", to_hex(d.m_color_rgba)}
-    };
+    j = json{{"class-id", d.m_id.m_id}, {"class", d.m_class}, {"colour", to_hex(d.m_color_rgba)}};
 }
 
-void from_json(const nlohmann::json &j, label_defn &d)
+void from_json(const json &j, label_defn &d)
 {
     j.at("class-id").get_to(d.m_id.m_id);
     j.at("class").get_to(d.m_class);
     d.m_color_rgba = from_hex(j.at("colour").get<std::string>());
 }
 
-void to_json(nlohmann::json &j, const label_dict &p)
+void to_json(json &j, const label_dict &p)
 {
     for(auto &def : p)
         j.push_back(def);
 }
 
-void from_json(const nlohmann::json &j, label_dict &p)
+void from_json(const json &j, label_dict &p)
 {
     for(auto &it : j.items())
         p.add(it.value().get<label_defn>());
@@ -110,7 +162,7 @@ project_config project_config::parse_from_file(std::string filename)
     std::ifstream f(filename);
     if(!f)
         throw std::runtime_error("Could not open " + filename);
-    auto j = nlohmann::json::parse(f);
+    auto j = json::parse(f);
     j.at("dataset-roots").get_to(cfg.m_wav_paths);
     j.at("label-palette").get_to(cfg.m_palette);
     j.at("export-prefix").get_to(cfg.m_export_prefix);
@@ -151,7 +203,7 @@ project_model::project_model(const project_config &cfg) :
     if(!f)
         throw std::runtime_error("Could not load " + generic_utf8(palette_path));
 
-    auto j = nlohmann::json::parse(f);
+    auto j = json::parse(f);
     j.at("label-palette").get_to(m_label_dict);
 
     load_labels();
@@ -161,7 +213,7 @@ project_model::~project_model()
 {
     try
     {
-        save_if_changed();
+        save_if_dirty();
     }
     catch(const std::exception &e)
     {
@@ -235,6 +287,96 @@ std::string project_model::class_name_of(const label &l) const
 {
     auto defn = m_label_dict.find_ptr(l.m_defn_id);
     return defn ? defn->m_class : std::string{};
+}
+
+const labels &project_model::get_labels(const fs::path &file) const
+{
+    static const labels none;
+    auto it = m_file_labels.find(file);
+    return it != m_file_labels.end() ? it->second : none;
+}
+
+void project_model::add_label(const fs::path &file, const label &l)
+{
+    if(!m_file_labels[file].add(l))
+        throw std::logic_error("Label ID already in use");
+    ++m_revision;
+}
+
+bool project_model::erase_label(const fs::path &file, label_id id)
+{
+    auto it = m_file_labels.find(file);
+    if(it == m_file_labels.end() || !it->second.erase(id))
+        return false;
+    ++m_revision;
+    return true;
+}
+
+bool project_model::update_label(const fs::path &file, const label &l)
+{
+    auto it = m_file_labels.find(file);
+    if(it == m_file_labels.end())
+        return false;
+    auto *existing = it->second.find_ptr(l.m_id);
+    if(!existing)
+        return false;
+    if(!(*existing == l))
+    {
+        *existing = l;
+        ++m_revision;
+    }
+    return true;
+}
+
+void project_model::set_labels(const fs::path &file, labels l)
+{
+    if(get_labels(file) == l)
+        return;
+    m_file_labels[file] = std::move(l);
+    ++m_revision;
+}
+
+file_status project_model::get_status(const fs::path &file) const
+{
+    const auto *state = find_file_state(file);
+    return state ? state->m_status : file_status::todo;
+}
+
+void project_model::set_status(const fs::path &file, file_status status)
+{
+    auto &state = m_file_states[file];
+    if(state.m_status == status)
+        return;
+    state.m_status = status;
+    ++m_revision;
+}
+
+const file_state *project_model::find_file_state(const fs::path &file) const
+{
+    auto it = m_file_states.find(file);
+    return it != m_file_states.end() ? &it->second : nullptr;
+}
+
+std::string project_model::get_source_id(const fs::path &file)
+{
+    const auto size = fs::file_size(file);
+    const auto mtime = mtime_of(file);
+
+    auto &state = m_file_states[file];
+    if(state.m_source_id &&
+       state.m_source_id->m_size == size &&
+       state.m_source_id->m_mtime == mtime)
+        return state.m_source_id->m_id;
+
+    state.m_source_id = source_id_cache{compute_source_id(file), size, mtime};
+    ++m_revision;
+    return state.m_source_id->m_id;
+}
+
+void project_model::record_export(const fs::path &file, export_record record)
+{
+    m_file_states[file].m_export = std::move(record);
+    ++m_revision;
 }
 
 void project_model::export_csv()
@@ -320,7 +462,8 @@ void project_model::load_labels()
     auto label_file = m_cfg.resolve_proj(m_cfg.m_labels);
     if(!fs::exists(label_file))
     {
-        spdlog::warn("Label file {} does not exist, skipping label load", generic_utf8(label_file));
+        spdlog::warn("Label file {} does not exist, it will be created", generic_utf8(label_file));
+        ++m_revision;
         return;
     }
     spdlog::info("Loading labels from {}", generic_utf8(label_file));
@@ -333,54 +476,48 @@ void project_model::load_labels()
     if(text.empty())
     {
         spdlog::warn("Label file {} is empty", generic_utf8(label_file));
+        ++m_revision;
         return;
     }
 
-    auto j = nlohmann::json::parse(text);
+    auto j = json::parse(text);
     if(!j.is_object())
         throw std::runtime_error("Label file is not a JSON object: " + generic_utf8(label_file));
 
-    m_last_saved = text;
+    if(const int version = j.value("version", 1); version > label_file_version)
+        throw std::runtime_error(
+            fmt::format(
+                "Label file {} is version {}, which needs a newer version of this app",
+                generic_utf8(label_file),
+                version));
 
-    const auto records = j.find("labels");
-    if(records == j.end())
-        return;
-
-    std::set<fs::path> known_files;
-    for(const auto &file : m_files)
-        known_files.insert(file.m_path);
+    const auto &label_records = array_at(j, "labels");
+    const auto &file_records = array_at(j, "files");
 
     // If exactly one saved root has gone from the project and exactly one project root is unused
-    // by the labels then the dataset was moved. Anything less clear-cut risks attaching labels to
-    // a same-named file in the wrong root, so those stay unresolved.
+    // by the file, then the dataset was moved. Anything less clear-cut risks attaching labels to a
+    // same-named file in the wrong root, so those stay unresolved.
     std::set<std::string> stale_roots;
-    for(const auto &jl : *records)
-        if(auto it = jl.find("dataset-root"); it != jl.end())
-            stale_roots.insert(it->get<std::string>());
+    for(const auto *records : {&label_records, &file_records})
+        for(const auto &record : *records)
+            if(auto it = record.find("dataset-root"); it != record.end())
+                stale_roots.insert(it->get<std::string>());
     std::set<std::string> unused_roots;
     for(const auto &wav_path : m_cfg.m_wav_paths)
         if(!stale_roots.erase(generic_utf8(wav_path)))
             unused_roots.insert(generic_utf8(wav_path));
     const bool dataset_moved = stale_roots.size() == 1 && unused_roots.size() == 1;
 
+    std::set<fs::path> known_files;
+    for(const auto &file : m_files)
+        known_files.insert(file.m_path);
+
     std::map<std::string, std::optional<fs::path>> resolved_paths;
-    std::set<label_id> used_ids;
-    std::vector<std::pair<fs::path, label>> duplicate_ids;
-    label_id max_id{};
-
-    for(const auto &jl : *records)
+    auto resolve = [&](const json &record) -> std::optional<fs::path>
     {
-        const auto filename = jl.at("filename").get<std::string>();
-        const auto id = jl.at("label-id").get<label_id>();
-        const auto start_s = jl.at("start [s]").get<double>();
-        const auto stop_s = jl.at("stop [s]").get<double>();
-        const auto class_id = jl.at("class-id").get<uint32_t>();
-        const auto class_name = jl.at("class-name").get<std::string>();
-
-        max_id = std::max(max_id, id);
-
+        const auto filename = record.at("filename").get<std::string>();
         std::optional<std::string> root;
-        if(auto it = jl.find("dataset-root"); it != jl.end())
+        if(auto it = record.find("dataset-root"); it != record.end())
             root = it->get<std::string>();
         if(dataset_moved && root == *stale_roots.begin())
             root = *unused_roots.begin();
@@ -389,15 +526,31 @@ void project_model::load_labels()
         auto cached = resolved_paths.find(cache_key);
         if(cached == resolved_paths.end())
             cached =
-                resolved_paths
-                    .emplace(cache_key, resolve_stored_path(filename, root, known_files))
+                resolved_paths.emplace(cache_key, resolve_stored_path(filename, root, known_files))
                     .first;
+        return cached->second;
+    };
 
-        // Audio may only be missing for now, so the label is kept and written back untouched:
-        if(!cached->second)
+    std::set<label_id> used_ids;
+    std::vector<std::pair<fs::path, label>> duplicate_ids;
+    label_id max_id{};
+
+    for(const auto &record : label_records)
+    {
+        const auto id = record.at("label-id").get<label_id>();
+        const auto start_s = get_time(record, "start_s", "start [s]");
+        const auto stop_s = get_time(record, "stop_s", "stop [s]");
+        const auto class_id = record.at("class-id").get<uint32_t>();
+        const auto class_name = record.at("class-name").get<std::string>();
+
+        max_id = std::max(max_id, id);
+
+        // Audio may only be missing for now, so the label is kept and written back:
+        const auto path = resolve(record);
+        if(!path)
         {
             used_ids.insert(id);
-            m_unresolved_labels.push_back(jl);
+            m_unresolved_labels.push_back(upgrade_label_record(record));
             continue;
         }
 
@@ -409,7 +562,7 @@ void project_model::load_labels()
                 "Class {} ({}) is not in the palette, adding it for this session",
                 class_id,
                 class_name);
-            m_label_dict.add(label_defn{class_id, class_name, IM_COL32(127, 127, 127, 127)});
+            m_label_dict.add(label_defn{class_id, class_name, unknown_class_colour});
         }
         else if(defn_lookup->m_class != class_name)
             spdlog::error(
@@ -420,9 +573,9 @@ void project_model::load_labels()
         label l{id, class_id, std::max(0., start_s), std::max(0., stop_s)};
 
         if(used_ids.insert(id).second)
-            m_file_labels[*cached->second].add(l);
+            m_file_labels[*path].add(l);
         else
-            duplicate_ids.emplace_back(*cached->second, l);
+            duplicate_ids.emplace_back(*path, l);
     }
 
     // New IDs must not collide with those just loaded:
@@ -434,54 +587,118 @@ void project_model::load_labels()
         m_file_labels[path].add(l);
     }
 
+    for(const auto &record : file_records)
+    {
+        const auto path = resolve(record);
+        if(!path)
+        {
+            m_unresolved_files.push_back(record);
+            continue;
+        }
+
+        file_state state;
+        const auto status_text = record.value("status", std::string{to_string(file_status::todo)});
+        if(auto status = status_from_string(status_text))
+            state.m_status = *status;
+        else
+            spdlog::error("Unknown file status {}", status_text);
+
+        if(auto it = record.find("source-id"); it != record.end())
+            state.m_source_id = source_id_cache{
+                it->get<std::string>(),
+                record.value("size", std::uintmax_t{}),
+                record.value("mtime", std::int64_t{})
+            };
+
+        if(auto it = record.find("export"); it != record.end())
+            state.m_export = export_record{
+                it->value("time", std::string{}),
+                it->value("directory", std::string{}),
+                it->value("clips", uint64_t{}),
+                it->value("verified", false)
+            };
+
+        if(!state.is_default())
+            m_file_states[*path] = std::move(state);
+    }
+
     if(!m_unresolved_labels.empty())
         spdlog::warn(
             "{} labels refer to audio files not found in the dataset. They will be preserved.",
             m_unresolved_labels.size());
+
+    // Any migration (older version, moved dataset, repaired IDs) is written at the next save:
+    if(serialize_labels() != text)
+        ++m_revision;
 }
 
 std::string project_model::serialize_labels() const
 {
-    nlohmann::json j{{"$schema", "../schemas/labels.schema.json"}};
-    auto &records = j["labels"];
-    records = nlohmann::json::array();
+    json j{{"$schema", "../schemas/labels.schema.json"}, {"version", label_file_version}};
 
+    auto &label_records = j["labels"];
+    label_records = json::array();
     for(const auto &[src_path, labels] : m_file_labels)
     {
         const auto portable = to_portable(src_path);
         for(const auto &l : labels)
         {
-            nlohmann::json r{
+            json r{
                 {"filename", portable.m_relative},
                 {"label-id", l.m_id},
-                {"start [s]", l.m_start_s},
-                {"stop [s]", l.m_stop_s},
+                {"start_s", l.m_start_s},
+                {"stop_s", l.m_stop_s},
                 {"class-id", l.m_defn_id.m_id},
                 {"class-name", class_name_of(l)}
             };
             if(!portable.m_root.empty())
                 r["dataset-root"] = portable.m_root;
-            records.push_back(std::move(r));
+            label_records.push_back(std::move(r));
         }
     }
-
     for(const auto &r : m_unresolved_labels)
-        records.push_back(r);
+        label_records.push_back(r);
+
+    auto &file_records = j["files"];
+    file_records = json::array();
+    for(const auto &[src_path, state] : m_file_states)
+    {
+        if(state.is_default())
+            continue;
+
+        const auto portable = to_portable(src_path);
+        json r{{"filename", portable.m_relative}, {"status", to_string(state.m_status)}};
+        if(!portable.m_root.empty())
+            r["dataset-root"] = portable.m_root;
+        if(state.m_source_id)
+        {
+            r["source-id"] = state.m_source_id->m_id;
+            r["size"] = state.m_source_id->m_size;
+            r["mtime"] = state.m_source_id->m_mtime;
+        }
+        if(state.m_export)
+            r["export"] = json{
+                {"time", state.m_export->m_time},
+                {"directory", state.m_export->m_directory},
+                {"clips", state.m_export->m_clips},
+                {"verified", state.m_export->m_verified}
+            };
+        file_records.push_back(std::move(r));
+    }
+    for(const auto &r : m_unresolved_files)
+        file_records.push_back(r);
 
     return j.dump(2);
 }
 
-void project_model::save_if_changed()
+void project_model::save_if_dirty()
 {
-    if(!has_project())
+    if(!has_project() || !is_dirty())
         return;
 
-    auto text = serialize_labels();
-    if(text == m_last_saved)
-        return;
-
+    const auto revision = m_revision;
     const auto label_file = m_cfg.resolve_proj(m_cfg.m_labels);
     spdlog::info("Saving labels to {}", generic_utf8(label_file));
-    write_file_atomically(label_file, text);
-    m_last_saved = std::move(text);
+    write_file_atomically(label_file, serialize_labels());
+    m_saved_revision = revision;
 }

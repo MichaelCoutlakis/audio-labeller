@@ -4,6 +4,7 @@
  *****************************************************************************/
 #pragma once
 #include <chrono>
+#include <cstdint>
 #include <optional>
 #include <string>
 
@@ -15,20 +16,19 @@
 class waveform_view
 {
 public:
-    waveform_view();
-    void render(project_model &project, app_state &state);
+    void render(const project_model &project, app_state &state);
 
     std::string m_window_name{"Waveform View"};
 
 private:
     void render_cursor(app_state &state);
-    void render_waveform(project_model &project, app_state &state);
-    void render_annotations(project_model &project, app_state &state);
-    void upate_waveform_drag(project_model &proj, app_state &state);
+    void render_waveform(app_state &state);
+    void render_annotations(const project_model &project, app_state &state);
+    void update_waveform_drag(const project_model &proj, app_state &state);
 
-    void process_selections(project_model &proj, app_state &state);
+    void process_selections(app_state &state);
 
-    bool render_resize_label_rect(app_state &state, label &l, ImColor col);
+    void render_resize_label_rect(app_state &state, const label &l, ImColor col);
 
     coord_transform m_transform;
 
@@ -36,5 +36,6 @@ private:
     using ms = std::chrono::milliseconds;
     tp m_drag_start;
     std::optional<label_id> m_drag_arm_id;
+    uint64_t m_drag_seq{}; ///< Incremented per mouse press, so each drag is one undo step
     std::optional<std::filesystem::path> m_last_active_file;
 };

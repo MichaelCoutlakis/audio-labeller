@@ -25,19 +25,23 @@ public:
     auto end() const noexcept { return m_items.end(); }
 
     auto size() const noexcept { return m_items.size(); }
+    bool empty() const noexcept { return m_items.empty(); }
 
     void clear() { m_items.clear(); }
-    void erase(key_type key)
+    bool erase(key_type key)
     {
         if(auto p = find_ptr(key); p)
+        {
             m_items.erase(m_items.begin() + std::distance(m_items.data(), p));
+            return true;
+        }
+        return false;
     }
     void erase(T *ptr)
     {
-        auto offset = std::distance(m_items.data(), ptr);
-        if(ptr < m_items.data() || offset >= m_items.size())
+        if(ptr < m_items.data() || ptr >= m_items.data() + m_items.size())
             throw std::out_of_range("Cannot erase item not in container");
-        m_items.erase(m_items.begin() + offset);
+        m_items.erase(m_items.begin() + std::distance(m_items.data(), ptr));
     }
     bool add(T t)
     {
@@ -65,10 +69,9 @@ public:
         return k != npos ? m_items.begin() + k : end();
     }
 
-protected:
-    auto &items() noexcept { return m_items; }
-    const auto &items() const noexcept { return m_items; }
+    bool operator==(const ordered_registry &other) const { return m_items == other.m_items; }
 
+private:
     size_t find_idx(key_type key) const
     {
         for(size_t u = 0U; u != m_items.size(); ++u)
@@ -77,7 +80,6 @@ protected:
         return npos;
     }
 
-private:
     container_type m_items;
     static constexpr auto npos{std::numeric_limits<size_t>::max()};
 };

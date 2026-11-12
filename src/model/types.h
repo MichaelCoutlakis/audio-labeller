@@ -3,6 +3,7 @@
  * SPDX-FileCopyrightText: 2026 Michael Coutlakis
  *****************************************************************************/
 #pragma once
+#include <cstdint>
 #include <string>
 #include <utility>
 
@@ -14,10 +15,9 @@ struct playback_state
     double playhead_s{};
 };
 
-
 struct audio_dev
 {
-    int index;
+    uint32_t id{}; ///< Only valid for this run. Devices are remembered between runs by name.
     std::string name;
-    bool operator==(const audio_dev& other) const = default;
+    bool operator==(const audio_dev &other) const = default;
 };

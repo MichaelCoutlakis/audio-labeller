@@ -20,10 +20,14 @@ imgui_app::imgui_app(app_config config) :
 
 void imgui_app::init_sdl()
 {
-    if(!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO))
+    if(!SDL_Init(SDL_INIT_VIDEO))
     {
         throw std::runtime_error(SDL_GetError());
     }
+
+    // The app can still be used without sound
+    if(!SDL_InitSubSystem(SDL_INIT_AUDIO))
+        SDL_Log("Could not initialise audio: %s", SDL_GetError());
 
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
@@ -33,7 +37,8 @@ void imgui_app::init_sdl()
     SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
     SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE, 8);
 
-    m_window = SDL_CreateWindow(m_config.title.c_str(),
+    m_window = SDL_CreateWindow(
+        m_config.title.c_str(),
         m_config.m_width,
         m_config.m_height,
         SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE);

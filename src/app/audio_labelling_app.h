@@ -2,6 +2,7 @@
  * SPDX-License-Identifier: MIT
  * SPDX-FileCopyrightText: 2026 Michael Coutlakis
  *****************************************************************************/
+#pragma once
 #include "../imgui_app/imgui_app.h"
 
 #include <chrono>
@@ -13,6 +14,7 @@
 #include "../views/file_list_view.h"
 #include "../views/label_controls_view.h"
 #include "../views/labels_view.h"
+#include "../views/shortcuts.h"
 #include "../views/waveform_view.h"
 
 #include "action_handler.h"

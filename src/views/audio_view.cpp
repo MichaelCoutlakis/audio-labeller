@@ -4,12 +4,11 @@
  *****************************************************************************/
 #include <algorithm>
 #include <imgui.h>
-#include <iostream>
 #include <vector>
 
 #include "audio_view.h"
 
-void audio_view::render(project_model &proj, app_state &state)
+void audio_view::render(const project_model &proj, app_state &state)
 {
     ImGui::Begin(m_window_name.c_str());
 
@@ -21,18 +20,14 @@ void audio_view::render(project_model &proj, app_state &state)
     for(auto &dev : state.m_audio_devs)
         names.push_back((dev.name.c_str()));
 
-    if(state.settings.dev)
-    {
-        auto it = std::ranges::find(state.m_audio_devs, state.settings.dev.value());
-        if(it != state.m_audio_devs.end())
-            m_index = std::distance(state.m_audio_devs.begin(), it);
-    }
-    m_index = std::clamp<int>(m_index, 0, std::max<int>(0, names.size() - 1));
-    if(ImGui::Combo("Playback Device", &m_index, names.data(), names.size()))
-        state.add_action(actions::select_playback_device{state.m_audio_devs.at(m_index)});
+    // Devices are remembered by name, the first being the system default:
+    auto it = std::ranges::find(state.m_audio_devs, state.settings.m_device_name, &audio_dev::name);
+    m_index = it != state.m_audio_devs.end()
+        ? static_cast<int>(std::distance(state.m_audio_devs.begin(), it))
+        : 0;
 
-    if(ImGui::IsKeyPressed(ImGuiKey_Space, false))
-        state.add_action(actions::toggle_playback{});
+    if(ImGui::Combo("Playback Device", &m_index, names.data(), static_cast<int>(names.size())))
+        state.add_action(actions::select_playback_device{state.m_audio_devs.at(m_index)});
 
     ImGui::End();
 }

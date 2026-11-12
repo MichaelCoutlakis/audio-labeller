@@ -2,32 +2,45 @@
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "$id": "label.schema.json",
     "title": "Labels",
-    "description": "Saves labels of the data set",
+    "description": "Labels of the data set, and per-file state. Written by the app.",
     "type": "object",
+    "$defs": {
+        "file-identity": {
+            "type": "object",
+            "properties": {
+                "filename": {
+                    "description": "Audio file path relative to dataset-root, using forward slashes",
+                    "type": "string"
+                },
+                "dataset-root": {
+                    "description": "The entry in the project's dataset-roots which contains the file. Absent in older label files, where filename was relative to the working directory",
+                    "type": "string"
+                }
+            },
+            "required": [ "filename" ]
+        }
+    },
     "properties": {
+        "version": {
+            "description": "Format version. Version 1 files have no version field.",
+            "const": 2
+        },
         "labels": {
             "type": "array",
             "description": "List of the labels",
             "items": {
                 "type": "object",
+                "allOf": [ { "$ref": "#/$defs/file-identity" } ],
                 "properties": {
-                    "filename": {
-                        "description": "Audio file path relative to dataset-root, using forward slashes",
-                        "type": "string"
-                    },
-                    "dataset-root": {
-                        "description": "The entry in the project's dataset-roots which contains the file. Absent in older label files, where filename was relative to the working directory",
-                        "type": "string"
-                    },
                     "label-id": {
                         "description": "Unique label identifier",
                         "type": "integer"
                     },
-                    "start [s]": {
+                    "start_s": {
                         "description": "Label start time in seconds",
                         "type": "number"
                     },
-                    "stop [s]": {
+                    "stop_s": {
                         "description": "Label stop time in seconds",
                         "type": "number"
                     },
@@ -40,7 +53,44 @@
                         "type": "string"
                     }
                 },
-                "required": [ "filename", "label-id", "start [s]", "stop [s]", "class-id", "class-name" ]
+                "required": [ "label-id", "start_s", "stop_s", "class-id", "class-name" ]
+            }
+        },
+        "files": {
+            "type": "array",
+            "description": "State of files that differ from the default of todo with nothing cached",
+            "items": {
+                "type": "object",
+                "allOf": [ { "$ref": "#/$defs/file-identity" } ],
+                "properties": {
+                    "status": {
+                        "description": "todo: not fully labelled. done: fully labelled, so with no labels it contains none of the classes. skip: not usable.",
+                        "enum": [ "todo", "done", "skip" ]
+                    },
+                    "source-id": {
+                        "description": "12 hex digits of a 64-bit FNV-1a hash of the file's contents",
+                        "type": "string"
+                    },
+                    "size": {
+                        "description": "File size in bytes when source-id was computed",
+                        "type": "integer"
+                    },
+                    "mtime": {
+                        "description": "Modification time when source-id was computed, in seconds of the platform's file clock",
+                        "type": "integer"
+                    },
+                    "export": {
+                        "description": "The most recent clip export of this file",
+                        "type": "object",
+                        "properties": {
+                            "time": { "type": "string", "description": "UTC, ISO 8601" },
+                            "directory": { "type": "string" },
+                            "clips": { "type": "integer" },
+                            "verified": { "type": "boolean", "description": "Every clip was read back and matched" }
+                        }
+                    }
+                },
+                "required": [ "status" ]
             }
         }
     },

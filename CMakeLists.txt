@@ -20,6 +20,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 option(AUDIOLAB_ENABLE_WARNINGS "Enable strict warnings" ON)
+option(AUDIOLAB_BUILD_TESTS "Build the unit tests" ON)
 
 
 ################################################################################
@@ -37,11 +38,8 @@ find_package(OpenGL REQUIRED)
 # Nlohmann::json
 find_package(nlohmann_json CONFIG REQUIRED)
 
-# AudioFile
-find_package(AudioFile CONFIG REQUIRED)
-
-# portaudio
-find_package(portaudio CONFIG REQUIRED)
+# dr_libs (header only: dr_wav)
+find_path(DRLIBS_INCLUDE_DIRS "dr_wav.h" REQUIRED)
 
 # spdlog
 find_package(spdlog CONFIG REQUIRED)
@@ -98,3 +96,9 @@ target_link_libraries(implot PUBLIC imgui)
 ## Application source
 ################################################################################
 add_subdirectory(src)
+
+if(AUDIOLAB_BUILD_TESTS)
+    find_package(doctest CONFIG REQUIRED)
+    enable_testing()
+    add_subdirectory(tests)
+endif()
