@@ -19,6 +19,7 @@
 #include <nlohmann/json.hpp>
 #include <spdlog/spdlog.h>
 
+#include "../io/files.h"
 #include "../io/source_id.h"
 #include "colour.h"
 #include "label.h"
@@ -30,24 +31,6 @@ using nlohmann::json;
 
 namespace
 {
-/// Replace the target in one step, so that a failure part way through a write can never leave a
-/// truncated file in place of the previous good one.
-void write_file_atomically(const fs::path &target, const std::string &contents)
-{
-    auto tmp = target;
-    tmp += ".tmp";
-    {
-        std::ofstream f(tmp, std::ios::binary | std::ios::trunc);
-        if(!f)
-            throw std::runtime_error("Could not create " + generic_utf8(tmp));
-        f << contents;
-        f.flush();
-        if(!f)
-            throw std::runtime_error("Could not write " + generic_utf8(tmp));
-    }
-    fs::rename(tmp, target);
-}
-
 std::optional<file_status> status_from_string(const std::string &s)
 {
     for(auto status : {file_status::todo, file_status::done, file_status::skip})
@@ -167,6 +150,8 @@ project_config project_config::parse_from_file(std::string filename)
     j.at("label-palette").get_to(cfg.m_palette);
     j.at("export-prefix").get_to(cfg.m_export_prefix);
     j.at("label-file").get_to(cfg.m_labels);
+    if(auto it = j.find("export"); it != j.end())
+        cfg.m_export = *it;
     return cfg;
 }
 
@@ -253,23 +238,6 @@ void project_model::rescan_files()
             }
         }
     }
-}
-
-static std::string csv_escape(const std::string &s)
-{
-    if(s.find_first_of(", \"\r\n") == std::string::npos)
-        return s;
-
-    std::string out = "\"";
-    for(char c : s)
-    {
-        if(c == '"')
-            out += "\"\"";
-        else
-            out += c;
-    }
-    out += "\"";
-    return out;
 }
 
 project_model::portable_path project_model::to_portable(const fs::path &file) const

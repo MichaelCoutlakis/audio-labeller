@@ -3,6 +3,7 @@ add_executable(audio_labeller_tests
     "test_utils.h"
     "test_audio_engine.cpp"
     "test_audio_source.cpp"
+    "test_export.cpp"
     "test_history.cpp"
     "test_lanes.cpp"
     "test_playback_cursor.cpp"

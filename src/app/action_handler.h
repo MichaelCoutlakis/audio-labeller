@@ -33,6 +33,7 @@ struct action_handler
     void operator()(const actions::playback_loop &p);
     void operator()(const actions::rescan_files &r);
     void operator()(const actions::export_csv &e);
+    void operator()(const actions::export_dataset &e);
 
 private:
     audio_engine &m_audio_engine;

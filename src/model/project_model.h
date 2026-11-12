@@ -34,6 +34,7 @@ struct project_config
     std::filesystem::path m_palette;                  ///< Classification dictionary
     std::filesystem::path m_labels;        ///< Path for pre-saved labels / labelling directory
     std::filesystem::path m_export_prefix; ///< Where to save exported artifacts
+    nlohmann::json m_export;               ///< Clip export settings, see export_settings
 };
 
 struct audio_file_entry

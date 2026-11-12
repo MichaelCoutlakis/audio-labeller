@@ -12,12 +12,17 @@ add_library(audio_labeller_core STATIC
     "model/types.h"
 
     "io/audio_source.h" "io/audio_source.cpp"
+    "io/files.h" "io/files.cpp"
     "io/source_id.h" "io/source_id.cpp"
+    "io/wav_writer.h" "io/wav_writer.cpp"
+
+    "export/clip_export.h" "export/clip_export.cpp"
 )
 target_include_directories(audio_labeller_core
     PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}
     PRIVATE ${DRLIBS_INCLUDE_DIRS}
 )
+target_compile_definitions(audio_labeller_core PRIVATE AUDIOLAB_VERSION="${PROJECT_VERSION}")
 target_link_libraries(audio_labeller_core PUBLIC
     nlohmann_json::nlohmann_json
     spdlog::spdlog

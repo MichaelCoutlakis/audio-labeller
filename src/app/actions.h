@@ -111,6 +111,11 @@ struct export_csv
 {
 };
 
+/// Export clips of the files marked done, see export/clip_export.h
+struct export_dataset
+{
+};
+
 using app_action = std::variant<
     load_file,
     add_label,
@@ -128,6 +133,7 @@ using app_action = std::variant<
     toggle_playback,
     playback_loop,
     rescan_files,
-    export_csv>;
+    export_csv,
+    export_dataset>;
 
 }

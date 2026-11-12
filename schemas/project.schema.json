@@ -23,6 +23,19 @@
         "export-prefix": {
             "description": "Prefix path to export output files, including filename minus extension",
             "type": "string"
+        },
+        "export": {
+            "description": "Clip export settings. Every key is optional.",
+            "type": "object",
+            "properties": {
+                "directory": { "type": "string", "description": "Output directory, relative to this file. Default: dataset" },
+                "mode": { "enum": [ "padded", "fixed" ], "description": "padded: each label plus padding, merging labels whose clips would overlap. fixed: a window of fixed length centred on each label. Default: padded" },
+                "padding_s": { "type": "number", "description": "Padding before and after each label, and the gap kept between background clips and labels. Default: 0.5" },
+                "fixed_length_s": { "type": "number", "description": "Clip length in fixed mode. Default: 10" },
+                "max_clip_s": { "type": "number", "description": "Merging stops before a clip would exceed this. Default: 30" },
+                "background_per_file": { "type": "integer", "description": "Clips with no labels, from files marked done. Default: 0" },
+                "background_length_s": { "type": "number", "description": "Length of background clips. Default: 5" }
+            }
         }
     },
     "required": [ "label-palette", "dataset-roots", "label-file", "export-prefix" ]

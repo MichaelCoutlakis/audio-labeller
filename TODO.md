@@ -19,15 +19,13 @@ lane per class, and a notice for labels whose audio is missing.
 
 ## Phase 3: Export
 
-- [ ] `export` section in the project file, and its schema.
-- [ ] Clip export: padded and fixed modes, merging, truncation flags, with the
-      layout in `ARCHITECTURE.md` (`dataset.json`, `sources.csv`,
-      `metadata.jsonl`, `labels.tsv`, `clips/`).
-- [ ] Additive re-export, keeping entries whose originals were deleted.
-- [ ] Read back and verify clips, record the export in the label file, and show
-      which originals are safe to delete.
-- [ ] Background clips from files marked done, off by default.
+Done: `export` settings in the project file, clip export (padded and fixed
+modes, merging, truncation flags, background clips), additive re-export,
+read-back verification, export records, and "exported" in the file list.
+
 - [ ] Per-recording label exports: DCASE TSV, Audacity and Raven formats.
+- [ ] Run exports on a background thread with progress, for large datasets.
+- [ ] Settings UI for the export section, rather than editing the project file.
 
 ## Phase 4: Seeing and hearing
 

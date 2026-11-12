@@ -140,7 +140,7 @@ audio_buffer>`) rather than copied.
 Computed with pocketfft on a background thread into texture tiles, with linear,
 log and mel frequency scales and adjustable gain.
 
-## Export (planned)
+## Export
 
 Export turns labelled recordings into a dataset for training. The intended
 workflow is: label long recordings from the dataset roots, export clips around
@@ -165,6 +165,7 @@ of record:
   sources.csv       source_id -> original root and path, duration, rate, channels
   metadata.jsonl    one row per clip, with its labels nested
   labels.tsv        one row per label: DCASE strong format
+  durations.tsv     filename and duration of every clip, as psds_eval expects
   clips/
     3f9a1c2e7b4d_000012340.wav    <source_id>_<clip start in ms, 9 digits>
 ```
@@ -205,7 +206,20 @@ Times are in seconds. Onsets and offsets are relative to the clip.
   labels, taken only from files marked `done`, since only there is "no label"
   known to mean "none of the classes". Their `events` list is empty.
 
-Settings live in an `export` section of the project file.
+Settings live in an optional `export` section of the project file (see
+`schemas/project.schema.json`), for example:
+
+```json
+"export": { "directory": "dataset", "mode": "padded", "padding_s": 0.5,
+            "background_per_file": 3, "background_length_s": 5 }
+```
+
+Only files marked `done` are exported, from the File List's "Export clips"
+button. Clip start and stop times are rounded to whole samples, and the label
+times in the manifests are relative to the samples actually cut. Clips are
+written by `io/wav_writer.cpp`: PCM and float sources are copied byte for byte,
+other WAV formats are decoded to 32-bit float. The export currently runs on the
+UI thread.
 
 ### Other label formats (planned)
 

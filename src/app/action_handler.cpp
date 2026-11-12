@@ -7,6 +7,7 @@
 
 #include <spdlog/spdlog.h>
 
+#include "../export/clip_export.h"
 #include "../model/paths.h"
 #include "action_handler.h"
 #include "actions.h"
@@ -253,3 +254,27 @@ void action_handler::operator()(const actions::playback_loop &p)
 void action_handler::operator()(const actions::rescan_files &r) { m_proj.rescan_files(); }
 
 void action_handler::operator()(const actions::export_csv &e) { m_proj.export_csv(); }
+
+void action_handler::operator()(const actions::export_dataset &e)
+{
+    const auto settings = export_settings::from_json(m_proj.config().m_export);
+    const auto summary = export_dataset(m_proj, settings);
+
+    std::string message = fmt::format(
+        "Exported {} clips from {} files to\n{}",
+        summary.m_clips,
+        summary.m_files,
+        generic_utf8(summary.m_directory));
+    if(summary.m_unverified_clips)
+        message += fmt::format(
+            "\n\n{} clips didn't read back correctly. Keep their originals.",
+            summary.m_unverified_clips);
+    if(summary.m_todo_with_labels)
+        message += fmt::format(
+            "\n\n{} files with labels weren't exported because they aren't marked done.",
+            summary.m_todo_with_labels);
+    m_state.report_info(message);
+
+    for(const auto &error : summary.m_errors)
+        m_state.report_error("Export failed for " + error);
+}

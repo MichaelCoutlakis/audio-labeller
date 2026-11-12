@@ -57,14 +57,22 @@ void file_list_view::render(const project_model &project, app_state &state)
         for(const auto *file : files)
         {
             const auto num_labels = project.get_labels(file->m_path).size();
+            const auto *file_state = project.find_file_state(file->m_path);
+            const bool exported =
+                file_state && file_state->m_export && file_state->m_export->m_verified;
             const std::string text = status_marker(project.get_status(file->m_path)) +
                 file->m_display_name +
-                (num_labels ? " (" + std::to_string(num_labels) + ")" : "");
+                (num_labels ? " (" + std::to_string(num_labels) + ")" : "") +
+                (exported ? " - exported" : "");
 
             bool is_selected = state.is_selected_file(file->m_path);
             ImGui::PushID(id++); // Names are only unique within their dataset root
             if(ImGui::Selectable(text.c_str(), &is_selected) && is_selected)
                 state.add_action(actions::load_file{file->m_path});
+            if(exported && ImGui::IsItemHovered())
+                ImGui::SetTooltip(
+                    "Exported %s and verified: the original is safe to delete",
+                    file_state->m_export->m_time.c_str());
             ImGui::PopID();
         }
         ImGui::EndListBox();
@@ -98,5 +106,10 @@ void file_list_view::render(const project_model &project, app_state &state)
     ImGui::SameLine();
     if(ImGui::Button("Export CSV"))
         state.add_action(actions::export_csv{});
+    ImGui::SameLine();
+    if(ImGui::Button("Export clips"))
+        state.add_action(actions::export_dataset{});
+    if(ImGui::IsItemHovered())
+        ImGui::SetTooltip("Cut clips around the labels of files marked done, for training");
     ImGui::End();
 }

@@ -191,6 +191,10 @@ public:
     void report_error(const std::string &message);
     std::string m_error_message; ///< Errors waiting to be acknowledged, empty if none
 
+    /// Queue a message to be shown to the user
+    void report_info(const std::string &message);
+    std::string m_info_message;
+
 private:
     std::set<label_id> m_selected_labels;
     uint64_t m_edit_seq{};

@@ -31,6 +31,23 @@ Labels are saved automatically every few seconds and on exit. Each label stores 
 relative to its dataset root, so a project can be moved or shared. Labels whose audio file can't be
 found are kept in the label file, and are picked up again once the file is available.
 
+## Exporting clips for training
+
+"Export clips" in the file list cuts clips around the labels of every file
+marked done, into a dataset directory (`dataset` next to the project file by
+default):
+
+- `clips/*.wav`: lossless copies of the source audio around the labels
+- `metadata.jsonl`: one row per clip with its labels, loadable with pandas
+  (`read_json(lines=True)`) or Hugging Face's `audiofolder`
+- `labels.tsv`: one row per label, in the DCASE strong label format
+- `sources.csv`: maps each clip's `source_id` back to its original recording.
+  Use it to keep clips of one recording in the same train/test split.
+
+Exporting again updates the dataset rather than replacing it, so originals can
+be deleted once exported ("exported" in the file list). See `ARCHITECTURE.md`
+for the format and the `export` settings in the project file.
+
 ## Controls:
 
 ### Waveform

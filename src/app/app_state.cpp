@@ -60,6 +60,14 @@ void app_state::report_error(const std::string &message)
     m_error_message += message;
 }
 
+void app_state::report_info(const std::string &message)
+{
+    spdlog::info("{}", message);
+    if(!m_info_message.empty())
+        m_info_message += "\n\n";
+    m_info_message += message;
+}
+
 app_state::app_state() :
     settings(app_settings::load())
 {

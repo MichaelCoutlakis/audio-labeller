@@ -114,24 +114,30 @@ void audio_labeller_app::autosave()
 
 void audio_labeller_app::render_error_popup()
 {
-    static constexpr auto popup_name = "Error";
-
-    if(!m_app_state.m_error_message.empty() && !ImGui::IsPopupOpen(popup_name))
-        ImGui::OpenPopup(popup_name);
-
-    if(ImGui::BeginPopupModal(popup_name, nullptr, ImGuiWindowFlags_AlwaysAutoResize))
+    // Errors take priority over information. Each is shown until acknowledged.
+    auto popup = [](const char *name, std::string &message)
     {
-        ImGui::PushTextWrapPos(600.f);
-        ImGui::TextUnformatted(m_app_state.m_error_message.c_str());
-        ImGui::PopTextWrapPos();
+        if(!message.empty() && !ImGui::IsPopupOpen(name))
+            ImGui::OpenPopup(name);
 
-        if(ImGui::Button("OK"))
+        if(ImGui::BeginPopupModal(name, nullptr, ImGuiWindowFlags_AlwaysAutoResize))
         {
-            m_app_state.m_error_message.clear();
-            ImGui::CloseCurrentPopup();
+            ImGui::PushTextWrapPos(600.f);
+            ImGui::TextUnformatted(message.c_str());
+            ImGui::PopTextWrapPos();
+
+            if(ImGui::Button("OK"))
+            {
+                message.clear();
+                ImGui::CloseCurrentPopup();
+            }
+            ImGui::EndPopup();
         }
-        ImGui::EndPopup();
-    }
+    };
+
+    popup("Error", m_app_state.m_error_message);
+    if(m_app_state.m_error_message.empty())
+        popup("Information", m_app_state.m_info_message);
 }
 
 void audio_labeller_app::render_main_dockspace()
