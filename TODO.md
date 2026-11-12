@@ -16,6 +16,11 @@ lane per class, and a notice for labels whose audio is missing.
 
 - [ ] Configurable nudge step, and a finer step with a modifier.
 - [ ] Remember the class lanes setting and file filter between runs.
+- [ ] Replace fixed class lanes with stacking: labels use the full height and
+      only share it where they overlap in time (like a calendar's overlapping
+      events). Fixed lanes get too thin with tens of classes. `app/lanes.h`
+      would compute each label's band from its overlaps rather than its class,
+      and the hit test in `select_labels` already uses whatever band it's given.
 
 ## Phase 3: Export
 
