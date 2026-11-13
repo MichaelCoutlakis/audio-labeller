@@ -22,8 +22,8 @@
     },
     "properties": {
         "version": {
-            "description": "Format version. Version 1 files have no version field.",
-            "const": 2
+            "description": "Format version. Version 1 files have no version field. Version 3 added label states, scores and channels.",
+            "enum": [ 2, 3 ]
         },
         "labels": {
             "type": "array",
@@ -41,7 +41,15 @@
                         "type": "number"
                     },
                     "stop_s": {
-                        "description": "Label stop time in seconds",
+                        "description": "Label stop time in seconds. Equal to start_s for an onset.",
+                        "type": "number"
+                    },
+                    "state": {
+                        "description": "Absent for a label. suggested: proposed (eg. by a detector) and waiting for review. rejected: proposed, then judged not to be an event.",
+                        "enum": [ "confirmed", "suggested", "rejected" ]
+                    },
+                    "score": {
+                        "description": "The proposer's confidence, if it gave one",
                         "type": "number"
                     },
                     "class-id": {
@@ -74,6 +82,10 @@
                     "size": {
                         "description": "File size in bytes when source-id was computed",
                         "type": "integer"
+                    },
+                    "channel": {
+                        "description": "Channel to view and play, numbered from 1, or mix. Overrides the project's channel.",
+                        "type": "string"
                     },
                     "mtime": {
                         "description": "Modification time when source-id was computed, in seconds of the platform's file clock",

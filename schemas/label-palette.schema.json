@@ -22,6 +22,10 @@
                         "description": "Hex RGBA",
                         "type": "string",
                         "format": "color-hex"
+                    },
+                    "kind": {
+                        "description": "region: a start and a stop (eg. context like rain). onset: a point in time (eg. a call or click), drawn as a line; dragging with an onset class makes an onset. Default: region",
+                        "enum": [ "region", "onset" ]
                     }
                 },
                 "required": [ "class-id", "class", "colour" ]

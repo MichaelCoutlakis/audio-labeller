@@ -2,7 +2,7 @@
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "$id": "project.schema.json",
     "title": "Audio Labelling App Project",
-    "description": "Project definition",
+    "description": "Project definition. Paths are relative to this file, and may use environment variables as ${NAME}.",
     "type": "object",
     "properties": {
         "label-palette": {
@@ -23,6 +23,65 @@
         "export-prefix": {
             "description": "Prefix path to export output files, including filename minus extension",
             "type": "string"
+        },
+        "channel": {
+            "description": "Channel to view and play, numbered from 1. Default: a mix of all channels. Can be changed per file in the app.",
+            "type": "integer",
+            "minimum": 1
+        },
+        "annotations": {
+            "description": "Trees of per-recording label files that mirror the dataset roots, for exchanging labels with other tools: <root>/<path relative to the dataset root, with the label file's extension>",
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "name": { "type": "string", "description": "Shown in the app" },
+                    "root": { "type": "string", "description": "Root of the tree" },
+                    "format": { "enum": [ "audacity", "dcase", "raven" ], "description": "audacity: start, stop, label (.txt). dcase: onset, offset, event_label (.tsv). raven: a selection table (.Table.1.selections.txt). Default: audacity" },
+                    "format-options": { "type": "object", "description": "raven: label-column (default Annotation)" },
+                    "naming": { "enum": [ "replace", "append" ], "description": "replace: rec.wav -> rec.txt. append: rec.wav -> rec.wav.txt. Default: replace" },
+                    "extension": { "type": "string", "description": "Instead of the format's own" },
+                    "import": { "enum": [ "none", "suggestions", "labels" ], "description": "How the files are read. Labels whose text starts with x: are rejected candidates. Default: none (export only)" },
+                    "export": { "type": "boolean", "description": "Whether the app writes the files. Default: true" },
+                    "export-files": { "enum": [ "done", "all" ], "description": "done: only files marked done, each written even with no labels, so an empty file means checked with no events. all: also files with labels not marked done. Default: done" },
+                    "include-suggestions": { "type": "boolean", "description": "Also write suggestions not yet reviewed. Default: false" },
+                    "empty-means-done": { "type": "boolean", "description": "An empty file marks its recording done on import. Default: true, except for trees imported as suggestions" }
+                },
+                "required": [ "root" ]
+            }
+        },
+        "review": {
+            "description": "How labels are played and shown while checking them. Every key is optional.",
+            "type": "object",
+            "properties": {
+                "onset_pre_s": { "type": "number", "description": "Played before an onset. Default: 0.1" },
+                "onset_post_s": { "type": "number", "description": "Played after an onset. Default: 0.5" },
+                "pre_roll_s": { "type": "number", "description": "Played before a region. Default: 0" },
+                "view_pre_s": { "type": "number", "description": "Shown before a suggestion in review mode. Default: 0.1" },
+                "view_post_s": { "type": "number", "description": "Shown after a suggestion's start in review mode. Default: 0.65" },
+                "snap_window_s": { "type": "number", "description": "How far snapping may move an onset. Default: 0.005" },
+                "by_score": { "type": "boolean", "description": "Review the lowest scores first, if suggestions have scores. Default: true" }
+            }
+        },
+        "clip-manifest": {
+            "description": "A CSV of clips cut by another tool, to check in the app",
+            "type": "object",
+            "properties": {
+                "path": { "type": "string" },
+                "clip-root": { "type": "string", "description": "Clip paths are relative to this. Default: the CSV's folder" },
+                "columns": {
+                    "type": "object",
+                    "properties": {
+                        "clip": { "type": "string", "description": "Default: clip_path" },
+                        "source": { "type": "string", "description": "The source recording, relative to a dataset root. Default: source_path" },
+                        "onset": { "type": "string", "description": "Onset in the source, in seconds. Default: onset_s" },
+                        "label": { "type": "string", "description": "Default: label" }
+                    }
+                },
+                "dataset-root": { "type": "string", "description": "The dataset root source paths are relative to, as written in dataset-roots. Default: try each" },
+                "match_s": { "type": "number", "description": "A label this close to a clip's onset is the clip's label. Default: 0.05" }
+            },
+            "required": [ "path" ]
         },
         "export": {
             "description": "Clip export settings. Every key is optional.",
