@@ -21,7 +21,16 @@ int main()
         cfg.m_docking = true;
         cfg.m_nav_keyboard = false; // The app's own shortcuts use the arrows, Tab and Space
 
-        // System fonts with wide coverage, for file names in any language
+        // System fonts with wide coverage, for file names in any language, unless the settings
+        // name one ("builtin" for ImGui's own, which is crisp but ASCII only)
+        const auto settings = app_settings::load();
+        cfg.m_font_size = settings.m_font_size;
+        if(settings.m_font == "builtin")
+            ; // No font files: ImGui's own
+        else if(!settings.m_font.empty())
+            cfg.m_fonts = {settings.m_font};
+        else
+        {
 #ifdef _WIN32
         const char *windir = std::getenv("WINDIR");
         const std::string fonts = std::string{windir ? windir : "C:/Windows"} + "/Fonts/";
@@ -38,6 +47,7 @@ int main()
             "/usr/share/fonts/dejavu/DejaVuSans.ttf"
         };
 #endif
+        }
         audio_labeller_app app(cfg);
         return app.run();
     }

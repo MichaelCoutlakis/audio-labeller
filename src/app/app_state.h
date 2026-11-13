@@ -40,6 +40,11 @@ struct app_settings
     std::string m_device_name; ///< Previously used playback device, empty for the default
     std::string project_file;
 
+    /// Font file (UTF-8), empty for a system font with wide coverage, or "builtin" for ImGui's
+    /// own (crisp, but ASCII only). Takes effect at the next start.
+    std::string m_font;
+    float m_font_size{16.f};
+
     /* Remembered between runs: */
     label_layout m_layout{label_layout::stacked};
     file_filter m_file_filter{file_filter::all};

@@ -74,6 +74,9 @@ found are kept in the label file, and are picked up again once the file is avail
 
 The app settings file also remembers the view and editing options (label
 layout, file filter, nudge steps, playback speed, spectrogram) between runs.
+Its `font` is a font file, empty for a system font that covers most languages,
+or `builtin` for ImGui's own pixel font (crisp, but ASCII only); `font_size`
+sets the size. Both take effect at the next start.
 
 ## Exporting clips for training
 
@@ -176,8 +179,9 @@ re-cut.
 
 Labels use the full height and share it only where they overlap in time, like
 overlapping calendar events. A lane per class, or every label at full height,
-can be chosen under Audio Control, along with the waveform gain, a spectrogram
-(linear, log or mel scale) and the channel of a multi-channel file.
+can be chosen under Audio Control, along with the channel of a multi-channel
+file. The Spectrogram checkbox above the waveform shows a spectrogram behind it
+(linear, log or mel scale), and the slider beside it sets the waveform gain.
 
 ### Label Palette
 The label palette uses a "paint class" style:

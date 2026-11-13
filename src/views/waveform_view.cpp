@@ -166,6 +166,31 @@ void waveform_view::render(const project_model &project, app_state &state)
     ImPlot::GetInputMap().Pan = ImGuiMouseButton_Middle;
     ImPlot::GetInputMap().Fit = ImGuiMouseButton_Middle; // Double click middle to zoom to fit
 
+    // The view options used most, at hand (the rest are under Audio Control)
+    auto &settings = state.settings;
+    ImGui::Checkbox("Spectrogram", &settings.m_show_spectrogram);
+    if(settings.m_show_spectrogram)
+    {
+        const char *scales[] = {"Linear", "Log", "Mel"};
+        int scale = static_cast<int>(settings.m_spectrogram_scale);
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(ImGui::GetFontSize() * 5.f);
+        if(ImGui::Combo("##Scale", &scale, scales, IM_ARRAYSIZE(scales)))
+            settings.m_spectrogram_scale = static_cast<frequency_scale>(scale);
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(ImGui::GetFontSize() * 8.f);
+        ImGui::SliderFloat("##SpecGain", &settings.m_spectrogram_gain_db, -20.f, 60.f, "Gain %.0f dB");
+    }
+    ImGui::SameLine();
+    ImGui::SetNextItemWidth(ImGui::GetFontSize() * 8.f);
+    ImGui::SliderFloat(
+        "##WaveGain",
+        &settings.m_waveform_gain,
+        1.f,
+        100.f,
+        "Waveform %.1fx",
+        ImGuiSliderFlags_Logarithmic);
+
     state.m_hover_time_s.reset();
     if(ImPlot::BeginPlot("Waveform", ImVec2{-1.f, -1.f}, ImPlotFlags_NoLegend))
     {

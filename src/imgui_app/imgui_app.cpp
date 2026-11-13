@@ -78,13 +78,18 @@ void imgui_app::init_imgui()
 
     ImGui::StyleColorsDark();
 
-    // ImGui loads glyphs as they're needed, so one font file covers whatever it has glyphs for
+    // ImGui loads glyphs as they're needed, so one font file covers whatever it has glyphs for.
+    // Glyphs are snapped to whole pixels: sub-pixel positioning makes small text look soft.
+    ImFontConfig font_config;
+    font_config.PixelSnapH = true;
+    font_config.OversampleH = 1;
+    font_config.OversampleV = 1;
     for(const auto &font : m_config.m_fonts)
     {
         std::error_code ec;
         if(!std::filesystem::exists(std::filesystem::path(std::u8string(font.begin(), font.end())), ec))
             continue;
-        if(io.Fonts->AddFontFromFileTTF(font.c_str(), m_config.m_font_size))
+        if(io.Fonts->AddFontFromFileTTF(font.c_str(), m_config.m_font_size, &font_config))
             break;
     }
 

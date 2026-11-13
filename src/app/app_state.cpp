@@ -58,6 +58,8 @@ app_settings app_settings::load()
         s.project_file = j.value("project", std::string{});
         if(auto dev = j.find("audio_device"); dev != j.end())
             s.m_device_name = dev->value("name", std::string{});
+        s.m_font = j.value("font", s.m_font);
+        s.m_font_size = std::clamp(j.value("font_size", s.m_font_size), 8.f, 48.f);
         s.m_layout = enum_value(j, "layout", s.m_layout, layout_names);
         s.m_file_filter = enum_value(j, "file_filter", s.m_file_filter, filter_names);
         s.m_nudge_s = std::max(1e-4, j.value("nudge_ms", s.m_nudge_s * 1000.) / 1000.);
@@ -90,6 +92,8 @@ void app_settings::save()
 
     nlohmann::json j{
         {"project", project_file},
+        {"font", m_font},
+        {"font_size", m_font_size},
         {"layout", enum_name(m_layout, layout_names)},
         {"file_filter", enum_name(m_file_filter, filter_names)},
         {"nudge_ms", m_nudge_s * 1000.},
