@@ -13,14 +13,27 @@ project(AudioLabeller
 ################################################################################
 # Global settings
 ################################################################################
-set(CMAKE_CXX_STANDARD 26)
+set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-option(AUDIOLAB_ENABLE_WARNINGS "Enable strict warnings" ON)
+option(AUDIOLAB_ENABLE_WARNINGS "Enable strict warnings for the app's own code" ON)
 option(AUDIOLAB_BUILD_TESTS "Build the unit tests" ON)
+option(AUDIOLAB_SDL_SUBMODULE "Build SDL3 from external/SDL, rather than find an installed one" ON)
+
+# Warnings for the app's own targets only, not the dependencies
+function(audiolab_warnings target)
+    if(NOT AUDIOLAB_ENABLE_WARNINGS)
+        return()
+    endif()
+    if(MSVC)
+        target_compile_options(${target} PRIVATE /W4 /permissive-)
+    else()
+        target_compile_options(${target} PRIVATE -Wall -Wextra -Wno-unused-parameter -Wno-missing-field-initializers)
+    endif()
+endfunction()
 
 
 ################################################################################
@@ -47,10 +60,14 @@ find_package(spdlog CONFIG REQUIRED)
 ################################################################################
 # Dependencies which are managed as submodules:
 ################################################################################
-# SDL3
-set(SDL_SHARED OFF CACHE BOOL "" FORCE)
-set(SDL_STATIC ON CACHE BOOL "" FORCE)
-add_subdirectory(external/SDL EXCLUDE_FROM_ALL)
+# SDL3: from the submodule, or installed (eg. vcpkg's sdl3)
+if(AUDIOLAB_SDL_SUBMODULE)
+    set(SDL_SHARED OFF CACHE BOOL "" FORCE)
+    set(SDL_STATIC ON CACHE BOOL "" FORCE)
+    add_subdirectory(external/SDL EXCLUDE_FROM_ALL)
+else()
+    find_package(SDL3 CONFIG REQUIRED)
+endif()
 
 
 ### ImGUI

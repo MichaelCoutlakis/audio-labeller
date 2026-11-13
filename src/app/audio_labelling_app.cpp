@@ -8,6 +8,7 @@
 #include <imgui_internal.h> // docking
 #include <spdlog/spdlog.h>
 
+#include "../model/paths.h"
 #include "app_state.h"
 #include "audio_labelling_app.h"
 
@@ -32,7 +33,9 @@ project_model audio_labeller_app::open_project(app_state &state)
 
     try
     {
-        return project_model(project_config::parse_from_file(state.settings.project_file));
+        // The settings file is UTF-8, so non-ASCII paths work on Windows too
+        return project_model(
+            project_config::parse_from_file(path_from_utf8(state.settings.project_file)));
     }
     catch(const std::exception &e)
     {

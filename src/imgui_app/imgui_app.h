@@ -7,6 +7,7 @@
 
 #include <SDL3/SDL.h>
 #include <string>
+#include <vector>
 
 /// App configuration, \sa imgui_app
 struct app_config
@@ -19,6 +20,10 @@ struct app_config
     bool m_vsync = true;
     bool m_nav_keyboard = true; ///< ImGui keyboard navigation, which claims arrows, Tab and Space
     bool m_bImPlotContext{true};
+    /// Font files to try in order, for text beyond ASCII (eg. file names). The first that exists
+    /// is used, else ImGui's built-in font.
+    std::vector<std::string> m_fonts;
+    float m_font_size{16.f};
 };
 
 /// A generic ImGui app to hide the boiler-plate

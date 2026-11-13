@@ -19,4 +19,6 @@ add_executable(audio_labeller_tests
 target_include_directories(audio_labeller_tests PRIVATE ${DRLIBS_INCLUDE_DIRS})
 target_link_libraries(audio_labeller_tests PRIVATE audio_labeller_core SDL3::SDL3 doctest::doctest)
 
+audiolab_warnings(audio_labeller_tests)
+
 add_test(NAME audio_labeller_tests COMMAND audio_labeller_tests)

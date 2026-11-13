@@ -9,6 +9,7 @@
 #include <imgui.h>
 #include <implot.h>
 
+#include <filesystem>
 #include <stdexcept>
 
 #include <SDL3/SDL_opengl.h>
@@ -76,6 +77,16 @@ void imgui_app::init_imgui()
         io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
 
     ImGui::StyleColorsDark();
+
+    // ImGui loads glyphs as they're needed, so one font file covers whatever it has glyphs for
+    for(const auto &font : m_config.m_fonts)
+    {
+        std::error_code ec;
+        if(!std::filesystem::exists(std::filesystem::path(std::u8string(font.begin(), font.end())), ec))
+            continue;
+        if(io.Fonts->AddFontFromFileTTF(font.c_str(), m_config.m_font_size))
+            break;
+    }
 
     ImGui_ImplSDL3_InitForOpenGL(m_window, m_gl_context);
     ImGui_ImplOpenGL3_Init("#version 330");

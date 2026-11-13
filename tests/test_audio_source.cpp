@@ -2,6 +2,7 @@
  * SPDX-License-Identifier: MIT
  * SPDX-FileCopyrightText: 2026 Michael Coutlakis
  *****************************************************************************/
+#include <chrono>
 #include <cstddef>
 #include <cstring>
 
@@ -161,4 +162,47 @@ TEST_CASE("source IDs depend only on content")
     CHECK(id.size() == 12);
     CHECK(id == compute_source_id(dir / "sub/b.wav"));
     CHECK(id != compute_source_id(dir / "c.wav"));
+}
+
+// Run explicitly: audio_labeller_tests -tc="long recording*" --no-skip
+TEST_CASE("long recording load time and memory" * doctest::skip())
+{
+    temp_dir dir;
+    const auto file = dir / "long.wav";
+    constexpr uint32_t rate = 48000, channels = 4;
+    constexpr uint64_t frames = uint64_t(rate) * 600; // 10 minutes
+    {
+        drwav_data_format format{};
+        format.container = drwav_container_riff;
+        format.format = DR_WAVE_FORMAT_PCM;
+        format.channels = channels;
+        format.sampleRate = rate;
+        format.bitsPerSample = 24;
+        drwav wav;
+#ifdef _WIN32
+        REQUIRE(drwav_init_file_write_w(&wav, file.c_str(), &format, nullptr));
+#else
+        REQUIRE(drwav_init_file_write(&wav, file.c_str(), &format, nullptr));
+#endif
+        std::vector<std::byte> chunk(rate * channels * 3);
+        for(size_t i = 0; i != chunk.size(); ++i)
+            chunk[i] = std::byte(i * 7919U);
+        for(uint64_t s = 0; s != 600; ++s)
+            drwav_write_raw(&wav, chunk.size(), chunk.data());
+        drwav_uninit(&wav);
+    }
+    const auto start = std::chrono::steady_clock::now();
+    const auto mono = load_mono(file);
+    const auto mixed_s = std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
+    const auto start_one = std::chrono::steady_clock::now();
+    const auto one = load_mono(file, 3U);
+    const auto one_s =
+        std::chrono::duration<double>(std::chrono::steady_clock::now() - start_one).count();
+    CHECK(mono.num_frames() == frames);
+    MESSAGE(
+        "10 min, 4 ch, 24-bit, 48 kHz (" << std::filesystem::file_size(file) / 1000000
+                                         << " MB): mix in " << mixed_s << " s, one channel in "
+                                         << one_s << " s, view buffer "
+                                         << mono.m_samples.size() * sizeof(float) / 1000000
+                                         << " MB");
 }

@@ -63,3 +63,6 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     audio_labeller_core
     AudioLabeller::ImGuiApp
 )
+
+audiolab_warnings(audio_labeller_core)
+audiolab_warnings(${PROJECT_NAME})

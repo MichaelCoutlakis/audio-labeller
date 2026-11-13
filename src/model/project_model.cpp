@@ -159,7 +159,7 @@ void from_json(const json &j, label_dict &p)
         p.add(it.value().get<label_defn>());
 }
 
-project_config project_config::parse_from_file(std::string filename)
+project_config project_config::parse_from_file(const fs::path &filename)
 {
     project_config cfg{};
 
@@ -171,7 +171,7 @@ project_config project_config::parse_from_file(std::string filename)
 
     std::ifstream f(filename);
     if(!f)
-        throw std::runtime_error("Could not open " + filename);
+        throw std::runtime_error("Could not open " + generic_utf8(filename));
     auto j = json::parse(f);
     j.at("dataset-roots").get_to(cfg.m_wav_paths);
     j.at("label-palette").get_to(cfg.m_palette);
@@ -629,7 +629,7 @@ void project_model::load_labels()
                 "Class {} ({}) is not in the palette, adding it for this session",
                 class_id,
                 class_name);
-            m_label_dict.add(label_defn{class_id, class_name, unknown_class_colour});
+            m_label_dict.add(label_defn{label_defn_id{class_id}, class_name, unknown_class_colour});
         }
         else if(defn_lookup->m_class != class_name)
             spdlog::error(
@@ -637,7 +637,7 @@ void project_model::load_labels()
                 class_name,
                 defn_lookup->m_class);
 
-        label l{id, class_id, std::max(0., start_s), std::max(0., stop_s)};
+        label l{id, label_defn_id{class_id}, std::max(0., start_s), std::max(0., stop_s)};
         if(auto it = record.find("state"); it != record.end())
         {
             if(auto state = state_from_string(it->get<std::string>()))

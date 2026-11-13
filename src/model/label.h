@@ -14,11 +14,6 @@ using label_id = uint64_t;
 
 struct label_defn_id
 {
-    label_defn_id &operator=(const label_defn_id &other)
-    {
-        m_id = other.m_id;
-        return *this;
-    }
     operator uint32_t() const { return m_id; }
     bool operator==(const label_defn_id &other) const = default;
 

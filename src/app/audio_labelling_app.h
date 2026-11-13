@@ -44,8 +44,6 @@ private:
 
     action_handler m_handler{m_audio_engine, m_project, m_app_state};
 
-    bool m_layout_initialised{false};
-
     std::chrono::steady_clock::time_point m_last_autosave{std::chrono::steady_clock::now()};
     bool m_autosave_failed{false}; ///< To report a persistent failure once rather than every time
 

@@ -21,7 +21,8 @@
 
 struct project_config
 {
-    static project_config parse_from_file(std::string filename);
+    /// An empty path gives an empty config, which loads no project
+    static project_config parse_from_file(const std::filesystem::path &filename);
 
     /// Resolve a project related path (label, export) relative to the project location, after
     /// expanding any ${ENV_VARS} in it
