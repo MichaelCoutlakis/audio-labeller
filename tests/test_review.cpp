@@ -203,3 +203,15 @@ TEST_CASE("spectrogram tiles are computed in the background and cached")
     tiles.request(0., 4., level);
     // Destroying with work queued stops the threads
 }
+
+TEST_CASE("frequency positions invert the row frequencies, for the axis ticks")
+{
+    for(const auto scale : {frequency_scale::linear, frequency_scale::log, frequency_scale::mel})
+    {
+        spectrogram_settings s;
+        s.m_scale = scale;
+        const double min_hz = spectrogram_min_hz(s, 8000.);
+        const double hz = row_frequency(30., 100, min_hz, 8000., scale);
+        CHECK(frequency_position(hz, min_hz, 8000., scale) == doctest::Approx(0.3));
+    }
+}

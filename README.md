@@ -179,9 +179,10 @@ re-cut.
 
 Labels use the full height and share it only where they overlap in time, like
 overlapping calendar events. A lane per class, or every label at full height,
-can be chosen under Audio Control, along with the channel of a multi-channel
-file. The Spectrogram checkbox above the waveform shows a spectrogram behind it
-(linear, log or mel scale), and the slider beside it sets the waveform gain.
+can be chosen under Options > Display, along with the channel of a
+multi-channel file, the waveform gain, and a spectrogram (linear, log or mel
+scale) shown below the waveform. The two share a time axis, the split between
+them can be dragged, and labels can be selected, drawn and moved on either.
 
 ### Label Palette
 The label palette uses a "paint class" style:
@@ -195,7 +196,7 @@ The label palette uses a "paint class" style:
 - Single click selects only that label
 
 ### Hot keys:
-The list is also in the app, under Audio Control > Keyboard shortcuts.
+The list is also in the app, under Options > Keyboard shortcuts.
 
 - 1-9: choose a palette class, which also applies it to the selected labels
   (confirming suggestions)
@@ -210,7 +211,7 @@ The list is also in the app, under Audio Control > Keyboard shortcuts.
 - A: snap the selected onsets to the sharpest rise within a few milliseconds
   (Ctrl+Z undoes it)
 - Left / Right: move the selected labels by the nudge step (10 ms by default,
-  set under Audio Control); with Alt, by the fine step (1 ms)
+  set under Options); with Alt, by the fine step (1 ms)
 - Ctrl+Left / Ctrl+Right: move their start edges
 - Shift+Left / Shift+Right: move their stop edges
 - Delete: delete the selected labels

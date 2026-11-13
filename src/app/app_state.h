@@ -58,6 +58,7 @@ struct app_settings
     frequency_scale m_spectrogram_scale{frequency_scale::mel};
     float m_spectrogram_gain_db{0.f};   ///< Added to the levels before colouring
     float m_spectrogram_range_db{80.f}; ///< Levels this far below full scale are black
+    float m_spectrogram_share{0.5f};    ///< Of the height, below the waveform
 
     /// Set if the settings file exists but is unreadable, in which case it's left as is on save
     std::string m_load_error;

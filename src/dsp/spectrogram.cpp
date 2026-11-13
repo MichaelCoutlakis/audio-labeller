@@ -68,6 +68,25 @@ double row_frequency(double row, size_t rows, double min_hz, double max_hz, freq
     }
 }
 
+double frequency_position(double hz, double min_hz, double max_hz, frequency_scale scale)
+{
+    switch(scale)
+    {
+    case frequency_scale::log:
+        return std::log(hz / min_hz) / std::log(max_hz / min_hz);
+    case frequency_scale::mel:
+        return (hz_to_mel(hz) - hz_to_mel(min_hz)) / (hz_to_mel(max_hz) - hz_to_mel(min_hz));
+    case frequency_scale::linear:
+    default:
+        return hz / max_hz;
+    }
+}
+
+double spectrogram_min_hz(const spectrogram_settings &settings, double max_hz)
+{
+    return settings.m_scale == frequency_scale::linear ? 0. : std::min(settings.m_min_hz, max_hz / 2.);
+}
+
 spectrogram_image compute_spectrogram(
     const audio_buffer &audio,
     double start_s,
@@ -88,9 +107,7 @@ spectrogram_image compute_spectrogram(
     image.m_start_s = start_s;
     image.m_stop_s = stop_s;
     image.m_max_hz = rate / 2.;
-    image.m_min_hz = settings.m_scale == frequency_scale::linear
-        ? 0.
-        : std::min(settings.m_min_hz, image.m_max_hz / 2.);
+    image.m_min_hz = spectrogram_min_hz(settings, image.m_max_hz);
     image.m_db.assign(rows * columns, -200.f);
 
     // Hann window, scaled so that a full scale sine reads 0 dB

@@ -7,12 +7,13 @@
 #include "../app/app_state.h"
 #include "../model/project_model.h"
 
+/// Display, playback, editing and review options, and the keyboard shortcuts
 class audio_view
 {
 public:
     void render(const project_model &proj, app_state &state);
 
-    std::string m_window_name{"Audio Control"};
+    std::string m_window_name{"Options"};
 
 private:
     int m_index{0};

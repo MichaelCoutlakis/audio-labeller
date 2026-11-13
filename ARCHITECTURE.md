@@ -289,6 +289,11 @@ the most recently used tiles; new audio or settings start a new generation, and
 work for the old one is dropped. Levels are kept in dB, so changing the gain or
 range only recolours the textures (a few per frame).
 
+The spectrogram is a second ImPlot subplot below the waveform, with the x axes
+linked. Both run the same interaction code (drawing, selecting, dragging
+labels), since they share time and the label bands; on the spectrogram labels
+have a faint fill and an outline so it stays visible.
+
 ## Export
 
 Export turns labelled recordings into a dataset for training. The intended

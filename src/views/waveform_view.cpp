@@ -166,71 +166,101 @@ void waveform_view::render(const project_model &project, app_state &state)
     ImPlot::GetInputMap().Pan = ImGuiMouseButton_Middle;
     ImPlot::GetInputMap().Fit = ImGuiMouseButton_Middle; // Double click middle to zoom to fit
 
-    // The view options used most, at hand (the rest are under Audio Control)
-    auto &settings = state.settings;
-    ImGui::Checkbox("Spectrogram", &settings.m_show_spectrogram);
-    if(settings.m_show_spectrogram)
-    {
-        const char *scales[] = {"Linear", "Log", "Mel"};
-        int scale = static_cast<int>(settings.m_spectrogram_scale);
-        ImGui::SameLine();
-        ImGui::SetNextItemWidth(ImGui::GetFontSize() * 5.f);
-        if(ImGui::Combo("##Scale", &scale, scales, IM_ARRAYSIZE(scales)))
-            settings.m_spectrogram_scale = static_cast<frequency_scale>(scale);
-        ImGui::SameLine();
-        ImGui::SetNextItemWidth(ImGui::GetFontSize() * 8.f);
-        ImGui::SliderFloat("##SpecGain", &settings.m_spectrogram_gain_db, -20.f, 60.f, "Gain %.0f dB");
-    }
-    ImGui::SameLine();
-    ImGui::SetNextItemWidth(ImGui::GetFontSize() * 8.f);
-    ImGui::SliderFloat(
-        "##WaveGain",
-        &settings.m_waveform_gain,
-        1.f,
-        100.f,
-        "Waveform %.1fx",
-        ImGuiSliderFlags_Logarithmic);
-
     state.m_hover_time_s.reset();
-    if(ImPlot::BeginPlot("Waveform", ImVec2{-1.f, -1.f}, ImPlotFlags_NoLegend))
+    auto &settings = state.settings;
+    if(!settings.m_show_spectrogram)
+        render_plot(project, state, false, true);
+    else
     {
-        ImPlot::SetupAxes(
-            "Time",
-            state.settings.m_show_spectrogram ? "Frequency" : "Amplitude",
-            ImPlotAxisFlags_NoGridLines,
-            ImPlotAxisFlags_NoGridLines | ImPlotAxisFlags_NoTickLabels);
-        ImPlot::SetupAxisLimits(ImAxis_Y1, -1, 1, ImPlotCond_Always);
-
-        auto plot_limits = ImPlot::GetPlotLimits();
-
-        m_transform.m_view_start_s = plot_limits.X.Min;
-        m_transform.m_view_end_s = plot_limits.X.Max;
-
-        if(ImPlot::IsPlotHovered())
+        // Waveform above, spectrogram below, sharing the time axis. The split can be dragged.
+        float ratios[2] = {1.f - settings.m_spectrogram_share, settings.m_spectrogram_share};
+        if(ImPlot::BeginSubplots(
+               "##Views",
+               2,
+               1,
+               ImVec2{-1.f, -1.f},
+               ImPlotSubplotFlags_LinkAllX | ImPlotSubplotFlags_NoMenus,
+               ratios))
         {
-            state.m_hover_time_s = ImPlot::GetPlotMousePos(ImAxis_X1, ImAxis_Y1).x;
-            if(ImGui::IsMouseClicked(ImGuiMouseButton_Left))
-                m_drag_seq = state.next_edit_seq();
+            render_plot(project, state, false, false);
+            render_plot(project, state, true, true);
+            ImPlot::EndSubplots();
+            settings.m_spectrogram_share = std::clamp(ratios[1] / (ratios[0] + ratios[1]), 0.1f, 0.9f);
         }
-
-        ImPlot::PushPlotClipRect();
-        if(state.settings.m_show_spectrogram)
-            render_spectrogram(state);
-
-        update_waveform_drag(project, state);
-
-        process_selections(state);
-
-        render_waveform(state);
-
-        render_cursor(state);
-
-        render_annotations(project, state);
-
-        ImPlot::PopPlotClipRect();
-        ImPlot::EndPlot();
     }
     ImGui::End();
+}
+
+void waveform_view::setup_frequency_ticks(const app_state &state)
+{
+    const auto rate = state.get_audio_buffer().m_sample_rate_hz;
+    if(rate == 0U)
+        return;
+    spectrogram_settings s;
+    s.m_scale = state.settings.m_spectrogram_scale;
+    const double max_hz = rate / 2.;
+    const double min_hz = spectrogram_min_hz(s, max_hz);
+
+    std::vector<double> positions;
+    std::vector<std::string> names;
+    for(const double hz : {0., 100., 200., 500., 1000., 2000., 5000., 10000., 20000., 50000., 100000.})
+    {
+        if(hz < min_hz || hz > max_hz || (hz == 0. && s.m_scale != frequency_scale::linear))
+            continue;
+        const double pos = frequency_position(hz, min_hz, max_hz, s.m_scale);
+        // Skip ticks crowded together, which the linear scale makes at the bottom
+        if(!positions.empty() && pos * 2. - 1. - positions.back() < 0.08)
+            continue;
+        positions.push_back(pos * 2. - 1.);
+        names.push_back(hz >= 1000. ? fmt::format("{:g}k", hz / 1000.) : fmt::format("{:g}", hz));
+    }
+    std::vector<const char *> labels;
+    for(const auto &n : names)
+        labels.push_back(n.c_str());
+    ImPlot::SetupAxisTicks(ImAxis_Y1, positions.data(), static_cast<int>(positions.size()), labels.data());
+}
+
+void waveform_view::render_plot(
+    const project_model &project,
+    app_state &state,
+    bool spectrogram,
+    bool bottom)
+{
+    if(!ImPlot::BeginPlot(spectrogram ? "##Spectrogram" : "##Waveform", ImVec2{-1.f, -1.f}, ImPlotFlags_NoLegend))
+        return;
+
+    ImPlot::SetupAxes(
+        bottom ? "Time (s)" : nullptr,
+        spectrogram ? "Hz" : nullptr,
+        ImPlotAxisFlags_NoGridLines | (bottom ? 0 : ImPlotAxisFlags_NoTickLabels),
+        ImPlotAxisFlags_NoGridLines | (spectrogram ? 0 : ImPlotAxisFlags_NoTickLabels));
+    if(spectrogram)
+        setup_frequency_ticks(state);
+    ImPlot::SetupAxisLimits(ImAxis_Y1, -1, 1, ImPlotCond_Always);
+
+    auto plot_limits = ImPlot::GetPlotLimits();
+    m_transform.m_view_start_s = plot_limits.X.Min;
+    m_transform.m_view_end_s = plot_limits.X.Max;
+
+    if(ImPlot::IsPlotHovered())
+    {
+        state.m_hover_time_s = ImPlot::GetPlotMousePos(ImAxis_X1, ImAxis_Y1).x;
+        if(ImGui::IsMouseClicked(ImGuiMouseButton_Left))
+            m_drag_seq = state.next_edit_seq();
+    }
+
+    ImPlot::PushPlotClipRect();
+    if(spectrogram)
+        render_spectrogram(state);
+    update_waveform_drag(project, state);
+    process_selections(state);
+    if(!spectrogram)
+        render_waveform(state);
+    render_cursor(state);
+    // Labels are edited on either plot, but only faintly filled on the spectrogram so it shows
+    render_annotations(project, state, spectrogram);
+    ImPlot::PopPlotClipRect();
+    ImPlot::EndPlot();
 }
 
 void waveform_view::render_cursor(app_state &state)
@@ -278,8 +308,6 @@ void waveform_view::render_waveform(app_state &state)
     const size_t frames_per_px = std::max<size_t>(1U, (last - first) / plot_width);
 
     ImPlotSpec spec;
-    if(state.settings.m_show_spectrogram)
-        spec.FillAlpha = 0.35f;
 
     m_x.clear();
     m_lo.clear();
@@ -357,7 +385,7 @@ void waveform_view::render_spectrogram(app_state &state)
     }
 }
 
-void waveform_view::render_annotations(const project_model &project, app_state &state)
+void waveform_view::render_annotations(const project_model &project, app_state &state, bool faint)
 {
     if(!state.m_active_file)
         return;
@@ -380,7 +408,7 @@ void waveform_view::render_annotations(const project_model &project, app_state &
         else
         {
             const auto band = bands.contains(label->m_id) ? bands.at(label->m_id) : lane{};
-            render_resize_label_rect(state, *label, col, name, band.m_y_min, band.m_y_max);
+            render_resize_label_rect(state, *label, col, name, band.m_y_min, band.m_y_max, faint);
         }
     }
 }
@@ -476,14 +504,25 @@ void waveform_view::render_resize_label_rect(
     ImColor col,
     const std::string &name,
     double y_min,
-    double y_max)
+    double y_max,
+    bool faint)
 {
     // ImPlot edits the values in place, so it gets a copy and any change becomes an action. The
     // vertical extent is fixed by the label's lane.
     double start{l.m_start_s}, stop{l.m_stop_s};
     double top{y_max}, bottom{y_min};
+    ImColor fill = col;
+    if(faint)
+        fill.Value.w *= 0.3f;
     const bool was_resized =
-        ImPlot::DragRect(static_cast<int>(l.m_id), &start, &bottom, &stop, &top, col);
+        ImPlot::DragRect(static_cast<int>(l.m_id), &start, &bottom, &stop, &top, fill);
+    if(faint)
+    {
+        // An outline, as the fill is faint
+        const ImVec2 a = ImPlot::PlotToPixels(l.m_start_s, y_max);
+        const ImVec2 b = ImPlot::PlotToPixels(l.m_stop_s, y_min);
+        ImPlot::GetPlotDrawList()->AddRect(a, b, ImColor(col.Value.x, col.Value.y, col.Value.z, 0.9f));
+    }
 
     if(l.m_state == label_state::suggested)
     {

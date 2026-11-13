@@ -29,7 +29,10 @@ private:
     void render_cursor(app_state &state);
     void render_waveform(app_state &state);
     void render_spectrogram(app_state &state);
-    void render_annotations(const project_model &project, app_state &state);
+    /// One plot of the stack: the waveform, or the spectrogram. Labels can be edited on either.
+    void render_plot(const project_model &project, app_state &state, bool spectrogram, bool bottom);
+    void setup_frequency_ticks(const app_state &state);
+    void render_annotations(const project_model &project, app_state &state, bool faint);
     void update_waveform_drag(const project_model &proj, app_state &state);
 
     void process_selections(app_state &state);
@@ -40,7 +43,8 @@ private:
         ImColor col,
         const std::string &name,
         double y_min,
-        double y_max);
+        double y_max,
+        bool faint);
     void render_onset(app_state &state, const label &l, ImColor col, const std::string &name);
 
     coord_transform m_transform;

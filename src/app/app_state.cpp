@@ -75,6 +75,7 @@ app_settings app_settings::load()
             s.m_spectrogram_scale = enum_value(*spec, "scale", s.m_spectrogram_scale, scale_names);
             s.m_spectrogram_gain_db = spec->value("gain_db", s.m_spectrogram_gain_db);
             s.m_spectrogram_range_db = spec->value("range_db", s.m_spectrogram_range_db);
+            s.m_spectrogram_share = std::clamp(spec->value("share", s.m_spectrogram_share), 0.1f, 0.9f);
         }
     }
     catch(const nlohmann::json::exception &e)
@@ -106,7 +107,8 @@ void app_settings::save()
          {{"show", m_show_spectrogram},
           {"scale", enum_name(m_spectrogram_scale, scale_names)},
           {"gain_db", m_spectrogram_gain_db},
-          {"range_db", m_spectrogram_range_db}}}
+          {"range_db", m_spectrogram_range_db},
+          {"share", m_spectrogram_share}}}
     };
     if(!m_device_name.empty())
         j["audio_device"] = {{"name", m_device_name}};

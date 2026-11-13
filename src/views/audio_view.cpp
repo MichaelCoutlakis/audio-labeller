@@ -16,29 +16,30 @@ void audio_view::render(const project_model &proj, app_state &state)
     ImGui::Begin(m_window_name.c_str());
     auto &settings = state.settings;
 
-    if(ImGui::Checkbox("Loop", &state.m_loop))
-        state.add_action(actions::playback_loop{state.m_loop});
-    ImGui::SameLine();
-    ImGui::Checkbox("Auto play", &state.m_auto_start);
+    ImGui::SeparatorText("Display");
+    const char *layouts[] = {"Stacked where they overlap", "Lane per class", "Full height"};
+    int layout = static_cast<int>(settings.m_layout);
+    if(ImGui::Combo("Labels", &layout, layouts, IM_ARRAYSIZE(layouts)))
+        settings.m_layout = static_cast<label_layout>(layout);
+    ImGui::Checkbox("Show rejected (H)", &settings.m_show_rejected);
 
-    float speed = settings.m_playback_speed;
-    if(ImGui::SliderFloat("Speed", &speed, 0.1f, 1.f, "%.2fx"))
-        state.add_action(actions::set_playback_speed{speed});
-    if(ImGui::IsItemHovered())
-        ImGui::SetTooltip("Slower playback, which also lowers the pitch. Ctrl+click to type.");
-
-    std::vector<const char *> names;
-    for(auto &dev : state.m_audio_devs)
-        names.push_back((dev.name.c_str()));
-
-    // Devices are remembered by name, the first being the system default:
-    auto it = std::ranges::find(state.m_audio_devs, settings.m_device_name, &audio_dev::name);
-    m_index = it != state.m_audio_devs.end()
-        ? static_cast<int>(std::distance(state.m_audio_devs.begin(), it))
-        : 0;
-
-    if(ImGui::Combo("Playback Device", &m_index, names.data(), static_cast<int>(names.size())))
-        state.add_action(actions::select_playback_device{state.m_audio_devs.at(m_index)});
+    ImGui::SliderFloat(
+        "Waveform gain",
+        &settings.m_waveform_gain,
+        1.f,
+        100.f,
+        "%.1fx",
+        ImGuiSliderFlags_Logarithmic);
+    ImGui::Checkbox("Spectrogram below the waveform", &settings.m_show_spectrogram);
+    if(settings.m_show_spectrogram)
+    {
+        const char *scales[] = {"Linear", "Log", "Mel"};
+        int scale = static_cast<int>(settings.m_spectrogram_scale);
+        if(ImGui::Combo("Frequency scale", &scale, scales, IM_ARRAYSIZE(scales)))
+            settings.m_spectrogram_scale = static_cast<frequency_scale>(scale);
+        ImGui::SliderFloat("Gain", &settings.m_spectrogram_gain_db, -20.f, 60.f, "%.0f dB");
+        ImGui::SliderFloat("Range", &settings.m_spectrogram_range_db, 20.f, 140.f, "%.0f dB");
+    }
 
     // Channel of the active file
     if(state.has_active_file())
@@ -65,34 +66,34 @@ void audio_view::render(const project_model &proj, app_state &state)
                 ImGui::EndCombo();
             }
             if(ImGui::IsItemHovered())
-                ImGui::SetTooltip("Viewed and played. Remembered for this file.");
+                ImGui::SetTooltip("Shown and played. Remembered for this file.");
         }
     }
 
-    ImGui::SeparatorText("View");
-    const char *layouts[] = {"Stacked where they overlap", "Lane per class", "Full height"};
-    int layout = static_cast<int>(settings.m_layout);
-    if(ImGui::Combo("Labels", &layout, layouts, IM_ARRAYSIZE(layouts)))
-        settings.m_layout = static_cast<label_layout>(layout);
-    ImGui::Checkbox("Show rejected (H)", &settings.m_show_rejected);
+    ImGui::SeparatorText("Playback");
+    if(ImGui::Checkbox("Loop", &state.m_loop))
+        state.add_action(actions::playback_loop{state.m_loop});
+    ImGui::SameLine();
+    ImGui::Checkbox("Auto play", &state.m_auto_start);
 
-    ImGui::SliderFloat(
-        "Waveform gain",
-        &settings.m_waveform_gain,
-        1.f,
-        100.f,
-        "%.1fx",
-        ImGuiSliderFlags_Logarithmic);
-    ImGui::Checkbox("Spectrogram", &settings.m_show_spectrogram);
-    if(settings.m_show_spectrogram)
-    {
-        const char *scales[] = {"Linear", "Log", "Mel"};
-        int scale = static_cast<int>(settings.m_spectrogram_scale);
-        if(ImGui::Combo("Frequency scale", &scale, scales, IM_ARRAYSIZE(scales)))
-            settings.m_spectrogram_scale = static_cast<frequency_scale>(scale);
-        ImGui::SliderFloat("Gain", &settings.m_spectrogram_gain_db, -20.f, 60.f, "%.0f dB");
-        ImGui::SliderFloat("Range", &settings.m_spectrogram_range_db, 20.f, 140.f, "%.0f dB");
-    }
+    float speed = settings.m_playback_speed;
+    if(ImGui::SliderFloat("Speed", &speed, 0.1f, 1.f, "%.2fx"))
+        state.add_action(actions::set_playback_speed{speed});
+    if(ImGui::IsItemHovered())
+        ImGui::SetTooltip("Slower playback, which also lowers the pitch. Ctrl+click to type.");
+
+    std::vector<const char *> names;
+    for(auto &dev : state.m_audio_devs)
+        names.push_back((dev.name.c_str()));
+
+    // Devices are remembered by name, the first being the system default:
+    auto it = std::ranges::find(state.m_audio_devs, settings.m_device_name, &audio_dev::name);
+    m_index = it != state.m_audio_devs.end()
+        ? static_cast<int>(std::distance(state.m_audio_devs.begin(), it))
+        : 0;
+
+    if(ImGui::Combo("Playback Device", &m_index, names.data(), static_cast<int>(names.size())))
+        state.add_action(actions::select_playback_device{state.m_audio_devs.at(m_index)});
 
     ImGui::SeparatorText("Editing");
     double nudge_ms = settings.m_nudge_s * 1000.;

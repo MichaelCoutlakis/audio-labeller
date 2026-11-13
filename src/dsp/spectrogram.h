@@ -48,6 +48,13 @@ void fft(std::vector<std::complex<float>> &data);
 /// The frequency at the bottom edge of row (0 to rows, so rows gives the top) on the scale
 double row_frequency(double row, size_t rows, double min_hz, double max_hz, frequency_scale scale);
 
+/// Where a frequency lies on the scale, from 0 at min_hz to 1 at max_hz: the inverse of
+/// row_frequency()
+double frequency_position(double hz, double min_hz, double max_hz, frequency_scale scale);
+
+/// The lowest frequency shown, for a sample rate's top frequency
+double spectrogram_min_hz(const spectrogram_settings &settings, double max_hz);
+
 /// Spectrogram of the first channel between two times, for drawing at the given size
 spectrogram_image compute_spectrogram(
     const audio_buffer &audio,
