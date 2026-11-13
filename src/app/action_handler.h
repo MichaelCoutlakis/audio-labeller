@@ -48,8 +48,11 @@ struct action_handler
     void operator()(const actions::play_clip &p);
     void operator()(const actions::judge_clip &j);
     void operator()(const actions::jump_to &j);
+    void operator()(const actions::run_assist &r);
+    void operator()(const actions::cancel_assist &c);
 
-    /// Pick up the result of a background export once it's finished. Call every frame.
+    /// Pick up the results of background exports and assisted labelling once they've finished.
+    /// Call every frame.
     void poll_background();
 
     /// Stop a background export, waiting for it
@@ -88,4 +91,5 @@ private:
     void restore_active_audio();
 
     void report_export(const export_summary &summary);
+    void poll_assist();
 };

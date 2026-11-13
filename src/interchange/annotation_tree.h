@@ -101,6 +101,18 @@ struct annotation_import_summary
     std::vector<std::string> m_errors;
 };
 
+/// Add text labels to a file, mapping their text to classes (adding unknown ones for the
+/// session), unless the same label is already there. Shared by every source of suggestions.
+void add_text_labels(
+    project_model &project,
+    const std::filesystem::path &file,
+    const std::vector<text_label> &text_labels,
+    label_state state,
+    annotation_import_summary &summary);
+
+/// Sort and de-duplicate the new class names, once everything's added
+void finish_summary(annotation_import_summary &summary);
+
 /// Read the tree's label file for every audio file in the project. Labels already present (the
 /// same class and times to within a millisecond, in any state) aren't added again, so importing
 /// twice changes nothing.

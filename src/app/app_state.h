@@ -218,6 +218,13 @@ public:
     bool is_exporting() const { return m_export_result.valid(); }
     bool m_show_export_settings{false};
 
+    /* Assisted labelling: */
+    std::vector<assisted_labeller_settings> m_assisted_labellers;
+    std::shared_ptr<assist_progress> m_assist_progress;
+    std::future<assist_outcome> m_assist_result;
+    bool is_assisting() const { return m_assist_result.valid(); }
+    std::string m_assist_report; ///< What the last run did, shown in its window
+
     /* Clip manifest: */
     bool m_keys_captured{false}; ///< A view with focus handles the keys, eg. the clip list
     bool m_playing_clip{false};  ///< The audio engine has a manifest clip, not the active file

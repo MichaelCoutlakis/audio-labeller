@@ -16,6 +16,13 @@ inline std::string generic_utf8(const std::filesystem::path &p)
     return std::string(s.begin(), s.end());
 }
 
+/// UTF-8 text of a path with the platform's separators, for passing to other programs
+inline std::string native_utf8(const std::filesystem::path &p)
+{
+    const auto s = p.u8string();
+    return std::string(s.begin(), s.end());
+}
+
 inline std::filesystem::path path_from_utf8(const std::string &s)
 {
     return std::filesystem::path(std::u8string(s.begin(), s.end()));

@@ -63,6 +63,31 @@
                 "by_score": { "type": "boolean", "description": "Review the lowest scores first, if suggestions have scores. Default: true" }
             }
         },
+        "assisted-labellers": {
+            "description": "Detectors that propose suggestions to review: external programs run once per recording, or built-ins. A built-in loudness labeller is listed even if not configured.",
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "name": { "type": "string", "description": "Shown in the app" },
+                    "command": {
+                        "description": "Program and arguments (preferred: no quoting needed), or one string run through cmd.exe or /bin/sh. Placeholders: {audio}, {output} (the label file to write; without it, standard output is read), {relative}, {root}, {project_dir}, {channel}, {class}. It must exit with 0.",
+                        "oneOf": [ { "type": "array", "items": { "type": "string" } }, { "type": "string" } ]
+                    },
+                    "format": { "enum": [ "audacity", "dcase", "raven" ], "description": "Of what the command writes. Default: audacity" },
+                    "format-options": { "type": "object" },
+                    "working-dir": { "type": "string", "description": "Default: the project's folder" },
+                    "timeout_s": { "type": "number", "description": "Per recording. Default: none" },
+                    "builtin": { "enum": [ "loudness" ], "description": "A built-in instead of a command" },
+                    "class": { "type": "string", "description": "Class of a built-in's suggestions. Default: chosen in the app" },
+                    "options": {
+                        "type": "object",
+                        "description": "Loudness: margin_db (12), min_level_db (-70), floor_percentile (0.2), frame_s (0.01), min_length_s (0.03), merge_gap_s (0.1), padding_s (0.01), onsets (false)"
+                    }
+                },
+                "required": [ "name" ]
+            }
+        },
         "clip-manifest": {
             "description": "A CSV of clips cut by another tool, to check in the app",
             "type": "object",

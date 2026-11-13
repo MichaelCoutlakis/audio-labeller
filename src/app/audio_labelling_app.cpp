@@ -53,6 +53,8 @@ void audio_labeller_app::on_init()
         m_app_state.m_review = review_settings::from_json(m_project.config().m_review);
         m_app_state.m_annotation_trees =
             annotation_tree_settings::list_from_json(m_project.config().m_annotations);
+        m_app_state.m_assisted_labellers =
+            assisted_labeller_settings::list_from_json(m_project.config().m_assisted_labellers);
     }
     catch(const std::exception &e)
     {
@@ -86,6 +88,7 @@ void audio_labeller_app::on_frame()
     m_label_controls.render(m_project, m_app_state);
     m_export_settings.render(m_project, m_app_state);
     m_clip_manifest.render(m_project, m_app_state);
+    m_assist.render(m_project, m_app_state);
 
     // Dispatch the actions (controller):
     for(auto &action : m_app_state.m_actions)
@@ -206,6 +209,7 @@ void audio_labeller_app::render_main_dockspace()
         ImGui::DockBuilderDockWindow(m_applied_labels.m_window_name.c_str(), right_id);
         ImGui::DockBuilderDockWindow(m_clip_manifest.m_window_name.c_str(), right_id);
         ImGui::DockBuilderDockWindow(m_audio_control.m_window_name.c_str(), bottom_left_id);
+        ImGui::DockBuilderDockWindow(m_assist.m_window_name.c_str(), bottom_left_id);
 
         ImGui::DockBuilderFinish(dockspace_id);
     }

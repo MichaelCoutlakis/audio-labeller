@@ -204,6 +204,31 @@ A typical pipeline round trip: the pipeline writes proposals into one tree,
 imported as suggestions; reviewers accept, reject or relabel; export writes the
 reviewed tree the pipeline reads back to cut clips and train.
 
+## Assisted labelling
+
+A **suggester** (`assist/assisted_labeller.h`) proposes `text_label`s for one
+recording at a time, on a worker thread, without touching the project. There are
+two kinds, both listed in one dropdown:
+
+- **External commands**, from the project's `assisted-labellers`. Detectors are
+  usually Python models, so they run as processes rather than as plugins loaded
+  into the app: any language works, no ABI is shared, a crash loses only that
+  run, and a model can be changed without rebuilding. `io/process.cpp` starts
+  the program without a shell (`CreateProcessW` or `fork`/`exec`), with UTF-8
+  arguments, its output logged to a file, and kills it on cancel or timeout. The
+  command writes a label file in one of the label formats, read back as for
+  annotation trees.
+- **Built-ins**, compiled in: currently loudness (`dsp/loudness.cpp`): frames
+  some margin above the noise floor (a low percentile of frame levels), joined
+  across short gaps, as regions or as onsets snapped to their rise. A new
+  built-in is a `suggester` and a case in `make_suggester`.
+
+A run is copied into an `assist_job` (the recordings, their portable paths and
+channels), run by `run_assist` with progress and cancellation, and applied on
+the UI thread by `apply_assist`, through the same `add_text_labels` as imports:
+class names are matched to the palette and suggestions already present aren't
+added again. A failure on one recording is reported and the rest carry on.
+
 ## Clip manifests
 
 A clip manifest is a pipeline's CSV of cut clips, with each clip's source

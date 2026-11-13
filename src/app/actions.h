@@ -12,6 +12,7 @@
 
 #include <nlohmann/json.hpp>
 
+#include "../assist/assisted_labeller.h"
 #include "../manifest/clip_manifest.h"
 #include "../model/label.h"
 #include "../model/project_model.h"
@@ -208,6 +209,19 @@ struct jump_to
     double m_time_s{};
 };
 
+/// Run one of the assisted labellers in the background, adding its suggestions when done
+struct run_assist
+{
+    size_t m_labeller{};
+    assist_scope m_scope{assist_scope::active_file};
+    std::string m_class; ///< For built-ins that need one
+    std::optional<loudness_settings> m_loudness; ///< Overrides the built-in's settings
+};
+
+struct cancel_assist
+{
+};
+
 using app_action = std::variant<
     load_file,
     add_label,
@@ -240,6 +254,8 @@ using app_action = std::variant<
     export_annotations,
     play_clip,
     judge_clip,
-    jump_to>;
+    jump_to,
+    run_assist,
+    cancel_assist>;
 
 }

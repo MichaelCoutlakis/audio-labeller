@@ -15,6 +15,7 @@ add_library(audio_labeller_core STATIC
     "io/files.h" "io/files.cpp"
     "io/source_id.h" "io/source_id.cpp"
     "io/wav_writer.h" "io/wav_writer.cpp"
+    "io/process.h" "io/process.cpp"
 
     "export/clip_export.h" "export/clip_export.cpp"
 
@@ -25,7 +26,10 @@ add_library(audio_labeller_core STATIC
 
     "manifest/clip_manifest.h" "manifest/clip_manifest.cpp"
 
+    "assist/assisted_labeller.h" "assist/assisted_labeller.cpp"
+
     "dsp/onset_snap.h" "dsp/onset_snap.cpp"
+    "dsp/loudness.h" "dsp/loudness.cpp"
     "dsp/spectrogram.h" "dsp/spectrogram.cpp"
     "dsp/spectrogram_tiles.h" "dsp/spectrogram_tiles.cpp"
 )
@@ -50,6 +54,7 @@ add_executable(AudioLabeller main.cpp
     "audio/audio_engine.h" "audio/audio_engine.cpp"
     "audio/playback_cursor.h"
 
+    "views/assist_view.h" "views/assist_view.cpp"
     "views/audio_view.h" "views/audio_view.cpp"
     "views/export_settings_view.h" "views/export_settings_view.cpp"
     "views/clip_manifest_view.h" "views/clip_manifest_view.cpp"

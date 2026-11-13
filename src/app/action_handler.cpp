@@ -422,8 +422,79 @@ void action_handler::operator()(const actions::cancel_export &c)
         m_state.m_export_progress->m_cancel = true;
 }
 
+void action_handler::operator()(const actions::run_assist &r)
+{
+    if(m_state.is_assisting())
+        return;
+    auto settings = m_state.m_assisted_labellers.at(r.m_labeller);
+    if(r.m_loudness)
+        settings.m_loudness = *r.m_loudness;
+    auto job = std::make_shared<assist_job>(
+        prepare_assist(m_proj, settings, r.m_scope, m_state.m_active_file, r.m_class));
+    if(job->m_inputs.empty())
+    {
+        m_state.m_assist_report = "No files to run on.";
+        return;
+    }
+    auto progress = std::make_shared<assist_progress>();
+    m_state.m_assist_progress = progress;
+    m_state.m_assist_report.clear();
+    m_state.m_assist_result = std::async(
+        std::launch::async,
+        [job, progress] { return run_assist(*job, progress.get()); });
+}
+
+void action_handler::operator()(const actions::cancel_assist &c)
+{
+    if(m_state.m_assist_progress)
+        m_state.m_assist_progress->m_cancel = true;
+}
+
+void action_handler::poll_assist()
+{
+    auto &result = m_state.m_assist_result;
+    if(!result.valid() || result.wait_for(std::chrono::seconds(0)) != std::future_status::ready)
+        return;
+    m_state.m_assist_progress.reset();
+
+    const auto outcome = result.get();
+    const auto summary = apply_assist(m_proj, outcome);
+    if(summary.m_added)
+        m_state.m_history = history{}; // As for imports: older snapshots would drop them
+
+    auto &report = m_state.m_assist_report;
+    report = fmt::format(
+        "{}{}: {} suggestions added in {} files{}.",
+        outcome.m_name,
+        outcome.m_cancelled ? " (cancelled)" : "",
+        summary.m_added,
+        summary.m_files,
+        summary.m_duplicates ? fmt::format(", {} already there", summary.m_duplicates) : "");
+    if(!summary.m_new_classes.empty())
+    {
+        report += "\nNot in the palette, added for this session:";
+        for(const auto &name : summary.m_new_classes)
+            report += " " + name;
+    }
+    if(!outcome.m_errors.empty())
+    {
+        report += fmt::format("\n{} files failed.", outcome.m_errors.size());
+        if(!outcome.m_log_dir.empty())
+            report += " Logs are in " + generic_utf8(outcome.m_log_dir);
+        std::string errors;
+        for(size_t i = 0U; i != std::min<size_t>(outcome.m_errors.size(), 5U); ++i)
+            errors += (i ? "\n\n" : "") + outcome.m_errors[i];
+        if(outcome.m_errors.size() > 5U)
+            errors += fmt::format("\n\n...and {} more", outcome.m_errors.size() - 5U);
+        m_state.report_error(outcome.m_name + " failed:\n" + errors);
+    }
+    spdlog::info("{}", report);
+}
+
 void action_handler::poll_background()
 {
+    poll_assist();
+
     auto &result = m_state.m_export_result;
     if(!result.valid() || result.wait_for(std::chrono::seconds(0)) != std::future_status::ready)
         return;
@@ -446,10 +517,16 @@ void action_handler::poll_background()
 
 void action_handler::cancel_background()
 {
-    if(!m_state.is_exporting())
-        return;
-    (*this)(actions::cancel_export{});
-    m_state.m_export_result.wait();
+    if(m_state.is_assisting())
+    {
+        (*this)(actions::cancel_assist{});
+        m_state.m_assist_result.wait();
+    }
+    if(m_state.is_exporting())
+    {
+        (*this)(actions::cancel_export{});
+        m_state.m_export_result.wait();
+    }
     poll_background();
 }
 

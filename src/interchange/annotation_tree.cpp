@@ -175,6 +175,49 @@ std::vector<text_label> labels_for_export(
     return out;
 }
 
+void add_text_labels(
+    project_model &project,
+    const fs::path &file,
+    const std::vector<text_label> &text_labels,
+    label_state state,
+    annotation_import_summary &summary)
+{
+    for(const auto &t : text_labels)
+    {
+        const auto parsed = parse_label_text(t.m_text);
+        auto cls = find_class(project.m_label_dict, parsed.m_class);
+        if(!cls)
+        {
+            cls = project.add_session_class(parsed.m_class);
+            summary.m_new_classes.push_back(parsed.m_class);
+        }
+
+        label l{
+            get_next_label_id(),
+            *cls,
+            std::max(0., std::min(t.m_start_s, t.m_stop_s)),
+            std::max(0., std::max(t.m_start_s, t.m_stop_s)),
+            parsed.m_rejected ? label_state::rejected : state,
+            t.m_score
+        };
+        const auto &existing = project.get_labels(file);
+        if(std::ranges::any_of(existing, [&](const label &e) { return same_label(e, l); }))
+        {
+            ++summary.m_duplicates;
+            continue;
+        }
+        project.add_label(file, l);
+        ++summary.m_added;
+    }
+}
+
+void finish_summary(annotation_import_summary &summary)
+{
+    std::ranges::sort(summary.m_new_classes);
+    const auto [first, last] = std::ranges::unique(summary.m_new_classes);
+    summary.m_new_classes.erase(first, last);
+}
+
 annotation_import_summary import_annotations(project_model &project, const annotation_tree &tree)
 {
     annotation_import_summary summary;
@@ -219,33 +262,7 @@ annotation_import_summary import_annotations(project_model &project, const annot
                 continue;
             }
 
-            for(const auto &t : text_labels)
-            {
-                const auto parsed = parse_label_text(t.m_text);
-                auto cls = find_class(project.m_label_dict, parsed.m_class);
-                if(!cls)
-                {
-                    cls = project.add_session_class(parsed.m_class);
-                    summary.m_new_classes.push_back(parsed.m_class);
-                }
-
-                label l{
-                    get_next_label_id(),
-                    *cls,
-                    std::max(0., std::min(t.m_start_s, t.m_stop_s)),
-                    std::max(0., std::max(t.m_start_s, t.m_stop_s)),
-                    parsed.m_rejected ? label_state::rejected : state,
-                    t.m_score
-                };
-                const auto &existing = project.get_labels(file.m_path);
-                if(std::ranges::any_of(existing, [&](const label &e) { return same_label(e, l); }))
-                {
-                    ++summary.m_duplicates;
-                    continue;
-                }
-                project.add_label(file.m_path, l);
-                ++summary.m_added;
-            }
+            add_text_labels(project, file.m_path, text_labels, state, summary);
         }
         catch(const std::exception &e)
         {
@@ -265,9 +282,7 @@ annotation_import_summary import_annotations(project_model &project, const annot
             ++summary.m_unmatched;
     }
 
-    std::ranges::sort(summary.m_new_classes);
-    const auto [first, last] = std::ranges::unique(summary.m_new_classes);
-    summary.m_new_classes.erase(first, last);
+    finish_summary(summary);
     spdlog::info(
         "Imported {} labels from {} files in {}",
         summary.m_added,

@@ -10,6 +10,7 @@
 #include <imgui.h>
 
 #include "../audio/audio_engine.h"
+#include "../views/assist_view.h"
 #include "../views/audio_view.h"
 #include "../views/clip_manifest_view.h"
 #include "../views/export_settings_view.h"
@@ -39,6 +40,7 @@ private:
     keyboard_controller m_keyboard;
     export_settings_view m_export_settings;
     clip_manifest_view m_clip_manifest;
+    assist_view m_assist;
 
     audio_engine m_audio_engine;
 

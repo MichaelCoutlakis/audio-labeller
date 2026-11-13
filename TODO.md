@@ -80,9 +80,14 @@ channel.
 ## Phase 5: Assisted labelling
 
 Done: import predictions with scores, with accept and reject keys (as
-suggestions, in Phase 3b).
+suggestions, in Phase 3b); assisted labellers, external detector commands from
+the project run per recording in the background, and a built-in loudness
+detector for regions or onsets.
 
-- [ ] Suggestions for event boundaries based on loudness.
+- [ ] More built-in suggesters, eg. band-limited energy for a class's frequency
+      range, or template matching against confirmed labels.
+- [ ] Let a command run once over many recordings (a batch mode), for models
+      that are slow to load.
 - [ ] Class statistics panel.
 - [ ] Annotator field, with merge and agreement checks.
 

@@ -9,6 +9,8 @@ Features:
 - Playback of the audio and labels, at reduced speed if needed
 - Review of labels proposed by a detector or pipeline: accept, reject or
   relabel each, stepping through all files lowest confidence first
+- Assisted labelling: run detector scripts, or a built-in loudness detector,
+  to propose labels
 - Per-recording label files in Audacity, DCASE or Raven formats, for
   exchanging labels with other tools
 - A clip export for training, and a checker for clips cut by another tool
@@ -125,6 +127,31 @@ Press R for review mode. Tab then steps through the suggestions in every file
 window around the suggestion and playing it with a short pre-roll. Enter
 accepts, X rejects and 1-9 relabels, each moving on to the next. The `review`
 section of the project sets the windows.
+
+## Assisted labelling
+
+The Assisted Labelling window runs a detector over the active file, the files
+to do, or all of them, in the background, and adds what it finds as
+suggestions to review (R, then Tab). Detectors are external programs, listed
+in the project's `assisted-labellers`, plus a built-in loudness detector:
+
+```json
+"assisted-labellers": [
+    { "name": "Bird detector",
+      "command": ["python", "${MODELS}/detect.py", "{audio}", "{output}"],
+      "format": "audacity", "timeout_s": 300 },
+    { "name": "Loud sounds", "builtin": "loudness", "class": "Bird",
+      "options": { "margin_db": 15, "onsets": true } }
+]
+```
+
+A command runs once per recording, without a shell, and writes its
+suggestions to `{output}` in the given format (or prints them, if there's no
+`{output}`), exiting with 0. An optional score column orders the review. Its
+output is logged, and shown if it fails. `examples/example_detector.py` is a
+template. The built-in finds sounds some decibels above the background
+(regions, or onsets snapped to their rise), with its settings adjustable in the
+window. Running again doesn't add the same suggestion twice.
 
 ## Checking cut clips
 
