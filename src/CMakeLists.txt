@@ -29,6 +29,7 @@ add_library(audio_labeller_core STATIC
     "assist/assisted_labeller.h" "assist/assisted_labeller.cpp"
 
     "dsp/onset_snap.h" "dsp/onset_snap.cpp"
+    "dsp/auto_gain.h" "dsp/auto_gain.cpp"
     "dsp/loudness.h" "dsp/loudness.cpp"
     "dsp/spectrogram.h" "dsp/spectrogram.cpp"
     "dsp/spectrogram_tiles.h" "dsp/spectrogram_tiles.cpp"

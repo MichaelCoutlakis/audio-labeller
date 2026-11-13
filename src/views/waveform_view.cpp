@@ -138,14 +138,22 @@ void waveform_view::render(const project_model &project, app_state &state)
 {
     ImGui::Begin(m_window_name.c_str());
 
-    // Rezoom the time axis if the active file changes
-    const bool new_file = state.m_active_file != m_last_active_file;
-    if(new_file)
+    // Zoom to the new file once it's loaded. ImPlot's fit only covers what was drawn, which is
+    // just the visible part of the waveform, so the limits are set explicitly.
+    const auto &audio = state.get_audio_buffer();
+    if(state.m_active_file != m_last_active_file && audio.num_frames() != 0U)
     {
         m_last_active_file = state.m_active_file;
         if(!state.m_view_request)
-            ImPlot::SetNextAxisToFit(ImAxis_X1);
+        {
+            const double duration = audio.duration_s();
+            const double initial = state.settings.m_initial_view_s;
+            state.m_view_request =
+                time_span{0., initial > 0. ? std::min(initial, duration) : duration};
+        }
     }
+    if(!state.m_view_request)
+        follow_playhead(state);
     if(state.m_view_request)
     {
         ImPlot::SetNextAxisLimits(
@@ -189,6 +197,31 @@ void waveform_view::render(const project_model &project, app_state &state)
         }
     }
     ImGui::End();
+}
+
+void waveform_view::follow_playhead(app_state &state)
+{
+    const auto &playback = state.m_playback_state;
+    const double t = playback.playhead_s, last = m_last_playhead_s;
+    const bool started = playback.playing && !m_was_playing;
+    const bool advancing = playback.playing && t != last;
+    m_last_playhead_s = t;
+    m_was_playing = playback.playing;
+
+    // Not while the user pans or zooms, or before the view is known
+    const double width = m_transform.view_duration();
+    if(!state.settings.m_follow_playhead || !advancing || state.m_playing_clip || width <= 0. ||
+       ImGui::IsMouseDown(ImGuiMouseButton_Middle) || ImGui::IsMouseDown(ImGuiMouseButton_Right))
+        return;
+
+    // Page on when the playhead nears the right edge or loops out of view. Only if it was in view
+    // or has just started, so that scrolling away while it plays isn't undone.
+    const double start = m_transform.m_view_start_s, end = m_transform.m_view_end_s;
+    const bool was_in_view = last >= start && last <= end;
+    if((t >= start && t <= start + width * 0.95) || !(was_in_view || started))
+        return;
+    const double new_start = t - width * 0.05;
+    state.m_view_request = time_span{new_start, new_start + width};
 }
 
 void waveform_view::setup_frequency_ticks(const app_state &state)

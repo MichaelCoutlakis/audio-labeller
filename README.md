@@ -6,7 +6,8 @@ Features:
 - Multi audio file projects export to a single label file
 - Define the temporal location of the sound in addition to the class: regions
   with a start and stop, or onsets (a point in time) for transients
-- Playback of the audio and labels, at reduced speed if needed
+- Playback of the audio and labels, at reduced speed if needed, with fixed or
+  automatic gain for quiet recordings
 - Review of labels proposed by a detector or pipeline: accept, reject or
   relabel each, stepping through all files lowest confidence first
 - Assisted labelling: run detector scripts, or a built-in loudness detector,
@@ -73,7 +74,7 @@ relative to its dataset root, so a project can be moved or shared. Labels whose 
 found are kept in the label file, and are picked up again once the file is available.
 
 The app settings file also remembers the view and editing options (label
-layout, file filter, nudge steps, playback speed, spectrogram) between runs.
+layout, file filter, nudge steps, playback speed and gain, spectrogram) between runs.
 Its `font` is a font file, empty for a system font that covers most languages,
 or `builtin` for ImGui's own pixel font (crisp, but ASCII only); `font_size`
 sets the size. Both take effect at the next start.
@@ -183,6 +184,15 @@ can be chosen under Options > Display, along with the channel of a
 multi-channel file, the waveform gain, and a spectrogram (linear, log or mel
 scale) shown below the waveform. The two share a time axis, the split between
 them can be dragged, and labels can be selected, drawn and moved on either.
+
+A file opens showing all of it, or its first few seconds if "View on opening"
+is set. While playing, the view pages on to keep the playhead in sight, unless
+"Follow the playhead" is off or you've scrolled away from it.
+
+Quiet recordings can be played louder with a fixed playback gain, or with "Auto
+gain", which raises quiet passages towards a comfortable level (and turns loud
+ones down) as they play, up to its maximum gain. Background noise is raised
+too. The output is clipped to full scale, so a sudden loud sound can't blast.
 
 ### Label Palette
 The label palette uses a "paint class" style:

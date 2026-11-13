@@ -27,6 +27,8 @@ public:
 
 private:
     void render_cursor(app_state &state);
+    /// Scroll the view on when playback reaches its edge
+    void follow_playhead(app_state &state);
     void render_waveform(app_state &state);
     void render_spectrogram(app_state &state);
     /// One plot of the stack: the waveform, or the spectrogram. Labels can be edited on either.
@@ -55,6 +57,8 @@ private:
     std::optional<label_id> m_drag_arm_id;
     uint64_t m_drag_seq{}; ///< New for each mouse press, so each drag is one undo step
     std::optional<std::filesystem::path> m_last_active_file;
+    double m_last_playhead_s{};
+    bool m_was_playing{false};
 
     // Scratch for drawing the visible part of the waveform at the chosen gain
     std::vector<float> m_x, m_lo, m_hi;

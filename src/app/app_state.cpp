@@ -66,6 +66,16 @@ app_settings app_settings::load()
         s.m_fine_nudge_s =
             std::max(1e-5, j.value("fine_nudge_ms", s.m_fine_nudge_s * 1000.) / 1000.);
         s.m_playback_speed = std::clamp(j.value("playback_speed", s.m_playback_speed), 0.1f, 2.f);
+        if(auto gain = j.find("playback_gain"); gain != j.end() && gain->is_object())
+        {
+            s.m_auto_gain = gain->value("automatic", s.m_auto_gain);
+            s.m_playback_gain_db =
+                std::clamp(gain->value("gain_db", s.m_playback_gain_db), 0.f, 60.f);
+            s.m_auto_gain_max_db =
+                std::clamp(gain->value("max_gain_db", s.m_auto_gain_max_db), 0.f, 60.f);
+        }
+        s.m_follow_playhead = j.value("follow_playhead", s.m_follow_playhead);
+        s.m_initial_view_s = std::max(0.f, j.value("initial_view_s", s.m_initial_view_s));
         s.m_show_rejected = j.value("show_rejected", s.m_show_rejected);
         s.m_auto_advance = j.value("auto_advance", s.m_auto_advance);
         s.m_waveform_gain = std::clamp(j.value("waveform_gain", s.m_waveform_gain), 1.f, 1000.f);
@@ -100,6 +110,12 @@ void app_settings::save()
         {"nudge_ms", m_nudge_s * 1000.},
         {"fine_nudge_ms", m_fine_nudge_s * 1000.},
         {"playback_speed", m_playback_speed},
+        {"playback_gain",
+         {{"automatic", m_auto_gain},
+          {"gain_db", m_playback_gain_db},
+          {"max_gain_db", m_auto_gain_max_db}}},
+        {"follow_playhead", m_follow_playhead},
+        {"initial_view_s", m_initial_view_s},
         {"show_rejected", m_show_rejected},
         {"auto_advance", m_auto_advance},
         {"waveform_gain", m_waveform_gain},

@@ -38,6 +38,7 @@ struct action_handler
     void operator()(const actions::toggle_playback &a);
     void operator()(const actions::playback_loop &p);
     void operator()(const actions::set_playback_speed &s);
+    void operator()(const actions::set_playback_gain &g);
     void operator()(const actions::rescan_files &r);
     void operator()(const actions::export_csv &e);
     void operator()(const actions::export_dataset &e);

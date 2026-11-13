@@ -30,6 +30,15 @@ void audio_view::render(const project_model &proj, app_state &state)
         100.f,
         "%.1fx",
         ImGuiSliderFlags_Logarithmic);
+    ImGui::Checkbox("Follow the playhead", &settings.m_follow_playhead);
+    ImGui::SliderFloat(
+        "View on opening",
+        &settings.m_initial_view_s,
+        0.f,
+        60.f,
+        settings.m_initial_view_s > 0.f ? "first %.0f s" : "whole file");
+    if(ImGui::IsItemHovered())
+        ImGui::SetTooltip("How much of a file is shown when it's opened. 0 shows all of it.");
     ImGui::Checkbox("Spectrogram below the waveform", &settings.m_show_spectrogram);
     if(settings.m_show_spectrogram)
     {
@@ -81,6 +90,24 @@ void audio_view::render(const project_model &proj, app_state &state)
         state.add_action(actions::set_playback_speed{speed});
     if(ImGui::IsItemHovered())
         ImGui::SetTooltip("Slower playback, which also lowers the pitch. Ctrl+click to type.");
+
+    bool gain_changed = ImGui::Checkbox("Auto gain", &settings.m_auto_gain);
+    if(ImGui::IsItemHovered())
+        ImGui::SetTooltip(
+            "Raise quiet audio towards a comfortable level as it plays, and turn loud audio "
+            "down. Background noise is raised too, up to the maximum gain.");
+    if(settings.m_auto_gain)
+    {
+        ImGui::SameLine();
+        ImGui::TextDisabled("now %+.0f dB", state.m_playback_state.gain_db);
+        gain_changed |= ImGui::SliderFloat(
+            "Max gain", &settings.m_auto_gain_max_db, 0.f, 60.f, "%.0f dB");
+    }
+    else
+        gain_changed |= ImGui::SliderFloat(
+            "Playback gain", &settings.m_playback_gain_db, 0.f, 60.f, "%.0f dB");
+    if(gain_changed)
+        state.add_action(actions::set_playback_gain{});
 
     std::vector<const char *> names;
     for(auto &dev : state.m_audio_devs)

@@ -367,6 +367,7 @@ void action_handler::operator()(const actions::select_playback_device &dev)
 {
     m_audio_engine.set_device(dev.dev);
     m_audio_engine.set_speed(m_state.settings.m_playback_speed);
+    (*this)(actions::set_playback_gain{});
     m_state.settings.m_device_name = dev.dev.name;
 }
 
@@ -395,6 +396,16 @@ void action_handler::operator()(const actions::set_playback_speed &s)
 {
     m_state.settings.m_playback_speed = std::clamp(s.m_speed, 0.1f, 2.f);
     m_audio_engine.set_speed(m_state.settings.m_playback_speed);
+}
+
+void action_handler::operator()(const actions::set_playback_gain &)
+{
+    const auto &s = m_state.settings;
+    auto_gain::settings g;
+    g.m_automatic = s.m_auto_gain;
+    g.m_gain_db = s.m_playback_gain_db;
+    g.m_max_gain_db = s.m_auto_gain_max_db;
+    m_audio_engine.set_gain(g);
 }
 
 void action_handler::operator()(const actions::rescan_files &r) { m_proj.rescan_files(); }

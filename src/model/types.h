@@ -13,6 +13,7 @@ struct playback_state
 {
     bool playing{false};
     double playhead_s{};
+    float gain_db{}; ///< Applied to what's played, which changes when it's automatic
 };
 
 struct audio_dev

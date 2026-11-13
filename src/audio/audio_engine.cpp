@@ -2,6 +2,7 @@
  * SPDX-License-Identifier: MIT
  * SPDX-FileCopyrightText: 2026 Michael Coutlakis
  *****************************************************************************/
+#include <algorithm>
 #include <stdexcept>
 #include <string>
 
@@ -14,6 +15,7 @@ namespace
 {
 constexpr int default_sample_rate_hz = 48000; ///< Before any clip is loaded
 constexpr size_t scratch_frames = 1U << 16;   ///< More than SDL asks for at a time
+constexpr double prime_s = 0.05;              ///< The automatic gain starts from this much audio
 }
 
 class audio_engine::stream_lock
@@ -90,6 +92,7 @@ void audio_engine::set_audio_clip(std::shared_ptr<const audio_buffer> clip)
     stream_lock lock(m_stream);
     m_clip = clip ? std::move(clip) : std::make_shared<audio_buffer>();
     m_cursor.reset(*m_clip);
+    m_gain.configure(m_gain.get_settings(), m_clip->m_sample_rate_hz);
 
     if(m_stream)
     {
@@ -104,6 +107,7 @@ void audio_engine::select_region(time_span t, bool loop)
 {
     stream_lock lock(m_stream);
     m_cursor.select_region(*m_clip, t, loop);
+    prime_gain();
     if(m_stream)
         SDL_ClearAudioStream(m_stream); // Jump straight to the new region
 }
@@ -121,6 +125,22 @@ void audio_engine::set_speed(float speed)
         spdlog::error("audio: could not set speed: {}", SDL_GetError());
 }
 
+void audio_engine::set_gain(const auto_gain::settings &settings)
+{
+    stream_lock lock(m_stream);
+    m_gain.configure(settings, m_clip->m_sample_rate_hz);
+}
+
+void audio_engine::prime_gain()
+{
+    const uint64_t start = m_cursor.m_playhead;
+    const uint64_t end = std::min<uint64_t>(
+        m_cursor.m_region_end,
+        start + static_cast<uint64_t>(prime_s * m_clip->m_sample_rate_hz));
+    if(end > start)
+        m_gain.prime(m_clip->m_samples.data() + start, end - start);
+}
+
 void audio_engine::play()
 {
     stream_lock lock(m_stream);
@@ -128,6 +148,7 @@ void audio_engine::play()
         SDL_ClearAudioStream(m_stream);
     if(!m_cursor.play())
         spdlog::info("audio: nothing to play");
+    prime_gain();
 }
 
 void audio_engine::stop()
@@ -152,7 +173,10 @@ playback_state audio_engine::get_state() const
         const uint64_t queued = queued_bytes > 0 ? uint64_t(queued_bytes) / sizeof(float) : 0U;
         heard = heard > m_cursor.m_region_start + queued ? heard - queued : m_cursor.m_region_start;
     }
-    return playback_state{m_cursor.m_playing, double(heard) / m_clip->m_sample_rate_hz};
+    return playback_state{
+        m_cursor.m_playing,
+        double(heard) / m_clip->m_sample_rate_hz,
+        m_gain.current_gain_db()};
 }
 
 void audio_engine::close()
@@ -176,6 +200,7 @@ void SDLCALL audio_engine::feed(void *user_data, SDL_AudioStream *stream, int ad
         self.m_scratch.resize(wanted); // Rare: only if SDL asks for more than the usual maximum
 
     const size_t n = self.m_cursor.read(*self.m_clip, self.m_scratch.data(), wanted);
+    self.m_gain.process(self.m_scratch.data(), n);
     if(n)
         SDL_PutAudioStreamData(stream, self.m_scratch.data(), static_cast<int>(n * sizeof(float)));
 }

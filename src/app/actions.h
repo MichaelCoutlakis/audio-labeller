@@ -152,6 +152,11 @@ struct set_playback_speed
     float m_speed{1.f};
 };
 
+/// Apply the playback gain in the settings, fixed or automatic
+struct set_playback_gain
+{
+};
+
 struct rescan_files
 {
 };
@@ -245,6 +250,7 @@ using app_action = std::variant<
     toggle_playback,
     playback_loop,
     set_playback_speed,
+    set_playback_gain,
     rescan_files,
     export_csv,
     export_dataset,

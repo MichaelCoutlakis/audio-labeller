@@ -9,6 +9,7 @@
 
 #include <SDL3/SDL_audio.h>
 
+#include "../dsp/auto_gain.h"
 #include "../model/audio_buffer.h"
 #include "../model/types.h"
 #include "playback_cursor.h"
@@ -38,6 +39,9 @@ public:
     /// Slower (or faster) playback, which also lowers (raises) the pitch. 1 is normal speed.
     void set_speed(float speed);
 
+    /// Fixed or automatic gain on what's played
+    void set_gain(const auto_gain::settings &settings);
+
     void play();
     void stop();
 
@@ -51,6 +55,9 @@ private:
 
     SDL_AudioSpec clip_spec() const;
 
+    /// Start the automatic gain from the level at the start of the region
+    void prime_gain();
+
     /// The stream's lock guards the members below. SDL holds it while calling feed().
     class stream_lock;
 
@@ -58,5 +65,6 @@ private:
     std::shared_ptr<const audio_buffer> m_clip{std::make_shared<audio_buffer>()};
     playback_cursor m_cursor;
     std::vector<float> m_scratch;
+    auto_gain m_gain;
     float m_speed{1.f};
 };

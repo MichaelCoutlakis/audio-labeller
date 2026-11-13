@@ -51,6 +51,11 @@ struct app_settings
     double m_nudge_s{0.01};       ///< Arrow keys move labels by this
     double m_fine_nudge_s{0.001}; ///< And by this with Alt
     float m_playback_speed{1.f};
+    bool m_auto_gain{false};         ///< Raise quiet audio automatically when playing
+    float m_playback_gain_db{0.f};   ///< Fixed playback gain, when not automatic
+    float m_auto_gain_max_db{40.f};  ///< The most the automatic gain raises the level
+    bool m_follow_playhead{true};    ///< Scroll the waveform to keep the playhead in view
+    float m_initial_view_s{0.f};     ///< Seconds shown when a file is opened, 0 for all of it
     bool m_show_rejected{false}; ///< Show rejected candidates, as a check on what was missed
     bool m_auto_advance{true};   ///< In review mode, go to the next suggestion after a verdict
     float m_waveform_gain{1.f};  ///< Vertical zoom of the waveform, for quiet recordings
