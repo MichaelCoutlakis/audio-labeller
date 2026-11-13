@@ -220,14 +220,67 @@ std::vector<clip_plan> plan_background(
     return plans;
 }
 
-export_summary export_dataset(project_model &project, const export_settings &settings)
+export_job prepare_export(const project_model &project, const export_settings &settings)
 {
     if(!project.has_project())
         throw std::runtime_error("No project loaded, nothing to export");
 
-    export_summary summary;
-    const auto dir = project.config().resolve_proj(settings.m_directory);
+    export_job job;
+    job.m_directory = project.config().resolve_proj(settings.m_directory);
+    job.m_settings = settings;
+    job.m_classes = project.m_label_dict;
+    for(const auto &file : project.get_files())
+    {
+        export_job::file f{file.m_path, file.m_display_name, project.to_portable(file.m_path)};
+        for(const auto &l : project.get_labels(file.m_path))
+        {
+            if(l.is_confirmed())
+                f.m_labels.push_back(l);
+            if(l.m_state != label_state::rejected)
+                f.m_unsure.push_back(l); // Not background either, until reviewed
+        }
+
+        const auto status = project.get_status(file.m_path);
+        if(status != file_status::done)
+        {
+            job.m_todo_with_labels += status == file_status::todo && !f.m_labels.empty();
+            continue;
+        }
+        if(const auto *state = project.find_file_state(file.m_path))
+            f.m_cached_id = state->m_source_id;
+        job.m_files.push_back(std::move(f));
+    }
+    return job;
+}
+
+void apply_export(project_model &project, const export_outcome &outcome)
+{
+    if(outcome.m_cancelled)
+        return;
+    for(const auto &r : outcome.m_results)
+    {
+        project.set_source_id(r.m_path, r.m_source_id);
+        project.record_export(r.m_path, r.m_record);
+    }
+}
+
+export_summary export_dataset(project_model &project, const export_settings &settings)
+{
+    const auto outcome = run_export(prepare_export(project, settings));
+    apply_export(project, outcome);
+    return outcome.m_summary;
+}
+
+export_outcome run_export(const export_job &job, export_progress *progress)
+{
+    export_outcome outcome;
+    auto &summary = outcome.m_summary;
+    const auto &settings = job.m_settings;
+    const auto &dir = job.m_directory;
     summary.m_directory = dir;
+    summary.m_todo_with_labels = job.m_todo_with_labels;
+    if(progress)
+        progress->m_total = job.m_files.size();
     fs::create_directories(dir / "clips");
 
     // What's already exported. Sources exported now replace their earlier entries.
@@ -238,27 +291,20 @@ export_summary export_dataset(project_model &project, const export_settings &set
     std::map<std::string, std::vector<json>> new_rows; // By source ID
     const auto now = utc_now_iso8601();
 
-    for(const auto &file : project.get_files())
+    for(const auto &file : job.m_files)
     {
-        const auto status = project.get_status(file.m_path);
-        const auto &file_labels = project.get_labels(file.m_path);
-        std::vector<label> labels, unsure;
-        for(const auto &l : file_labels)
+        if(progress && progress->m_cancel)
         {
-            if(l.is_confirmed())
-                labels.push_back(l);
-            if(l.m_state != label_state::rejected)
-                unsure.push_back(l); // Not background either, until reviewed
+            outcome.m_cancelled = true;
+            return outcome;
         }
-        if(status != file_status::done)
-        {
-            summary.m_todo_with_labels += status == file_status::todo && !labels.empty();
-            continue;
-        }
+        const auto &labels = file.m_labels;
+        const auto &unsure = file.m_unsure;
 
         try
         {
-            const auto source_id = project.get_source_id(file.m_path);
+            const auto id_cache = current_source_id(file.m_path, file.m_cached_id);
+            const auto &source_id = id_cache.m_id;
             audio_source source(file.m_path);
             const auto &format = source.format();
             auto plans = plan_clips(labels, format.duration_s(), settings);
@@ -301,7 +347,7 @@ export_summary export_dataset(project_model &project, const export_settings &set
                         json{
                             {"onset_s", std::max(0., e.m_onset_s + plan.m_start_s - offset_s)},
                             {"offset_s", e.m_offset_s + plan.m_start_s - offset_s},
-                            {"event_label", class_name(project.m_label_dict, e.m_class)},
+                            {"event_label", class_name(job.m_classes, e.m_class)},
                             {"class_id", e.m_class.m_id},
                             {"label_id", e.m_label_id},
                             {"truncated", e.m_truncated}
@@ -318,7 +364,7 @@ export_summary export_dataset(project_model &project, const export_settings &set
                     });
             }
 
-            const auto portable = project.to_portable(file.m_path);
+            const auto &portable = file.m_portable;
             sources[source_id] = json{
                 {"dataset_root", portable.m_root},
                 {"path", portable.m_relative},
@@ -330,9 +376,12 @@ export_summary export_dataset(project_model &project, const export_settings &set
             };
 
             const bool all_verified = verified == rows.size();
-            project.record_export(
-                file.m_path,
-                export_record{now, generic_utf8(dir), rows.size(), all_verified});
+            outcome.m_results.push_back(
+                export_outcome::file_result{
+                    file.m_path,
+                    id_cache,
+                    export_record{now, generic_utf8(dir), rows.size(), all_verified}
+                });
             ++summary.m_files;
             summary.m_clips += rows.size();
             summary.m_unverified_clips += rows.size() - verified;
@@ -341,6 +390,8 @@ export_summary export_dataset(project_model &project, const export_settings &set
         {
             summary.m_errors.push_back(file.m_display_name + ": " + e.what());
         }
+        if(progress)
+            ++progress->m_done;
     }
 
     // Merge: drop the earlier entries of re-exported sources, deleting clips no longer produced
@@ -372,7 +423,7 @@ export_summary export_dataset(project_model &project, const export_settings &set
     json classes = json::object();
     for(const auto &c : dataset.value("classes", json::array()))
         classes[std::to_string(c.at("class_id").get<uint32_t>())] = c;
-    for(const auto &defn : project.m_label_dict)
+    for(const auto &defn : job.m_classes)
         classes[std::to_string(defn.m_id.m_id)] =
             json{{"class_id", defn.m_id.m_id}, {"name", defn.m_class}};
     std::map<uint32_t, json> by_id;
@@ -425,5 +476,5 @@ export_summary export_dataset(project_model &project, const export_settings &set
         summary.m_clips,
         summary.m_files,
         generic_utf8(dir));
-    return summary;
+    return outcome;
 }

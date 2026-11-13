@@ -22,18 +22,35 @@ struct action_handler
     void operator()(const actions::toggle_label_selection &t);
     void operator()(const actions::clear_selection &c);
     void operator()(const actions::set_active_class &a);
+    void operator()(const actions::assign_class &a);
+    void operator()(const actions::accept_labels &a);
+    void operator()(const actions::reject_labels &r);
     void operator()(const actions::delete_labels &d);
     void operator()(const actions::move_label &m);
+    void operator()(const actions::snap_labels &s);
+    void operator()(const actions::review_step &r);
     void operator()(const actions::undo &u);
     void operator()(const actions::redo &r);
     void operator()(const actions::set_file_status &s);
+    void operator()(const actions::set_channel &c);
     void operator()(const actions::select_playback_device &dev);
     void operator()(const actions::select_playback_region &r);
     void operator()(const actions::toggle_playback &a);
     void operator()(const actions::playback_loop &p);
+    void operator()(const actions::set_playback_speed &s);
     void operator()(const actions::rescan_files &r);
     void operator()(const actions::export_csv &e);
     void operator()(const actions::export_dataset &e);
+    void operator()(const actions::cancel_export &c);
+    void operator()(const actions::set_export_settings &s);
+    void operator()(const actions::import_annotations &i);
+    void operator()(const actions::export_annotations &e);
+
+    /// Pick up the result of a background export once it's finished. Call every frame.
+    void poll_background();
+
+    /// Stop a background export, waiting for it
+    void cancel_background();
 
 private:
     audio_engine &m_audio_engine;
@@ -55,5 +72,14 @@ private:
         m_state.m_history.push(history::entry{file, std::move(before), snapshot(file), key});
     }
 
+    /// Change the labels (in the active file, including unclassified selections) with these IDs
+    template <typename F>
+    void edit_labels(const std::set<label_id> &ids, F &&edit);
+
     void assign_class(const std::set<label_id> &ids, label_defn_id defn_id);
+
+    /// Play a label's playback window, if auto play is on
+    void play_label(const label &l);
+
+    void report_export(const export_summary &summary);
 };

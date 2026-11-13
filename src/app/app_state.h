@@ -4,6 +4,7 @@
  *****************************************************************************/
 #pragma once
 #include <filesystem>
+#include <future>
 #include <limits>
 #include <memory>
 #include <optional>
@@ -11,10 +12,24 @@
 #include <string>
 #include <vector>
 
+#include "../dsp/spectrogram.h"
+#include "../export/clip_export.h"
+#include "../interchange/annotation_tree.h"
 #include "../model/audio_buffer.h"
 #include "../model/history.h"
 #include "../model/project_model.h"
+#include "../review/review.h"
 #include "actions.h"
+#include "lanes.h"
+
+enum class file_filter
+{
+    all,
+    todo,
+    done,
+    skip,
+    suggested ///< Files with suggestions waiting for review
+};
 
 struct app_settings
 {
@@ -24,6 +39,20 @@ struct app_settings
 
     std::string m_device_name; ///< Previously used playback device, empty for the default
     std::string project_file;
+
+    /* Remembered between runs: */
+    label_layout m_layout{label_layout::stacked};
+    file_filter m_file_filter{file_filter::all};
+    double m_nudge_s{0.01};       ///< Arrow keys move labels by this
+    double m_fine_nudge_s{0.001}; ///< And by this with Alt
+    float m_playback_speed{1.f};
+    bool m_show_rejected{false}; ///< Show rejected candidates, as a check on what was missed
+    bool m_auto_advance{true};   ///< In review mode, go to the next suggestion after a verdict
+    float m_waveform_gain{1.f};  ///< Vertical zoom of the waveform, for quiet recordings
+    bool m_show_spectrogram{false};
+    frequency_scale m_spectrogram_scale{frequency_scale::mel};
+    float m_spectrogram_gain_db{0.f};   ///< Added to the levels before colouring
+    float m_spectrogram_range_db{80.f}; ///< Levels this far below full scale are black
 
     /// Set if the settings file exists but is unreadable, in which case it's left as is on save
     std::string m_load_error;
@@ -107,9 +136,12 @@ public:
     /// Check if the specified file is the same as the currently active file
     bool is_selected_file(const std::filesystem::path &path) const;
 
-    void set_selected_file(const std::filesystem::path &path);
+    void set_selected_file(const std::filesystem::path &path, std::optional<uint32_t> channel);
 
     bool has_active_file() const { return m_active_file.has_value(); }
+
+    /// Load a file's audio for viewing and playing, as one channel or a mix
+    void load_audio(const std::filesystem::path &path, std::optional<uint32_t> channel);
 
     const audio_buffer &get_audio_buffer() const { return *m_active_audio; }
     std::shared_ptr<const audio_buffer> get_audio_buffer_ptr() const { return m_active_audio; }
@@ -154,20 +186,37 @@ public:
     uint64_t next_edit_seq() { return ++m_edit_seq; }
 
     /* File list: */
-    enum class file_filter
-    {
-        all,
-        todo,
-        done,
-        skip
-    };
-    file_filter m_file_filter{file_filter::all};
-
     /// The project's files that pass the filter, in list order
     std::vector<const audio_file_entry *> filtered_files(const project_model &project) const;
 
     /* Display: */
-    bool m_class_lanes{true}; ///< Each class in its own band of the waveform
+    /// Labels of the active file that are drawn and can be clicked: its labels, including
+    /// unclassified selections, and rejected ones only if they're shown
+    std::vector<const label *> visible_labels(const project_model &project) const;
+
+    /// The band of each visible label in the waveform
+    std::map<label_id, lane> label_bands(const project_model &project) const;
+
+    /// A time range for the waveform to zoom to, taken by the waveform on its next frame
+    std::optional<time_span> m_view_request;
+
+    /// The time under the mouse in the waveform, if it's there
+    std::optional<double> m_hover_time_s;
+
+    /* Review: */
+    review_settings m_review;
+    bool m_review_mode{false};               ///< Tab steps through suggestions in all files
+    std::optional<review_item> m_review_pos; ///< The suggestion last stepped to
+
+    /// The time range to play for a label, by the review settings
+    time_span playback_window(const label &l) const;
+
+    /* Annotation trees and background export: */
+    std::vector<annotation_tree_settings> m_annotation_trees;
+    std::shared_ptr<export_progress> m_export_progress;
+    std::future<export_outcome> m_export_result;
+    bool is_exporting() const { return m_export_result.valid(); }
+    bool m_show_export_settings{false};
 
     /* Actions: */
     void add_action(actions::app_action action) { m_actions.push_back(std::move(action)); }

@@ -216,3 +216,49 @@ TEST_CASE("export_dataset writes verified lossless clips and merges re-exports")
     CHECK(read_jsonl(out / "metadata.jsonl").size() == 2);
     CHECK(!fs::exists(out / path_from_utf8(old_b_clip)));
 }
+
+TEST_CASE("only confirmed labels become clips, and exports can be cancelled")
+{
+    temp_dir dir;
+    write_text(dir / "pal.json", R"({"label-palette":[{"class-id":0,"class":"Dog","colour":"#ccb42aab"}]})");
+    write_text(
+        dir / "proj.json",
+        R"({"dataset-roots":["data"],"export-prefix":"out","label-palette":"pal.json","label-file":"labels.json"})");
+    write_wav16(dir / "data/a.wav", 8000, 1, std::vector<int16_t>(8000 * 10, 100));
+
+    project_model m(project_config::parse_from_file((dir / "proj.json").string()));
+    const auto a = dir / "data/a.wav";
+    m.add_label(a, label{get_next_label_id(), label_defn_id{0}, 1., 2.});
+    m.add_label(a, label{get_next_label_id(), label_defn_id{0}, 5., 5., label_state::suggested});
+    m.add_label(a, label{get_next_label_id(), label_defn_id{0}, 8., 8., label_state::rejected});
+    m.set_status(a, file_status::done);
+
+    export_progress progress;
+    progress.m_cancel = true;
+    const auto cancelled = run_export(prepare_export(m, export_settings{}), &progress);
+    CHECK(cancelled.m_cancelled);
+    apply_export(m, cancelled);
+    CHECK(!m.find_file_state(a)->m_export);
+
+    const auto job = prepare_export(m, export_settings{});
+    REQUIRE(job.m_files.size() == 1);
+    CHECK(job.m_files[0].m_labels.size() == 1);
+    CHECK(job.m_files[0].m_unsure.size() == 2);
+
+    export_progress counted;
+    const auto outcome = run_export(job, &counted);
+    CHECK(counted.m_done == 1);
+    CHECK(outcome.m_summary.m_clips == 1);
+    apply_export(m, outcome);
+    CHECK(m.find_file_state(a)->m_export->m_verified);
+    CHECK(m.find_file_state(a)->m_source_id);
+
+    // The settings UI writes the export section back to the project file
+    auto section = export_settings{}.to_json();
+    section["padding_s"] = 0.25;
+    m.set_export_section(section);
+    CHECK(export_settings::from_json(m.config().m_export).m_padding_s == 0.25);
+    const auto saved = json::parse(read_text(dir / "proj.json"));
+    CHECK(saved["export"]["padding_s"] == 0.25);
+    CHECK(saved["label-file"] == "labels.json");
+}

@@ -15,6 +15,33 @@
 #include "actions.h"
 #include "app_state.h"
 
+namespace
+{
+template <typename E>
+E enum_value(const nlohmann::json &j, const char *key, E fallback, std::initializer_list<const char *> names)
+{
+    const auto text = j.value(key, std::string{});
+    int i = 0;
+    for(auto name : names)
+    {
+        if(text == name)
+            return static_cast<E>(i);
+        ++i;
+    }
+    return fallback;
+}
+
+template <typename E>
+const char *enum_name(E value, std::initializer_list<const char *> names)
+{
+    return *(names.begin() + static_cast<int>(value));
+}
+
+constexpr auto layout_names = {"stacked", "class_lanes", "full_height"};
+constexpr auto filter_names = {"all", "todo", "done", "skip", "suggested"};
+constexpr auto scale_names = {"linear", "log", "mel"};
+}
+
 app_settings app_settings::load()
 {
     app_settings s{};
@@ -31,6 +58,22 @@ app_settings app_settings::load()
         s.project_file = j.value("project", std::string{});
         if(auto dev = j.find("audio_device"); dev != j.end())
             s.m_device_name = dev->value("name", std::string{});
+        s.m_layout = enum_value(j, "layout", s.m_layout, layout_names);
+        s.m_file_filter = enum_value(j, "file_filter", s.m_file_filter, filter_names);
+        s.m_nudge_s = std::max(1e-4, j.value("nudge_ms", s.m_nudge_s * 1000.) / 1000.);
+        s.m_fine_nudge_s =
+            std::max(1e-5, j.value("fine_nudge_ms", s.m_fine_nudge_s * 1000.) / 1000.);
+        s.m_playback_speed = std::clamp(j.value("playback_speed", s.m_playback_speed), 0.1f, 2.f);
+        s.m_show_rejected = j.value("show_rejected", s.m_show_rejected);
+        s.m_auto_advance = j.value("auto_advance", s.m_auto_advance);
+        s.m_waveform_gain = std::clamp(j.value("waveform_gain", s.m_waveform_gain), 1.f, 1000.f);
+        if(auto spec = j.find("spectrogram"); spec != j.end() && spec->is_object())
+        {
+            s.m_show_spectrogram = spec->value("show", s.m_show_spectrogram);
+            s.m_spectrogram_scale = enum_value(*spec, "scale", s.m_spectrogram_scale, scale_names);
+            s.m_spectrogram_gain_db = spec->value("gain_db", s.m_spectrogram_gain_db);
+            s.m_spectrogram_range_db = spec->value("range_db", s.m_spectrogram_range_db);
+        }
     }
     catch(const nlohmann::json::exception &e)
     {
@@ -45,7 +88,22 @@ void app_settings::save()
     if(!m_load_error.empty())
         return;
 
-    nlohmann::json j{{"project", project_file}};
+    nlohmann::json j{
+        {"project", project_file},
+        {"layout", enum_name(m_layout, layout_names)},
+        {"file_filter", enum_name(m_file_filter, filter_names)},
+        {"nudge_ms", m_nudge_s * 1000.},
+        {"fine_nudge_ms", m_fine_nudge_s * 1000.},
+        {"playback_speed", m_playback_speed},
+        {"show_rejected", m_show_rejected},
+        {"auto_advance", m_auto_advance},
+        {"waveform_gain", m_waveform_gain},
+        {"spectrogram",
+         {{"show", m_show_spectrogram},
+          {"scale", enum_name(m_spectrogram_scale, scale_names)},
+          {"gain_db", m_spectrogram_gain_db},
+          {"range_db", m_spectrogram_range_db}}}
+    };
     if(!m_device_name.empty())
         j["audio_device"] = {{"name", m_device_name}};
     std::ofstream f(m_filename);
@@ -81,20 +139,47 @@ bool app_state::is_selected_file(const std::filesystem::path &path) const
     return m_active_file.has_value() && m_active_file.value() == path;
 }
 
-void app_state::set_selected_file(const std::filesystem::path &path)
+void app_state::set_selected_file(
+    const std::filesystem::path &path,
+    std::optional<uint32_t> channel)
 {
     if(path.empty() || is_selected_file(path))
         return;
 
     // File not yet selected - select it and load the audio
-    auto audio = std::make_shared<const audio_buffer>(load_mono(path));
-    m_active_audio = audio;
+    load_audio(path, channel);
     m_active_file = path;
-    spdlog::info("Loaded {}, SR={} Hz", generic_utf8(path), m_active_audio->m_sample_rate_hz);
-
-    m_audio_min_max_map = audio_min_max_pyramid_map(*m_active_audio);
     m_selected_labels.clear();
     m_unlabelled.clear();
+}
+
+void app_state::load_audio(const std::filesystem::path &path, std::optional<uint32_t> channel)
+{
+    m_active_audio = std::make_shared<const audio_buffer>(load_mono(path, channel));
+    spdlog::info("Loaded {}, SR={} Hz", generic_utf8(path), m_active_audio->m_sample_rate_hz);
+    m_audio_min_max_map = audio_min_max_pyramid_map(*m_active_audio);
+}
+
+std::vector<const label *> app_state::visible_labels(const project_model &project) const
+{
+    std::vector<const label *> out;
+    for(const auto &l : m_unlabelled)
+        out.push_back(&l);
+    if(m_active_file)
+        for(const auto &l : project.get_labels(*m_active_file))
+            if(l.m_state != label_state::rejected || settings.m_show_rejected)
+                out.push_back(&l);
+    return out;
+}
+
+std::map<label_id, lane> app_state::label_bands(const project_model &project) const
+{
+    return layout_labels(visible_labels(project), project.m_label_dict, settings.m_layout);
+}
+
+time_span app_state::playback_window(const label &l) const
+{
+    return ::playback_window(l, m_review, m_active_audio->duration_s());
 }
 
 std::vector<const audio_file_entry *> app_state::filtered_files(const project_model &project) const
@@ -103,10 +188,18 @@ std::vector<const audio_file_entry *> app_state::filtered_files(const project_mo
     for(const auto &file : project.get_files())
     {
         const auto status = project.get_status(file.m_path);
-        const bool pass = m_file_filter == file_filter::all ||
-            (m_file_filter == file_filter::todo && status == file_status::todo) ||
-            (m_file_filter == file_filter::done && status == file_status::done) ||
-            (m_file_filter == file_filter::skip && status == file_status::skip);
+        const auto filter = settings.m_file_filter;
+        const auto has_suggestions = [&]
+        {
+            return std::ranges::any_of(
+                project.get_labels(file.m_path),
+                [](const label &l) { return l.m_state == label_state::suggested; });
+        };
+        const bool pass = filter == file_filter::all ||
+            (filter == file_filter::todo && status == file_status::todo) ||
+            (filter == file_filter::done && status == file_status::done) ||
+            (filter == file_filter::skip && status == file_status::skip) ||
+            (filter == file_filter::suggested && has_suggestions());
         if(pass)
             files.push_back(&file);
     }

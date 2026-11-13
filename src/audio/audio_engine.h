@@ -35,6 +35,9 @@ public:
     void select_region(time_span t, bool loop);
     void set_playback_loop(bool loop);
 
+    /// Slower (or faster) playback, which also lowers (raises) the pitch. 1 is normal speed.
+    void set_speed(float speed);
+
     void play();
     void stop();
 
@@ -55,4 +58,5 @@ private:
     std::shared_ptr<const audio_buffer> m_clip{std::make_shared<audio_buffer>()};
     playback_cursor m_cursor;
     std::vector<float> m_scratch;
+    float m_speed{1.f};
 };

@@ -17,15 +17,47 @@ bool pressed(ImGuiKey key, ImGuiKeyChord mods = ImGuiMod_None, bool repeat = fal
     return ImGui::GetIO().KeyMods == mods && ImGui::IsKeyPressed(key, repeat);
 }
 
-/// All labels in the active file, including unclassified selections
+/// Visible labels in the active file, including unclassified selections
 std::vector<label> active_labels(const project_model &project, const app_state &state)
 {
-    std::vector<label> all(state.m_unlabelled.begin(), state.m_unlabelled.end());
-    if(state.has_active_file())
-        for(const auto &l : project.get_labels(state.m_active_file.value()))
-            all.push_back(l);
+    std::vector<label> all;
+    for(const auto *l : state.visible_labels(project))
+        all.push_back(*l);
     return all;
 }
+
+bool any_selected_suggestion(const project_model &project, const app_state &state)
+{
+    return std::ranges::any_of(
+        active_labels(project, state),
+        [&](const label &l)
+        { return state.is_label_selected(l.m_id) && l.m_state == label_state::suggested; });
+}
+}
+
+const std::vector<std::pair<const char *, const char *>> &keyboard_controller::descriptions()
+{
+    static const std::vector<std::pair<const char *, const char *>> keys = {
+        {"1-9", "Choose a palette class (applies to the selection, confirming suggestions)"},
+        {"Space", "Play / stop"},
+        {"Tab, Shift+Tab", "Select and play the next / previous label (suggestion in review mode)"},
+        {"R", "Review mode: step through suggestions in all files"},
+        {"Enter", "Accept the selected suggestions"},
+        {"X", "Reject the selected labels: not an event"},
+        {"H", "Show / hide rejected candidates"},
+        {"O", "Add an onset under the mouse, or at the playhead"},
+        {"A", "Snap the selected onsets to the sharpest rise nearby (Ctrl+Z undoes)"},
+        {"Left, Right", "Move the selected labels (Alt: finer)"},
+        {"Ctrl+Left, Ctrl+Right", "Move their start edges"},
+        {"Shift+Left, Shift+Right", "Move their stop edges"},
+        {"Delete", "Delete the selected labels"},
+        {"Escape", "Clear the selection and palette class"},
+        {"Ctrl+Z, Ctrl+Y", "Undo, redo"},
+        {"N, P", "Next / previous file in the list"},
+        {"D", "Mark the file done and open the next one to do"},
+        {"S", "Mark the file skipped and open the next one to do"},
+    };
+    return keys;
 }
 
 void keyboard_controller::handle(const project_model &project, app_state &state)
@@ -51,7 +83,13 @@ void keyboard_controller::handle(const project_model &project, app_state &state)
     if(pressed(ImGuiKey_Y, ImGuiMod_Ctrl) || pressed(ImGuiKey_Z, ImGuiMod_Ctrl | ImGuiMod_Shift))
         state.add_action(actions::redo{});
 
-    // Number keys choose a palette class, like clicking its button:
+    if(pressed(ImGuiKey_H))
+        state.settings.m_show_rejected = !state.settings.m_show_rejected;
+    if(pressed(ImGuiKey_R))
+        state.m_review_mode = !state.m_review_mode;
+
+    // Number keys choose a palette class, like clicking its button. In review mode they relabel
+    // the selection and move on.
     size_t index = 0U;
     for(const auto &defn : project.m_label_dict)
     {
@@ -61,22 +99,69 @@ void keyboard_controller::handle(const project_model &project, app_state &state)
         const auto keypad = static_cast<ImGuiKey>(ImGuiKey_Keypad1 + index);
         if(pressed(key) || pressed(keypad))
         {
-            const bool active = state.m_active_label_defn == defn.m_id;
-            state.add_action(
-                actions::set_active_class{
-                    active ? std::nullopt : std::optional<label_defn_id>{defn.m_id}
-                });
+            const bool advance = state.m_review_mode &&
+                state.settings.m_auto_advance &&
+                any_selected_suggestion(project, state);
+            if(advance)
+            {
+                state.add_action(actions::assign_class{state.selected_labels(), defn.m_id});
+                state.add_action(actions::review_step{true});
+            }
+            else
+            {
+                const bool active = state.m_active_label_defn == defn.m_id;
+                state.add_action(
+                    actions::set_active_class{
+                        active ? std::nullopt : std::optional<label_defn_id>{defn.m_id}
+                    });
+            }
         }
         ++index;
     }
 
-    if(pressed(ImGuiKey_Tab))
-        select_adjacent_label(project, state, true);
-    if(pressed(ImGuiKey_Tab, ImGuiMod_Shift))
-        select_adjacent_label(project, state, false);
+    if(pressed(ImGuiKey_O) && state.has_active_file())
+    {
+        const double t = state.m_hover_time_s.value_or(state.m_playback_state.playhead_s);
+        state.add_action(
+            actions::add_label{{t, t}, state.m_active_file.value(), state.m_active_label_defn});
+    }
+    if(pressed(ImGuiKey_A) && !state.selected_labels().empty())
+        state.add_action(actions::snap_labels{state.selected_labels()});
 
+    handle_review(project, state);
     handle_nudges(project, state);
     handle_files(project, state);
+}
+
+void keyboard_controller::handle_review(const project_model &project, app_state &state)
+{
+    const bool advance = state.m_review_mode && state.settings.m_auto_advance;
+    const auto &selection = state.selected_labels();
+
+    if((pressed(ImGuiKey_Enter) || pressed(ImGuiKey_KeypadEnter)) && !selection.empty())
+    {
+        const bool was_suggestion = any_selected_suggestion(project, state);
+        state.add_action(actions::accept_labels{selection});
+        if(advance && was_suggestion)
+            state.add_action(actions::review_step{true});
+    }
+    if(pressed(ImGuiKey_X) && !selection.empty())
+    {
+        const bool was_suggestion = any_selected_suggestion(project, state);
+        state.add_action(actions::reject_labels{selection});
+        if(advance && was_suggestion)
+            state.add_action(actions::review_step{true});
+    }
+
+    for(const bool forward : {true, false})
+    {
+        if(!pressed(ImGuiKey_Tab, forward ? ImGuiMod_None : ImGuiMod_Shift))
+            continue;
+        if(state.m_review_mode)
+            state.add_action(actions::review_step{forward});
+        else
+            select_adjacent_label(project, state, forward);
+    }
 }
 
 void keyboard_controller::select_adjacent_label(
@@ -109,40 +194,48 @@ void keyboard_controller::select_adjacent_label(
 
     state.add_action(actions::clear_selection{});
     state.add_action(actions::toggle_label_selection{next->m_id});
-    state.select_playback_region(next->m_start_s, next->m_stop_s);
+    const auto window = state.playback_window(*next);
+    state.select_playback_region(window.first, window.second);
 }
 
 void keyboard_controller::handle_nudges(const project_model &project, app_state &state)
 {
-    // Arrows move whole labels, Ctrl+arrows the start edge and Shift+arrows the stop edge
+    // Arrows move whole labels, Ctrl+arrows the start edge and Shift+arrows the stop edge. Alt
+    // makes the step finer.
     const bool held = ImGui::IsKeyDown(ImGuiKey_LeftArrow) || ImGui::IsKeyDown(ImGuiKey_RightArrow);
     if(held && !m_nudging)
         m_nudge_seq = state.next_edit_seq(); // A burst of nudges is one undo step
     m_nudging = held;
 
-    for(const auto mods : {ImGuiMod_None, ImGuiMod_Ctrl, ImGuiMod_Shift})
+    for(const auto edge : {ImGuiMod_None, ImGuiMod_Ctrl, ImGuiMod_Shift})
     {
-        double delta = 0.;
-        if(pressed(ImGuiKey_LeftArrow, mods, true))
-            delta = -nudge_s;
-        if(pressed(ImGuiKey_RightArrow, mods, true))
-            delta = nudge_s;
-        if(delta == 0.)
-            continue;
-
-        for(const auto &l : active_labels(project, state))
+        for(const bool fine : {false, true})
         {
-            if(!state.is_label_selected(l.m_id))
+            const ImGuiKeyChord mods = edge | (fine ? ImGuiMod_Alt : ImGuiMod_None);
+            const double step = fine ? state.settings.m_fine_nudge_s : state.settings.m_nudge_s;
+            double delta = 0.;
+            if(pressed(ImGuiKey_LeftArrow, mods, true))
+                delta = -step;
+            if(pressed(ImGuiKey_RightArrow, mods, true))
+                delta = step;
+            if(delta == 0.)
                 continue;
-            const bool move_start = mods != ImGuiMod_Shift;
-            const bool move_stop = mods != ImGuiMod_Ctrl;
-            state.add_action(
-                actions::move_label{
-                    l.m_id,
-                    l.m_start_s + (move_start ? delta : 0.),
-                    l.m_stop_s + (move_stop ? delta : 0.),
-                    m_nudge_seq
-                });
+
+            for(const auto &l : active_labels(project, state))
+            {
+                if(!state.is_label_selected(l.m_id))
+                    continue;
+                // An onset has one edge, which always moves
+                const bool move_start = edge != ImGuiMod_Shift || l.is_onset();
+                const bool move_stop = edge != ImGuiMod_Ctrl || l.is_onset();
+                state.add_action(
+                    actions::move_label{
+                        l.m_id,
+                        l.m_start_s + (move_start ? delta : 0.),
+                        l.m_stop_s + (move_stop ? delta : 0.),
+                        m_nudge_seq
+                    });
+            }
         }
     }
 }

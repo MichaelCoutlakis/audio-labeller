@@ -44,6 +44,18 @@ project_model audio_labeller_app::open_project(app_state &state)
 
 void audio_labeller_app::on_init()
 {
+    // Project sections read by the app. A mistake in one shouldn't stop labelling.
+    try
+    {
+        m_app_state.m_review = review_settings::from_json(m_project.config().m_review);
+        m_app_state.m_annotation_trees =
+            annotation_tree_settings::list_from_json(m_project.config().m_annotations);
+    }
+    catch(const std::exception &e)
+    {
+        m_app_state.report_error(std::string{"Error in the project file: "} + e.what());
+    }
+
     m_app_state.m_audio_devs = m_audio_engine.get_playback_devices();
 
     // Restore the previous device by name, or use the system default (always first):
@@ -69,6 +81,7 @@ void audio_labeller_app::on_frame()
     m_waveform.render(m_project, m_app_state);
     m_applied_labels.render(m_project, m_app_state);
     m_label_controls.render(m_project, m_app_state);
+    m_export_settings.render(m_project, m_app_state);
 
     // Dispatch the actions (controller):
     for(auto &action : m_app_state.m_actions)
@@ -85,12 +98,34 @@ void audio_labeller_app::on_frame()
     }
     m_app_state.m_actions.clear();
 
+    try
+    {
+        m_handler.poll_background();
+    }
+    catch(const std::exception &e)
+    {
+        m_app_state.report_error(e.what());
+    }
+
     autosave();
 
     render_error_popup();
 }
 
-void audio_labeller_app::on_shutdown() { m_audio_engine.close(); }
+void audio_labeller_app::on_shutdown()
+{
+    // An export in progress is stopped, so that it doesn't outlive the project it reports to
+    try
+    {
+        m_handler.cancel_background();
+    }
+    catch(const std::exception &e)
+    {
+        spdlog::error("Could not stop the export: {}", e.what());
+    }
+    m_waveform.release();
+    m_audio_engine.close();
+}
 
 void audio_labeller_app::autosave()
 {

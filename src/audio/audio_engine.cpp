@@ -79,6 +79,7 @@ void audio_engine::set_device(const audio_dev &device)
         throw std::runtime_error(
             "Could not open audio device " + device.name + ": " + SDL_GetError());
 
+    set_speed(m_speed);
     if(!SDL_ResumeAudioStreamDevice(m_stream))
         spdlog::error("audio: could not start device: {}", SDL_GetError());
     spdlog::info("audio: set device to {}", device.name);
@@ -111,6 +112,13 @@ void audio_engine::set_playback_loop(bool loop)
 {
     stream_lock lock(m_stream);
     m_cursor.m_loop = loop;
+}
+
+void audio_engine::set_speed(float speed)
+{
+    m_speed = speed;
+    if(m_stream && !SDL_SetAudioStreamFrequencyRatio(m_stream, speed))
+        spdlog::error("audio: could not set speed: {}", SDL_GetError());
 }
 
 void audio_engine::play()

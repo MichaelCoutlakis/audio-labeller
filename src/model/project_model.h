@@ -69,6 +69,12 @@ struct source_id_cache
     std::int64_t m_mtime{};
 };
 
+/// The source ID of a file (see source_id.h): the cached one if the file's size and modification
+/// time still match, else freshly computed. Doesn't touch any project, so it's safe on any thread.
+source_id_cache current_source_id(
+    const std::filesystem::path &file,
+    const std::optional<source_id_cache> &cached);
+
 struct export_record
 {
     std::string m_time;      ///< UTC, ISO 8601
@@ -109,6 +115,10 @@ public:
     bool has_project() const { return !m_cfg.m_filename.empty(); }
     const project_config &config() const { return m_cfg; }
 
+    /// Replace the export section, in the project and atomically in its file. The file's other
+    /// keys keep their values and order.
+    void set_export_section(const nlohmann::json &section);
+
     // Rescans files - will reset the active file
     void rescan_files();
 
@@ -137,6 +147,9 @@ public:
 
     /// The file's source ID (see source_id.h), cached against its size and modification time
     std::string get_source_id(const std::filesystem::path &file);
+
+    /// Store a source ID computed elsewhere, eg. by an export on another thread
+    void set_source_id(const std::filesystem::path &file, const source_id_cache &id);
 
     void record_export(const std::filesystem::path &file, export_record record);
 

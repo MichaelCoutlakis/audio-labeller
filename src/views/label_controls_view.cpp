@@ -4,6 +4,7 @@
  *****************************************************************************/
 
 #include <algorithm>
+#include <string>
 
 #include <imgui.h>
 
@@ -46,7 +47,9 @@ void label_control_view::render_label_palette(const project_model &project, app_
             ImGui::PushStyleColor(ImGuiCol_Button, col_v);
 
             // Toggles. Selecting a class also applies it to the selected labels.
-            if(ImGui::Button(def.m_class.c_str(), {button_w, button_h}))
+            // Onset classes are marked with a bar, as they're placed as points in time
+            const auto text = def.m_kind == class_kind::onset ? "| " + def.m_class : def.m_class;
+            if(ImGui::Button(text.c_str(), {button_w, button_h}))
                 state.add_action(
                     actions::set_active_class{
                         active ? std::nullopt : std::optional<label_defn_id>{def.m_id}

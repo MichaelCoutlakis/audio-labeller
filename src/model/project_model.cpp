@@ -194,6 +194,21 @@ project_config project_config::parse_from_file(std::string filename)
     return cfg;
 }
 
+void project_model::set_export_section(const json &section)
+{
+    if(!has_project())
+        throw std::runtime_error("No project loaded");
+
+    std::ifstream f(m_cfg.m_filename);
+    if(!f)
+        throw std::runtime_error("Could not open " + generic_utf8(m_cfg.m_filename));
+    auto j = nlohmann::ordered_json::parse(f);
+    f.close();
+    j["export"] = nlohmann::ordered_json::parse(section.dump());
+    write_file_atomically(m_cfg.m_filename, j.dump(4) + "\n");
+    m_cfg.m_export = section;
+}
+
 fs::path project_config::resolve_proj(const fs::path &p) const
 {
     auto out = expand_env_vars(p);
@@ -396,20 +411,29 @@ const file_state *project_model::find_file_state(const fs::path &file) const
     return it != m_file_states.end() ? &it->second : nullptr;
 }
 
-std::string project_model::get_source_id(const fs::path &file)
+source_id_cache current_source_id(const fs::path &file, const std::optional<source_id_cache> &cached)
 {
     const auto size = fs::file_size(file);
     const auto mtime = mtime_of(file);
+    if(cached && cached->m_size == size && cached->m_mtime == mtime)
+        return *cached;
+    return source_id_cache{compute_source_id(file), size, mtime};
+}
 
+std::string project_model::get_source_id(const fs::path &file)
+{
     auto &state = m_file_states[file];
-    if(state.m_source_id &&
-       state.m_source_id->m_size == size &&
-       state.m_source_id->m_mtime == mtime)
-        return state.m_source_id->m_id;
-
-    state.m_source_id = source_id_cache{compute_source_id(file), size, mtime};
-    ++m_revision;
+    set_source_id(file, current_source_id(file, state.m_source_id));
     return state.m_source_id->m_id;
+}
+
+void project_model::set_source_id(const fs::path &file, const source_id_cache &id)
+{
+    auto &cached = m_file_states[file].m_source_id;
+    if(cached && cached->m_id == id.m_id && cached->m_size == id.m_size && cached->m_mtime == id.m_mtime)
+        return;
+    cached = id;
+    ++m_revision;
 }
 
 void project_model::record_export(const fs::path &file, export_record record)
