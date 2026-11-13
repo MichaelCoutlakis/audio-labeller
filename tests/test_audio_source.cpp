@@ -58,6 +58,90 @@ TEST_CASE("load_mono mixes all channels")
     CHECK(buffer.m_samples[1] == doctest::Approx(0.25));
 }
 
+TEST_CASE("load_mono can read a single channel")
+{
+    temp_dir dir;
+    const auto file = dir / "two.WAV";
+    write_wav16(file, 8000, 2, {0, 16384, 0, 16384});
+    CHECK(is_supported_audio(file));
+    CHECK(is_supported_audio("x.Flac"));
+    CHECK(!is_supported_audio("x.txt"));
+
+    CHECK(load_mono(file, 1U).m_samples[0] == doctest::Approx(0.5));
+    CHECK(load_mono(file, 0U).m_samples[0] == 0.f);
+    CHECK(load_mono(file, 7U).m_samples[0] == doctest::Approx(0.25)); // No such channel: a mix
+    CHECK(load_mono(file).m_source_channels == 2);
+}
+
+TEST_CASE("RF64 and 32-bit multi-channel files at high sample rates")
+{
+    temp_dir dir;
+    struct variant
+    {
+        drwav_container container;
+        uint32_t format;
+        uint32_t bits;
+        uint32_t rate;
+    };
+    for(const auto v : {
+            variant{drwav_container_rf64, DR_WAVE_FORMAT_PCM, 24, 96000},
+            variant{drwav_container_riff, DR_WAVE_FORMAT_PCM, 32, 192000},
+            variant{drwav_container_riff, DR_WAVE_FORMAT_IEEE_FLOAT, 32, 48000},
+            variant{drwav_container_rf64, DR_WAVE_FORMAT_IEEE_FLOAT, 32, 192000},
+        })
+    {
+        CAPTURE(v.bits);
+        CAPTURE(v.rate);
+        const auto file = dir / "multi.wav";
+        constexpr uint32_t channels = 4;
+        constexpr uint64_t frames = 1000;
+
+        drwav_data_format format{};
+        format.container = v.container;
+        format.format = v.format;
+        format.channels = channels;
+        format.sampleRate = v.rate;
+        format.bitsPerSample = v.bits;
+        std::vector<float> samples(frames * channels);
+        for(uint64_t i = 0; i != frames; ++i)
+            for(uint32_t c = 0; c != channels; ++c)
+                samples[i * channels + c] = 0.1f * float(c + 1U) * (i % 2 ? 1.f : -1.f);
+
+        std::vector<std::byte> data(frames * channels * v.bits / 8U);
+        for(size_t s = 0; s != samples.size(); ++s)
+        {
+            if(v.format == DR_WAVE_FORMAT_IEEE_FLOAT)
+                std::memcpy(data.data() + s * 4, &samples[s], 4);
+            else
+            {
+                const auto value = static_cast<int32_t>(samples[s] * 2147483647.f);
+                const auto bytes = v.bits / 8U;
+                for(uint32_t b = 0; b != bytes; ++b)
+                    data[s * bytes + b] = std::byte(uint32_t(value) >> (32U - 8U * bytes + 8U * b));
+            }
+        }
+        drwav wav;
+#ifdef _WIN32
+        REQUIRE(drwav_init_file_write_w(&wav, file.c_str(), &format, nullptr));
+#else
+        REQUIRE(drwav_init_file_write(&wav, file.c_str(), &format, nullptr));
+#endif
+        drwav_write_raw(&wav, data.size(), data.data());
+        drwav_uninit(&wav);
+
+        audio_source source(file);
+        CHECK(source.format().m_channels == channels);
+        CHECK(source.format().m_sample_rate_hz == v.rate);
+        CHECK(source.format().m_frames == frames);
+        CHECK(source.format().is_raw_copyable());
+
+        const auto third = load_mono(file, 2U);
+        REQUIRE(third.num_frames() == frames);
+        CHECK(third.m_samples[1] == doctest::Approx(0.3).epsilon(1e-4));
+        CHECK(load_mono(file).m_samples[1] == doctest::Approx(0.25).epsilon(1e-4));
+    }
+}
+
 TEST_CASE("audio_source rejects files that aren't audio")
 {
     temp_dir dir;

@@ -19,6 +19,7 @@
 #include <nlohmann/json.hpp>
 #include <spdlog/spdlog.h>
 
+#include "../io/audio_source.h"
 #include "../io/files.h"
 #include "../io/source_id.h"
 #include "colour.h"
@@ -36,6 +37,14 @@ std::optional<file_status> status_from_string(const std::string &s)
     for(auto status : {file_status::todo, file_status::done, file_status::skip})
         if(s == to_string(status))
             return status;
+    return std::nullopt;
+}
+
+std::optional<label_state> state_from_string(const std::string &s)
+{
+    for(auto state : {label_state::confirmed, label_state::suggested, label_state::rejected})
+        if(s == to_string(state))
+            return state;
     return std::nullopt;
 }
 
@@ -80,6 +89,17 @@ const json &array_at(const json &j, const char *key)
 }
 }
 
+const char *to_string(label_state state)
+{
+    switch(state)
+    {
+    case label_state::suggested: return "suggested";
+    case label_state::rejected: return "rejected";
+    case label_state::confirmed:
+    default: return "confirmed";
+    }
+}
+
 const char *to_string(file_status status)
 {
     switch(status)
@@ -111,6 +131,8 @@ uint32_t from_hex(std::string col)
 void to_json(json &j, const label_defn &d)
 {
     j = json{{"class-id", d.m_id.m_id}, {"class", d.m_class}, {"colour", to_hex(d.m_color_rgba)}};
+    if(d.m_kind == class_kind::onset)
+        j["kind"] = "onset";
 }
 
 void from_json(const json &j, label_defn &d)
@@ -118,6 +140,11 @@ void from_json(const json &j, label_defn &d)
     j.at("class-id").get_to(d.m_id.m_id);
     j.at("class").get_to(d.m_class);
     d.m_color_rgba = from_hex(j.at("colour").get<std::string>());
+    const auto kind = j.value("kind", std::string{"region"});
+    if(kind == "onset")
+        d.m_kind = class_kind::onset;
+    else if(kind != "region")
+        throw std::runtime_error("Unknown class kind " + kind + ", expected region or onset");
 }
 
 void to_json(json &j, const label_dict &p)
@@ -152,12 +179,24 @@ project_config project_config::parse_from_file(std::string filename)
     j.at("label-file").get_to(cfg.m_labels);
     if(auto it = j.find("export"); it != j.end())
         cfg.m_export = *it;
+    if(auto it = j.find("annotations"); it != j.end())
+        cfg.m_annotations = *it;
+    if(auto it = j.find("review"); it != j.end())
+        cfg.m_review = *it;
+    if(auto it = j.find("channel"); it != j.end() && !it->is_null())
+    {
+        // Channels are numbered from 1 in the project file, as in most audio software
+        const auto channel = it->get<uint32_t>();
+        if(channel == 0U)
+            throw std::runtime_error("Channels are numbered from 1");
+        cfg.m_channel = channel - 1U;
+    }
     return cfg;
 }
 
 fs::path project_config::resolve_proj(const fs::path &p) const
 {
-    auto out = p;
+    auto out = expand_env_vars(p);
     if(out.is_relative())
         out = m_filename.parent_path() / out;
 
@@ -230,7 +269,7 @@ void project_model::rescan_files()
         for(const auto &entry :
             fs::recursive_directory_iterator(root, fs::directory_options::skip_permission_denied))
         {
-            if(entry.path().extension() == ".wav")
+            if(entry.is_regular_file() && is_supported_audio(entry.path()))
             {
                 auto path = entry.path().lexically_normal();
                 auto name = to_portable(path).m_relative;
@@ -319,6 +358,38 @@ void project_model::set_status(const fs::path &file, file_status status)
     ++m_revision;
 }
 
+std::optional<uint32_t> project_model::get_channel(const fs::path &file) const
+{
+    const auto *state = find_file_state(file);
+    const auto channel = state && state->m_channel ? state->m_channel : m_cfg.m_channel;
+    if(!channel || *channel == mixed_channels)
+        return std::nullopt;
+    return channel;
+}
+
+void project_model::set_channel(const fs::path &file, std::optional<uint32_t> channel)
+{
+    // Stored only where it differs from the project's default
+    std::optional<uint32_t> stored = channel.value_or(mixed_channels);
+    if(stored.value() == m_cfg.m_channel.value_or(mixed_channels))
+        stored.reset();
+    auto &state = m_file_states[file];
+    if(state.m_channel == stored)
+        return;
+    state.m_channel = stored;
+    ++m_revision;
+}
+
+label_defn_id project_model::add_session_class(const std::string &name)
+{
+    uint32_t next{};
+    for(const auto &defn : m_label_dict)
+        next = std::max(next, defn.m_id.m_id + 1U);
+    m_label_dict.add(label_defn{label_defn_id{next}, name, unknown_class_colour});
+    spdlog::warn("Class {} is not in the palette, adding it as {} for this session", name, next);
+    return label_defn_id{next};
+}
+
 const file_state *project_model::find_file_state(const fs::path &file) const
 {
     auto it = m_file_states.find(file);
@@ -367,6 +438,8 @@ void project_model::export_csv()
         const auto portable = to_portable(src_path);
         for(const auto &l : labels)
         {
+            if(!l.is_confirmed())
+                continue;
             f << csv_escape(portable.m_relative) << "," << l.m_start_s << "," << l.m_stop_s << ","
               << csv_escape(class_name_of(l)) << "," << l.m_defn_id.m_id << ","
               << csv_escape(portable.m_root) << "\n";
@@ -539,6 +612,15 @@ void project_model::load_labels()
                 defn_lookup->m_class);
 
         label l{id, class_id, std::max(0., start_s), std::max(0., stop_s)};
+        if(auto it = record.find("state"); it != record.end())
+        {
+            if(auto state = state_from_string(it->get<std::string>()))
+                l.m_state = *state;
+            else
+                spdlog::error("Unknown label state {}", it->dump());
+        }
+        if(auto it = record.find("score"); it != record.end() && it->is_number())
+            l.m_score = it->get<float>();
 
         if(used_ids.insert(id).second)
             m_file_labels[*path].add(l);
@@ -577,6 +659,13 @@ void project_model::load_labels()
                 record.value("size", std::uintmax_t{}),
                 record.value("mtime", std::int64_t{})
             };
+
+        if(auto it = record.find("channel"); it != record.end())
+        {
+            const auto text = it->get<std::string>();
+            state.m_channel =
+                text == "mix" ? mixed_channels : static_cast<uint32_t>(std::stoul(text) - 1U);
+        }
 
         if(auto it = record.find("export"); it != record.end())
             state.m_export = export_record{
@@ -621,6 +710,10 @@ std::string project_model::serialize_labels() const
             };
             if(!portable.m_root.empty())
                 r["dataset-root"] = portable.m_root;
+            if(l.m_state != label_state::confirmed)
+                r["state"] = to_string(l.m_state);
+            if(l.m_score)
+                r["score"] = *l.m_score;
             label_records.push_back(std::move(r));
         }
     }
@@ -644,6 +737,10 @@ std::string project_model::serialize_labels() const
             r["size"] = state.m_source_id->m_size;
             r["mtime"] = state.m_source_id->m_mtime;
         }
+        if(state.m_channel)
+            r["channel"] = *state.m_channel == mixed_channels
+                ? std::string{"mix"}
+                : std::to_string(*state.m_channel + 1U);
         if(state.m_export)
             r["export"] = json{
                 {"time", state.m_export->m_time},

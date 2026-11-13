@@ -5,9 +5,11 @@ add_executable(audio_labeller_tests
     "test_audio_source.cpp"
     "test_export.cpp"
     "test_history.cpp"
+    "test_interchange.cpp"
     "test_lanes.cpp"
     "test_playback_cursor.cpp"
     "test_project_model.cpp"
+    "test_review.cpp"
 
     # Playback is tested against SDL's dummy audio driver
     "${PROJECT_SOURCE_DIR}/src/audio/audio_engine.cpp"

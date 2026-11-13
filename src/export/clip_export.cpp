@@ -242,9 +242,17 @@ export_summary export_dataset(project_model &project, const export_settings &set
     {
         const auto status = project.get_status(file.m_path);
         const auto &file_labels = project.get_labels(file.m_path);
+        std::vector<label> labels, unsure;
+        for(const auto &l : file_labels)
+        {
+            if(l.is_confirmed())
+                labels.push_back(l);
+            if(l.m_state != label_state::rejected)
+                unsure.push_back(l); // Not background either, until reviewed
+        }
         if(status != file_status::done)
         {
-            summary.m_todo_with_labels += status == file_status::todo && !file_labels.empty();
+            summary.m_todo_with_labels += status == file_status::todo && !labels.empty();
             continue;
         }
 
@@ -253,10 +261,8 @@ export_summary export_dataset(project_model &project, const export_settings &set
             const auto source_id = project.get_source_id(file.m_path);
             audio_source source(file.m_path);
             const auto &format = source.format();
-            const std::vector<label> labels(file_labels.begin(), file_labels.end());
-
             auto plans = plan_clips(labels, format.duration_s(), settings);
-            for(auto &background : plan_background(labels, format.duration_s(), settings))
+            for(auto &background : plan_background(unsure, format.duration_s(), settings))
                 plans.push_back(std::move(background));
 
             auto &rows = new_rows[source_id];

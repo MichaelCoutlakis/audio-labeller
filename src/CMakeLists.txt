@@ -17,6 +17,14 @@ add_library(audio_labeller_core STATIC
     "io/wav_writer.h" "io/wav_writer.cpp"
 
     "export/clip_export.h" "export/clip_export.cpp"
+
+    "interchange/label_format.h" "interchange/label_format.cpp"
+    "interchange/annotation_tree.h" "interchange/annotation_tree.cpp"
+
+    "review/review.h" "review/review.cpp"
+
+    "dsp/onset_snap.h" "dsp/onset_snap.cpp"
+    "dsp/spectrogram.h" "dsp/spectrogram.cpp"
 )
 target_include_directories(audio_labeller_core
     PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}

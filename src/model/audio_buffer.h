@@ -13,6 +13,7 @@ struct audio_buffer
 {
     uint32_t m_sample_rate_hz{};
     uint32_t m_channels{1U};
+    uint32_t m_source_channels{1U}; ///< Channels in the file this was read from
     std::vector<float> m_samples;
 
     size_t num_frames() const { return m_samples.size() / m_channels; }

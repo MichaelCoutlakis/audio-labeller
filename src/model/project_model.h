@@ -6,6 +6,7 @@
 
 #include <cstdint>
 #include <filesystem>
+#include <limits>
 #include <map>
 #include <optional>
 #include <set>
@@ -22,20 +23,28 @@ struct project_config
 {
     static project_config parse_from_file(std::string filename);
 
-    /// Resolve a project related path (label, export) relative to the project location, according
-    /// to settings
+    /// Resolve a project related path (label, export) relative to the project location, after
+    /// expanding any ${ENV_VARS} in it
     std::filesystem::path resolve_proj(const std::filesystem::path &p) const;
 
     /// Resolve one of the dataset roots to a normalised directory path without a trailing separator
     std::filesystem::path resolve_root(const std::filesystem::path &root) const;
 
     std::filesystem::path m_filename;                 ///< This structure on disk
-    std::vector<std::filesystem::path> m_wav_paths{}; ///< Directories to scan for wav files
+    /// Directories to scan for audio files, as written in the project (before expanding any
+    /// environment variables), as that text is part of each file's identity
+    std::vector<std::filesystem::path> m_wav_paths{};
     std::filesystem::path m_palette;                  ///< Classification dictionary
     std::filesystem::path m_labels;        ///< Path for pre-saved labels / labelling directory
     std::filesystem::path m_export_prefix; ///< Where to save exported artifacts
     nlohmann::json m_export;               ///< Clip export settings, see export_settings
+    nlohmann::json m_annotations;          ///< Per-recording label files, see annotation_tree
+    nlohmann::json m_review;               ///< Playback and review settings, see review_settings
+    std::optional<uint32_t> m_channel;     ///< Channel to view and play by default, else a mix
 };
+
+/// A channel number meaning a mix of all channels
+inline constexpr uint32_t mixed_channels = std::numeric_limits<uint32_t>::max();
 
 struct audio_file_entry
 {
@@ -51,6 +60,7 @@ enum class file_status
 };
 
 const char *to_string(file_status status);
+const char *to_string(label_state state);
 
 struct source_id_cache
 {
@@ -73,14 +83,20 @@ struct file_state
     file_status m_status{file_status::todo};
     std::optional<source_id_cache> m_source_id;
     std::optional<export_record> m_export;
+    /// Channel to view and play, overriding the project's. mixed_channels for a mix.
+    std::optional<uint32_t> m_channel;
 
-    bool is_default() const { return m_status == file_status::todo && !m_source_id && !m_export; }
+    bool is_default() const
+    {
+        return m_status == file_status::todo && !m_source_id && !m_export && !m_channel;
+    }
 };
 
 class project_model
 {
 public:
-    static constexpr int label_file_version = 2;
+    /// Version 3 added label states (suggestions), scores and per-file channels
+    static constexpr int label_file_version = 3;
 
     /// A default constructed config gives an empty model that never reads or writes any files
     project_model(const project_config &cfg);
@@ -114,6 +130,9 @@ public:
     /* Per-file state: */
     file_status get_status(const std::filesystem::path &file) const;
     void set_status(const std::filesystem::path &file, file_status status);
+    /// The channel to view and play (nullopt for a mix of all), from the file or else the project
+    std::optional<uint32_t> get_channel(const std::filesystem::path &file) const;
+    void set_channel(const std::filesystem::path &file, std::optional<uint32_t> channel);
     const file_state *find_file_state(const std::filesystem::path &file) const;
 
     /// The file's source ID (see source_id.h), cached against its size and modification time
@@ -133,6 +152,9 @@ public:
     bool is_dirty() const { return m_revision != m_saved_revision; }
     /// Atomically write the label file, if anything changed since it was last read or written
     void save_if_dirty();
+
+    /// Add a class that isn't in the palette, for this session, with the next free ID
+    label_defn_id add_session_class(const std::string &name);
 
     /// Labels that refer to audio that couldn't be found
     size_t num_unresolved() const { return m_unresolved_labels.size(); }

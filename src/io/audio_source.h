@@ -8,6 +8,7 @@
 #include <cstdint>
 #include <filesystem>
 #include <memory>
+#include <optional>
 
 #include "../model/audio_buffer.h"
 
@@ -17,7 +18,7 @@ struct audio_format
     uint32_t m_channels{};
     uint64_t m_frames{};
     uint32_t m_bits_per_sample{};
-    uint16_t m_format_tag{}; ///< WAVE format tag: 1 = PCM, 3 = IEEE float, others are compressed
+    uint16_t m_format_tag{}; ///< WAVE format tag: 1 = PCM, 3 = IEEE float, 0 for other containers
 
     double duration_s() const
     {
@@ -32,7 +33,13 @@ struct audio_format
     size_t bytes_per_frame() const { return size_t(m_channels) * m_bits_per_sample / 8U; }
 };
 
-/// An audio file opened for reading ranges of frames, without reading the whole file into memory
+/// Whether a file's extension is one of the readable formats: WAV (including RF64 and W64), FLAC
+/// and MP3. Case-insensitive.
+bool is_supported_audio(const std::filesystem::path &path);
+
+/// An audio file opened for reading ranges of frames, without reading the whole file into memory.
+/// The decoder is chosen by the file's extension; each lives behind audio_source::decoder, so a
+/// format is added in one place (audio_source.cpp).
 class audio_source
 {
 public:
@@ -50,11 +57,15 @@ public:
     /// @return the number of frames read
     uint64_t read_raw_frames(uint64_t start_frame, uint64_t num_frames, std::byte *out);
 
+    class decoder;
+
 private:
-    struct impl;
-    std::unique_ptr<impl> m_impl;
+    std::unique_ptr<decoder> m_decoder;
     audio_format m_format;
 };
 
-/// Read a whole file, mixed down to mono
-audio_buffer load_mono(const std::filesystem::path &path);
+/// Read a whole file as mono: one channel (numbered from 0) or, if none is given, a mix of all of
+/// them. A channel the file doesn't have also gives the mix.
+audio_buffer load_mono(
+    const std::filesystem::path &path,
+    std::optional<uint32_t> channel = std::nullopt);

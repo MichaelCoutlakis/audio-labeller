@@ -65,7 +65,7 @@ TEST_CASE("labels round trip with portable paths")
         m.save_if_dirty();
     }
     const auto j = p.saved();
-    CHECK(j["version"] == 2);
+    CHECK(j["version"] == project_model::label_file_version);
     REQUIRE(j["labels"].size() == 2);
     CHECK(j["labels"][0]["filename"] == "x.wav");
     CHECK(j["labels"][0]["dataset-root"] == "a");
@@ -129,7 +129,7 @@ TEST_CASE("version 1 label files are migrated")
         CHECK(ls.begin()->m_stop_s == 1.5);
     }
     const auto j = p.saved();
-    CHECK(j["version"] == 2);
+    CHECK(j["version"] == project_model::label_file_version);
     CHECK(j["labels"][0]["filename"] == "Dog goes woof.wav");
     CHECK(j["labels"][1]["start_s"] == 2.); // Unresolved, but its keys are upgraded
     CHECK(!j["labels"][1].contains("start [s]"));
@@ -239,4 +239,56 @@ TEST_CASE("unreadable label files fail to load")
 
     p.write_labels(R"({"labels":5})");
     CHECK_THROWS(project_model(p.config()));
+}
+
+TEST_CASE("suggestions, scores, onsets and channels round trip")
+{
+    test_project p(R"(["a"])", {"a/x.wav"});
+    const auto x = p.dir / "a/x.wav";
+    const label onset{get_next_label_id(), label_defn_id{0}, 1., 1., label_state::suggested, 0.25f};
+    const label rejected{get_next_label_id(), label_defn_id{0}, 2., 3., label_state::rejected};
+    {
+        project_model m(p.config());
+        CHECK(!m.get_channel(x));
+        m.add_label(x, onset);
+        m.add_label(x, rejected);
+        m.set_channel(x, 1U);
+        CHECK(m.get_channel(x) == 1U);
+    }
+    const auto j = p.saved();
+    CHECK(j["labels"][0]["state"] == "suggested");
+    CHECK(j["labels"][0]["score"] == doctest::Approx(0.25));
+    CHECK(!j["labels"][1].contains("score"));
+    CHECK(j["files"][0]["channel"] == "2"); // Numbered from 1 in the file
+    {
+        project_model m(p.config());
+        const auto &ls = m.get_labels(x);
+        REQUIRE(ls.size() == 2);
+        CHECK(*ls.find_ptr(onset.m_id) == onset);
+        CHECK(ls.find_ptr(onset.m_id)->is_onset());
+        CHECK(*ls.find_ptr(rejected.m_id) == rejected);
+        CHECK(m.get_channel(x) == 1U);
+        m.set_channel(x, std::nullopt); // Back to the project's default
+        CHECK(!m.get_channel(x));
+    }
+    CHECK(!p.saved()["files"].dump().contains("channel"));
+}
+
+TEST_CASE("project default channel and palette kinds")
+{
+    test_project p(R"(["a"])", {"a/x.wav"});
+    write_text(
+        p.dir / "pal.json",
+        R"({"label-palette":[{"class-id":0,"class":"Dog","colour":"#ccb42aab","kind":"onset"},{"class-id":1,"class":"Rain","colour":"#ccb42aab"}]})");
+    write_text(
+        p.dir / "proj.json",
+        R"({"dataset-roots":["a"],"export-prefix":"out","label-palette":"pal.json","label-file":"labels.json","channel":2})");
+    const auto x = p.dir / "a/x.wav";
+    project_model m(p.config());
+    CHECK(m.m_label_dict.find_ptr(label_defn_id{0})->m_kind == class_kind::onset);
+    CHECK(m.m_label_dict.find_ptr(label_defn_id{1})->m_kind == class_kind::region);
+    CHECK(m.get_channel(x) == 1U);
+    m.set_channel(x, std::nullopt); // An explicit mix overrides the project's channel
+    CHECK(!m.get_channel(x));
+    CHECK(m.find_file_state(x)->m_channel == mixed_channels);
 }

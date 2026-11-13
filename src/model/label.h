@@ -6,6 +6,7 @@
 #include <atomic>
 #include <cstdint>
 #include <limits>
+#include <optional>
 #include <string>
 
 #include "ordered_registry.h"
@@ -40,11 +41,27 @@ inline void reserve_label_ids(label_id id)
         last = id;
 }
 
+/// What a palette class marks. Onset classes are transients, defined by their start time alone.
+enum class class_kind : uint8_t
+{
+    region, ///< A start and a stop, eg. context like rain or a passing vehicle
+    onset   ///< A point in time, eg. a call or a click
+};
+
 struct label_defn
 {
     label_defn_id m_id;
     std::string m_class;
     uint32_t m_color_rgba{}; ///< See colour.h
+    class_kind m_kind{class_kind::region};
+};
+
+/// Whether a label has been checked by a person
+enum class label_state : uint8_t
+{
+    confirmed, ///< A label
+    suggested, ///< Proposed (eg. by a detector), waiting to be accepted, rejected or relabelled
+    rejected   ///< Proposed, then judged not to be an event. Kept as a record of what was checked.
 };
 
 struct label
@@ -52,7 +69,12 @@ struct label
     label_id m_id;           //!< This specific label instance
     label_defn_id m_defn_id; //!< ID of the label definition in the dictionary
     double m_start_s{};
-    double m_stop_s{};
+    double m_stop_s{}; ///< Equal to the start for an onset
+    label_state m_state{label_state::confirmed};
+    std::optional<float> m_score; ///< The proposer's confidence, if it gave one
+
+    bool is_onset() const { return m_stop_s <= m_start_s; }
+    bool is_confirmed() const { return m_state == label_state::confirmed; }
 
     bool operator==(const label &other) const = default;
 };
