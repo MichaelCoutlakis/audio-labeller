@@ -183,6 +183,8 @@ project_config project_config::parse_from_file(std::string filename)
         cfg.m_annotations = *it;
     if(auto it = j.find("review"); it != j.end())
         cfg.m_review = *it;
+    if(auto it = j.find("clip-manifest"); it != j.end())
+        cfg.m_clip_manifest = *it;
     if(auto it = j.find("channel"); it != j.end() && !it->is_null())
     {
         // Channels are numbered from 1 in the project file, as in most audio software

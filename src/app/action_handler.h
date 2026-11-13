@@ -45,6 +45,9 @@ struct action_handler
     void operator()(const actions::set_export_settings &s);
     void operator()(const actions::import_annotations &i);
     void operator()(const actions::export_annotations &e);
+    void operator()(const actions::play_clip &p);
+    void operator()(const actions::judge_clip &j);
+    void operator()(const actions::jump_to &j);
 
     /// Pick up the result of a background export once it's finished. Call every frame.
     void poll_background();
@@ -80,6 +83,9 @@ private:
 
     /// Play a label's playback window, if auto play is on
     void play_label(const label &l);
+
+    /// Give the audio engine the active file again, after playing a manifest clip
+    void restore_active_audio();
 
     void report_export(const export_summary &summary);
 };

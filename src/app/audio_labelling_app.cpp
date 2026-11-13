@@ -82,6 +82,7 @@ void audio_labeller_app::on_frame()
     m_applied_labels.render(m_project, m_app_state);
     m_label_controls.render(m_project, m_app_state);
     m_export_settings.render(m_project, m_app_state);
+    m_clip_manifest.render(m_project, m_app_state);
 
     // Dispatch the actions (controller):
     for(auto &action : m_app_state.m_actions)
@@ -200,6 +201,7 @@ void audio_labeller_app::render_main_dockspace()
         ImGui::DockBuilderDockWindow(m_waveform.m_window_name.c_str(), centre_id);
         ImGui::DockBuilderDockWindow(m_label_controls.m_window_name.c_str(), bottom_centre_id);
         ImGui::DockBuilderDockWindow(m_applied_labels.m_window_name.c_str(), right_id);
+        ImGui::DockBuilderDockWindow(m_clip_manifest.m_window_name.c_str(), right_id);
         ImGui::DockBuilderDockWindow(m_audio_control.m_window_name.c_str(), bottom_left_id);
 
         ImGui::DockBuilderFinish(dockspace_id);

@@ -23,6 +23,8 @@ add_library(audio_labeller_core STATIC
 
     "review/review.h" "review/review.cpp"
 
+    "manifest/clip_manifest.h" "manifest/clip_manifest.cpp"
+
     "dsp/onset_snap.h" "dsp/onset_snap.cpp"
     "dsp/spectrogram.h" "dsp/spectrogram.cpp"
 )
@@ -49,6 +51,7 @@ add_executable(AudioLabeller main.cpp
 
     "views/audio_view.h" "views/audio_view.cpp"
     "views/export_settings_view.h" "views/export_settings_view.cpp"
+    "views/clip_manifest_view.h" "views/clip_manifest_view.cpp"
     "views/waveform_view.h" "views/waveform_view.cpp"
     "views/labels_view.h" "views/labels_view.cpp"
     "views/label_controls_view.h" "views/label_controls_view.cpp"

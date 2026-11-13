@@ -63,7 +63,7 @@ const std::vector<std::pair<const char *, const char *>> &keyboard_controller::d
 void keyboard_controller::handle(const project_model &project, app_state &state)
 {
     const auto &io = ImGui::GetIO();
-    if(io.WantTextInput)
+    if(io.WantTextInput || state.m_keys_captured)
         return;
 
     if(pressed(ImGuiKey_Space))

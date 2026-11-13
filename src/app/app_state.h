@@ -218,6 +218,10 @@ public:
     bool is_exporting() const { return m_export_result.valid(); }
     bool m_show_export_settings{false};
 
+    /* Clip manifest: */
+    bool m_keys_captured{false}; ///< A view with focus handles the keys, eg. the clip list
+    bool m_playing_clip{false};  ///< The audio engine has a manifest clip, not the active file
+
     /* Actions: */
     void add_action(actions::app_action action) { m_actions.push_back(std::move(action)); }
     std::vector<actions::app_action> m_actions;

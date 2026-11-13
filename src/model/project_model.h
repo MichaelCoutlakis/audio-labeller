@@ -40,6 +40,7 @@ struct project_config
     nlohmann::json m_export;               ///< Clip export settings, see export_settings
     nlohmann::json m_annotations;          ///< Per-recording label files, see annotation_tree
     nlohmann::json m_review;               ///< Playback and review settings, see review_settings
+    nlohmann::json m_clip_manifest;        ///< Clips cut elsewhere, see clip_manifest_settings
     std::optional<uint32_t> m_channel;     ///< Channel to view and play by default, else a mix
 };
 

@@ -7,6 +7,7 @@ add_executable(audio_labeller_tests
     "test_history.cpp"
     "test_interchange.cpp"
     "test_lanes.cpp"
+    "test_manifest.cpp"
     "test_playback_cursor.cpp"
     "test_project_model.cpp"
     "test_review.cpp"

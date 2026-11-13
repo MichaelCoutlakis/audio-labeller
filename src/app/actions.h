@@ -12,6 +12,7 @@
 
 #include <nlohmann/json.hpp>
 
+#include "../manifest/clip_manifest.h"
 #include "../model/label.h"
 #include "../model/project_model.h"
 #include "../model/types.h"
@@ -184,6 +185,29 @@ struct export_annotations
     size_t m_tree{};
 };
 
+/// Play a clip file from a clip manifest, rather than the active file
+struct play_clip
+{
+    std::filesystem::path m_clip;
+};
+
+/// Record a verdict on a clip, on the label at its onset in its source recording
+struct judge_clip
+{
+    std::filesystem::path m_source;
+    double m_onset_s{};
+    double m_window_s{};
+    clip_verdict m_verdict{};
+    label_defn_id m_defn_id;
+};
+
+/// Open a file and show a time in it, with context either side
+struct jump_to
+{
+    std::filesystem::path m_file;
+    double m_time_s{};
+};
+
 using app_action = std::variant<
     load_file,
     add_label,
@@ -213,6 +237,9 @@ using app_action = std::variant<
     cancel_export,
     set_export_settings,
     import_annotations,
-    export_annotations>;
+    export_annotations,
+    play_clip,
+    judge_clip,
+    jump_to>;
 
 }

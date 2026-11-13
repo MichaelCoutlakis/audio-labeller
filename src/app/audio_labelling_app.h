@@ -11,6 +11,7 @@
 
 #include "../audio/audio_engine.h"
 #include "../views/audio_view.h"
+#include "../views/clip_manifest_view.h"
 #include "../views/export_settings_view.h"
 #include "../views/file_list_view.h"
 #include "../views/label_controls_view.h"
@@ -37,6 +38,7 @@ private:
     labels_view m_applied_labels;
     keyboard_controller m_keyboard;
     export_settings_view m_export_settings;
+    clip_manifest_view m_clip_manifest;
 
     audio_engine m_audio_engine;
 

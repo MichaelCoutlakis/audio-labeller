@@ -12,6 +12,8 @@
 #include "../dsp/onset_snap.h"
 #include "../export/clip_export.h"
 #include "../interchange/annotation_tree.h"
+#include "../io/audio_source.h"
+#include "../manifest/clip_manifest.h"
 #include "../model/paths.h"
 #include "action_handler.h"
 #include "actions.h"
@@ -66,8 +68,17 @@ void action_handler::edit_labels(const std::set<label_id> &ids, F &&edit)
     }
 }
 
+void action_handler::restore_active_audio()
+{
+    if(!m_state.m_playing_clip)
+        return;
+    m_state.m_playing_clip = false;
+    m_audio_engine.set_audio_clip(m_state.get_audio_buffer_ptr());
+}
+
 void action_handler::play_label(const label &l)
 {
+    restore_active_audio();
     m_audio_engine.select_region(m_state.playback_window(l), m_state.m_loop);
     if(m_state.m_auto_start)
         m_audio_engine.play();
@@ -76,9 +87,13 @@ void action_handler::play_label(const label &l)
 void action_handler::operator()(const actions::load_file &f)
 {
     if(m_state.is_selected_file(f.file_path))
+    {
+        restore_active_audio();
         return;
+    }
     spdlog::info("loading file {}", generic_utf8(f.file_path));
     m_state.set_selected_file(f.file_path, m_proj.get_channel(f.file_path));
+    m_state.m_playing_clip = false;
 
     m_audio_engine.set_audio_clip(m_state.get_audio_buffer_ptr());
     m_audio_engine.select_region(
@@ -312,6 +327,7 @@ void action_handler::operator()(const actions::review_step &r)
         return;
     m_state.set_selection({l->m_id});
     m_state.m_view_request = review_view(*l, m_state.m_review);
+    restore_active_audio();
     m_audio_engine.select_region(m_state.playback_window(*l), m_state.m_loop);
     m_audio_engine.play(); // Reviewing means listening, whatever auto play says
 }
@@ -339,6 +355,7 @@ void action_handler::operator()(const actions::set_channel &c)
     if(!m_state.is_selected_file(c.m_file))
         return;
     m_state.load_audio(c.m_file, m_proj.get_channel(c.m_file));
+    m_state.m_playing_clip = false;
     const auto state = m_audio_engine.get_state();
     m_audio_engine.set_audio_clip(m_state.get_audio_buffer_ptr());
     m_audio_engine.select_region(
@@ -355,6 +372,7 @@ void action_handler::operator()(const actions::select_playback_device &dev)
 
 void action_handler::operator()(const actions::select_playback_region &r)
 {
+    restore_active_audio();
     m_audio_engine.select_region(r.t, r.loop);
     if(m_state.m_auto_start)
         m_audio_engine.play();
@@ -508,4 +526,41 @@ void action_handler::operator()(const actions::export_annotations &e)
             summary.m_unchanged));
     for(const auto &error : summary.m_errors)
         m_state.report_error("Could not export " + error);
+}
+
+void action_handler::operator()(const actions::play_clip &p)
+{
+    auto clip = std::make_shared<const audio_buffer>(load_mono(p.m_clip));
+    m_audio_engine.set_audio_clip(clip);
+    m_audio_engine.select_region(time_span{0., clip->duration_s()}, false);
+    m_audio_engine.play();
+    m_state.m_playing_clip = true;
+}
+
+void action_handler::operator()(const actions::judge_clip &j)
+{
+    undoable(
+        j.m_source,
+        [&]
+        {
+            apply_clip_verdict(m_proj, j.m_source, j.m_onset_s, j.m_window_s, j.m_verdict, j.m_defn_id);
+        });
+}
+
+void action_handler::operator()(const actions::jump_to &j)
+{
+    (*this)(actions::load_file{j.m_file});
+    restore_active_audio();
+    m_state.m_view_request = time_span{j.m_time_s - 2., j.m_time_s + 2.};
+    if(const auto *l = find_label_at(m_proj.get_labels(j.m_file), j.m_time_s, 0.05))
+    {
+        m_state.set_selection({l->m_id});
+        play_label(*l);
+    }
+    else
+    {
+        const label at{0U, label_defn_id{}, j.m_time_s, j.m_time_s};
+        m_audio_engine.select_region(m_state.playback_window(at), m_state.m_loop);
+        m_audio_engine.play();
+    }
 }
