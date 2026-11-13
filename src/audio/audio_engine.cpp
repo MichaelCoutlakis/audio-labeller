@@ -118,6 +118,21 @@ void audio_engine::set_playback_loop(bool loop)
     m_cursor.m_loop = loop;
 }
 
+time_span audio_engine::get_region() const
+{
+    stream_lock lock(m_stream);
+    const double rate = m_clip->m_sample_rate_hz;
+    if(rate == 0.)
+        return {};
+    return {double(m_cursor.m_region_start) / rate, double(m_cursor.m_region_end) / rate};
+}
+
+void audio_engine::release_region_end()
+{
+    stream_lock lock(m_stream);
+    m_cursor.m_region_end = m_clip->num_frames();
+}
+
 void audio_engine::set_speed(float speed)
 {
     m_speed = speed;

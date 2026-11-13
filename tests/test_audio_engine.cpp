@@ -71,3 +71,20 @@ TEST_CASE("audio_engine plays a region through SDL")
 
     engine.close();
 }
+
+TEST_CASE("audio_engine can play on past the end of its region")
+{
+    auto clip = std::make_shared<audio_buffer>();
+    clip->m_sample_rate_hz = 1000;
+    clip->m_samples.assign(2000, 0.1f);
+
+    audio_engine engine; // No device: only the region is checked
+    engine.set_audio_clip(clip);
+    engine.select_region({0.5, 1.0}, false);
+    CHECK(engine.get_region().first == doctest::Approx(0.5));
+    CHECK(engine.get_region().second == doctest::Approx(1.0));
+
+    engine.release_region_end();
+    CHECK(engine.get_region().first == doctest::Approx(0.5));
+    CHECK(engine.get_region().second == doctest::Approx(2.0));
+}

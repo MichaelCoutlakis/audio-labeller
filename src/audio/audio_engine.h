@@ -36,6 +36,12 @@ public:
     void select_region(time_span t, bool loop);
     void set_playback_loop(bool loop);
 
+    /// The region being played, or to be played
+    time_span get_region() const;
+
+    /// Play on to the end of the clip, without interrupting playback
+    void release_region_end();
+
     /// Slower (or faster) playback, which also lowers (raises) the pitch. 1 is normal speed.
     void set_speed(float speed);
 

@@ -65,6 +65,8 @@ private:
     app_state &m_state;
 
     label_snapshot snapshot(const std::filesystem::path &file) const;
+    /// If a label whose span is being played is removed, play on to the end of the file instead
+    void release_playback_of_removed(const label_snapshot &before, const label_snapshot &after);
     void restore(const std::filesystem::path &file, const label_snapshot &s);
 
     /// Apply a change to a file's labels as one undo step

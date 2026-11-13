@@ -39,14 +39,49 @@ label_snapshot action_handler::snapshot(const std::filesystem::path &file) const
 
 void action_handler::restore(const std::filesystem::path &file, const label_snapshot &s)
 {
+    const auto replaced = snapshot(file);
     m_proj.set_labels(file, s.m_labels);
 
     // Selections only exist for the active file:
     if(m_state.is_selected_file(file))
     {
+        release_playback_of_removed(replaced, s);
         m_state.m_unlabelled = s.m_unlabelled;
         m_state.set_selection(s.m_selection);
     }
+}
+
+void action_handler::release_playback_of_removed(
+    const label_snapshot &before,
+    const label_snapshot &after)
+{
+    if(m_state.m_playing_clip)
+        return;
+
+    // Drawing or moving a label plays just its span. If the label goes or moves, so does that
+    // limit.
+    const auto region = m_audio_engine.get_region();
+    const double tolerance = 1e-3;
+    const auto near = [&](time_span a)
+    {
+        return std::abs(a.first - region.first) < tolerance &&
+            std::abs(a.second - region.second) < tolerance;
+    };
+    const auto changed_with_region = [&](const labels &was, const labels &now)
+    {
+        return std::ranges::any_of(
+            was,
+            [&](const label &l)
+            {
+                const auto *n = now.find_ptr(l.m_id);
+                const bool gone = !n || n->m_start_s != l.m_start_s || n->m_stop_s != l.m_stop_s;
+                return gone &&
+                    (near({l.m_start_s, l.m_stop_s}) || near(m_state.playback_window(l)));
+            });
+    };
+    if(changed_with_region(before.m_labels, after.m_labels) ||
+       changed_with_region(before.m_unlabelled, after.m_unlabelled))
+        m_audio_engine.release_region_end();
 }
 
 template <typename F>
