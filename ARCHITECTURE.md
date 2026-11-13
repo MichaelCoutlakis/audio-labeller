@@ -247,12 +247,22 @@ ratio.
 
 ### Spectrogram
 
-`dsp/spectrogram.cpp` computes the visible range at the plot's size, with a
-small radix-2 FFT (1024 points, Hann window), on linear, log or mel frequency
-scales. When zoomed out, each column is the maximum of several FFT frames, so
-short events between frames aren't missed. The levels are coloured with a gain
-and range into an OpenGL texture drawn behind the waveform, recomputed once the
-view settles rather than every frame while zooming.
+`dsp/spectrogram.cpp` computes levels with a small radix-2 FFT (1024 points,
+Hann window) on linear, log or mel frequency scales. When zoomed out, each
+column is the maximum of several FFT frames, so short events between frames
+aren't missed.
+
+`dsp/spectrogram_tiles` computes it in **tiles** on worker threads, so the UI
+never waits for an FFT. A tile is 256 columns by 256 rows at a zoom level, where
+level k has 2^k samples per column; the view uses the coarsest level that's
+still at least as sharp as the screen. Tiles of a level line up whatever the
+view, so scrolling reuses them. Each frame the view asks for the visible tiles:
+ready ones are drawn, missing ones (and one either side) are queued from the
+middle of the view outwards, replacing the previous frame's queue, and coarser
+tiles already computed are drawn underneath until they arrive. The cache keeps
+the most recently used tiles; new audio or settings start a new generation, and
+work for the old one is dropped. Levels are kept in dB, so changing the gain or
+range only recolours the textures (a few per frame).
 
 ## Export
 

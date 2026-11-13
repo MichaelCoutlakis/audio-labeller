@@ -2,13 +2,16 @@
  * SPDX-License-Identifier: MIT
  * SPDX-FileCopyrightText: 2026 Michael Coutlakis
  *****************************************************************************/
+#include <chrono>
 #include <cmath>
+#include <thread>
 #include <numbers>
 
 #include <doctest/doctest.h>
 
 #include "dsp/onset_snap.h"
 #include "dsp/spectrogram.h"
+#include "dsp/spectrogram_tiles.h"
 #include "review/review.h"
 #include "test_utils.h"
 
@@ -144,4 +147,59 @@ TEST_CASE("FFT and spectrogram find a tone")
 
     CHECK(row_frequency(0., 10, 20., 8000., frequency_scale::mel) == doctest::Approx(20.));
     CHECK(row_frequency(10., 10, 20., 8000., frequency_scale::log) == doctest::Approx(8000.));
+}
+
+TEST_CASE("spectrogram tiles are computed in the background and cached")
+{
+    auto audio = std::make_shared<audio_buffer>(tone_burst(16000, 4., 1., 1000., 1.f));
+    spectrogram_tiles tiles(2U, 16U);
+    spectrogram_settings s;
+    s.m_scale = frequency_scale::linear;
+    tiles.set_audio(audio, s);
+
+    // 256 columns of 2^6 samples is about 1 s a tile at 16 kHz
+    const int level = tiles.level_for(64. / 16000.);
+    CHECK(level == 6);
+    CHECK(tiles.tile_seconds(level) == doctest::Approx(1.024));
+    CHECK(tiles.level_for(1e-9) == spectrogram_tiles::min_level);
+
+    auto wait = [&]
+    {
+        for(int i = 0; i != 2000 && tiles.pending(); ++i)
+            std::this_thread::sleep_for(std::chrono::milliseconds(5));
+        CHECK(tiles.pending() == 0U);
+    };
+
+    CHECK(tiles.request(0.5, 2.5, level).empty()); // Nothing ready yet
+    wait();
+    auto ready = tiles.request(0.5, 2.5, level);
+    REQUIRE(ready.size() == 3);
+    for(const auto &t : ready)
+    {
+        CHECK(t->m_image.m_columns == spectrogram_tiles::columns_per_tile);
+        CHECK(t->m_image.m_rows == spectrogram_tiles::rows);
+    }
+    // The tone starts at 1 s, near the end of the first tile (column 244 of 4 ms columns).
+    // 1 kHz of 8 kHz is row 32 of 256.
+    const auto tile = [&](int64_t i)
+    { return *std::ranges::find_if(ready, [&](auto &t) { return t->m_key.m_index == i; }); };
+    CHECK(tile(0)->m_image.at(32, 100) < -60.f);
+    CHECK(tile(0)->m_image.at(32, 250) > -6.f);
+    CHECK(tile(1)->m_image.at(32, 0) > -6.f);
+
+    // Coarser tiles stand in while finer ones are computed
+    tiles.request(0., 4., level + 2);
+    wait();
+    const auto coarse = tiles.fallback(1., 2., level);
+    REQUIRE(!coarse.empty());
+    CHECK(coarse.front()->m_key.m_level == level + 2);
+
+    // New audio starts again
+    const auto generation = tiles.generation();
+    tiles.set_audio(std::make_shared<audio_buffer>(tone_burst(16000, 1., 0., 500.)), s);
+    CHECK(tiles.generation() == generation + 1U);
+    CHECK(tiles.fallback(0., 1., 0).empty());
+    tiles.set_audio(audio, s);
+    tiles.request(0., 4., level);
+    // Destroying with work queued stops the threads
 }

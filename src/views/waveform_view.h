@@ -12,6 +12,7 @@
 #include <imgui.h>
 
 #include "../app/app_state.h"
+#include "../dsp/spectrogram_tiles.h"
 #include "../model/project_model.h"
 
 class waveform_view
@@ -50,22 +51,24 @@ private:
     std::optional<label_id> m_drag_arm_id;
     uint64_t m_drag_seq{}; ///< New for each mouse press, so each drag is one undo step
     std::optional<std::filesystem::path> m_last_active_file;
-    const audio_buffer *m_last_audio{nullptr};
 
     // Scratch for drawing the visible part of the waveform at the chosen gain
     std::vector<float> m_x, m_lo, m_hi;
 
-    /* Spectrogram: recomputed when the view settles on a new range */
-    struct spectrogram_key
+    /* Spectrogram: tiles computed in the background, each drawn from its own texture */
+    struct tile_texture
     {
-        const audio_buffer *m_audio{};
-        double m_start_s{}, m_stop_s{};
-        int m_width{}, m_height{};
-        frequency_scale m_scale{};
-        float m_gain_db{}, m_range_db{};
-        bool operator==(const spectrogram_key &) const = default;
+        std::weak_ptr<const spectrogram_tile> m_tile; ///< Freed with it once evicted
+        unsigned m_texture{};                         ///< OpenGL texture name
+        float m_gain_db{}, m_range_db{};              ///< The colours it was made with
     };
-    std::optional<spectrogram_key> m_spectrogram_key;
-    tp m_spectrogram_time{};
-    unsigned m_texture{}; ///< OpenGL texture name, 0 if none
+    /// The texture for a tile, made or recoloured if needed (up to a few per frame), else 0
+    unsigned tile_texture_for(const spectrogram_tiles::tile_ptr &tile, const app_settings &settings);
+    void free_unused_textures();
+
+    spectrogram_tiles m_tiles;
+    std::map<spectrogram_tile_key, tile_texture> m_textures;
+    std::vector<uint32_t> m_colour_map; ///< 256 colours, for the gain and range below
+    float m_map_gain_db{}, m_map_range_db{-1.f};
+    int m_uploads_this_frame{};
 };

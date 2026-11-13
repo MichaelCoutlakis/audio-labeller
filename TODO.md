@@ -68,15 +68,14 @@ Still to do:
 ## Phase 4: Seeing and hearing
 
 Done: a spectrogram behind the waveform (in-house FFT rather than pocketfft;
-linear, log or mel scale, gain and range), a waveform gain for quiet
+linear, log or mel scale, gain and range), computed in tiles on worker threads
+and cached for scrolling, a waveform gain for quiet
 recordings, drawing only the visible range and the samples themselves when
 zoomed in past the pyramid, slower playback and pre-roll, and viewing a single
 channel.
 
 - [ ] Load audio (and build the pyramid) off the UI thread, so long files don't
       freeze it for a couple of seconds.
-- [ ] Compute the spectrogram on a background thread too, in tiles that are
-      kept while scrolling.
 
 ## Phase 5: Assisted labelling
 

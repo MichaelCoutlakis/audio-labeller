@@ -39,12 +39,99 @@ std::string display_name(const label &l, const label_defn *defn)
 
 void waveform_view::release()
 {
-    if(m_texture)
+    for(auto &[key, t] : m_textures)
     {
-        GLuint tex = m_texture;
+        GLuint tex = t.m_texture;
         glDeleteTextures(1, &tex);
-        m_texture = 0;
     }
+    m_textures.clear();
+}
+
+void waveform_view::free_unused_textures()
+{
+    const auto generation = m_tiles.generation();
+    for(auto it = m_textures.begin(); it != m_textures.end();)
+    {
+        if(it->second.m_tile.expired() || it->first.m_generation != generation)
+        {
+            GLuint tex = it->second.m_texture;
+            glDeleteTextures(1, &tex);
+            it = m_textures.erase(it);
+        }
+        else
+            ++it;
+    }
+}
+
+unsigned waveform_view::tile_texture_for(
+    const spectrogram_tiles::tile_ptr &tile,
+    const app_settings &settings)
+{
+    auto &entry = m_textures[tile->m_key];
+    const bool current = entry.m_texture &&
+        entry.m_gain_db == settings.m_spectrogram_gain_db &&
+        entry.m_range_db == settings.m_spectrogram_range_db;
+    if(current)
+        return entry.m_texture;
+
+    // A few uploads a frame keep it smooth; the rest follow on later frames
+    constexpr int max_uploads_per_frame = 6;
+    if(m_uploads_this_frame >= max_uploads_per_frame)
+        return entry.m_texture; // Stale colours for a frame or two, or 0 if new
+    ++m_uploads_this_frame;
+
+    if(m_map_gain_db != settings.m_spectrogram_gain_db ||
+       m_map_range_db != settings.m_spectrogram_range_db)
+    {
+        m_map_gain_db = settings.m_spectrogram_gain_db;
+        m_map_range_db = settings.m_spectrogram_range_db;
+        m_colour_map.resize(256);
+        for(size_t i = 0U; i != 256U; ++i)
+            m_colour_map[i] = i == 0U ? IM_COL32(0, 0, 0, 255)
+                                      : ImGui::ColorConvertFloat4ToU32(
+                                            ImPlot::SampleColormap(float(i) / 255.f, ImPlotColormap_Viridis));
+    }
+
+    const auto &image = tile->m_image;
+    std::vector<uint32_t> pixels(image.m_db.size());
+    const float gain = settings.m_spectrogram_gain_db, range = settings.m_spectrogram_range_db;
+    for(size_t r = 0U; r != image.m_rows; ++r)
+    {
+        for(size_t c = 0U; c != image.m_columns; ++c)
+        {
+            const float t = std::clamp(1.f + (image.at(r, c) + gain) / range, 0.f, 1.f);
+            // Row 0 of the texture is the top, the highest frequency
+            pixels[(image.m_rows - 1U - r) * image.m_columns + c] =
+                m_colour_map[static_cast<size_t>(t * 255.f)];
+        }
+    }
+
+    if(!entry.m_texture)
+    {
+        GLuint tex{};
+        glGenTextures(1, &tex);
+        entry.m_texture = tex;
+    }
+    entry.m_tile = tile;
+    entry.m_gain_db = gain;
+    entry.m_range_db = range;
+    glBindTexture(GL_TEXTURE_2D, entry.m_texture);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
+    glTexImage2D(
+        GL_TEXTURE_2D,
+        0,
+        GL_RGBA,
+        static_cast<GLsizei>(image.m_columns),
+        static_cast<GLsizei>(image.m_rows),
+        0,
+        GL_RGBA,
+        GL_UNSIGNED_BYTE,
+        pixels.data());
+    return entry.m_texture;
 }
 
 void waveform_view::render(const project_model &project, app_state &state)
@@ -212,86 +299,37 @@ void waveform_view::render_waveform(app_state &state)
 
 void waveform_view::render_spectrogram(app_state &state)
 {
-    const auto &audio = state.get_audio_buffer();
-    if(audio.num_frames() == 0)
-        return;
-
-    const auto size = ImPlot::GetPlotSize();
+    m_uploads_this_frame = 0;
     const auto &settings = state.settings;
-    const spectrogram_key key{
-        &audio,
-        std::max(0., m_transform.m_view_start_s),
-        std::min(audio.duration_s(), m_transform.m_view_end_s),
-        std::clamp(static_cast<int>(size.x), 16, 4096),
-        std::clamp(static_cast<int>(size.y), 16, 1024),
-        settings.m_spectrogram_scale,
-        settings.m_spectrogram_gain_db,
-        settings.m_spectrogram_range_db
-    };
-    if(key.m_stop_s <= key.m_start_s)
+    spectrogram_settings s;
+    s.m_scale = settings.m_spectrogram_scale;
+    s.m_max_frames_per_column = 16U; // Off the UI thread, so it can afford to miss less
+    m_tiles.set_audio(state.get_audio_buffer_ptr(), s);
+    free_unused_textures();
+
+    if(state.get_audio_buffer().num_frames() == 0)
         return;
 
-    // While zooming or scrolling, keep the last image rather than recompute every frame
-    const auto now = std::chrono::steady_clock::now();
-    const bool stale = !m_spectrogram_key || !(*m_spectrogram_key == key);
-    if(stale && (!m_texture || now - m_spectrogram_time > ms(120) || m_last_audio != &audio))
+    const double start = m_transform.m_view_start_s, stop = m_transform.m_view_end_s;
+    const double px_s = m_transform.view_duration() / std::max(1.f, ImPlot::GetPlotSize().x);
+    const int level = m_tiles.level_for(px_s);
+
+    // Coarser tiles first, as a stand-in where the finer ones aren't ready yet
+    auto tiles = m_tiles.fallback(start, stop, level);
+    for(auto &t : m_tiles.request(start, stop, level))
+        tiles.push_back(std::move(t));
+
+    for(const auto &tile : tiles)
     {
-        m_spectrogram_time = now;
-        m_spectrogram_key = key;
-        m_last_audio = &audio;
-
-        spectrogram_settings s;
-        s.m_scale = key.m_scale;
-        const auto image = compute_spectrogram(
-            audio,
-            key.m_start_s,
-            key.m_stop_s,
-            static_cast<size_t>(key.m_width),
-            static_cast<size_t>(key.m_height),
-            s);
-
-        std::vector<uint32_t> pixels(image.m_db.size());
-        for(size_t r = 0U; r != image.m_rows; ++r)
-        {
-            for(size_t c = 0U; c != image.m_columns; ++c)
-            {
-                const float db = image.at(r, c) + key.m_gain_db;
-                const float t = std::clamp(1.f + db / key.m_range_db, 0.f, 1.f);
-                const auto colour = ImPlot::SampleColormap(t, ImPlotColormap_Viridis);
-                // Row 0 of the texture is the top, the highest frequency
-                pixels[(image.m_rows - 1U - r) * image.m_columns + c] = ImGui::ColorConvertFloat4ToU32(
-                    t > 0.f ? colour : ImVec4{0.f, 0.f, 0.f, 1.f});
-            }
-        }
-
-        if(!m_texture)
-        {
-            GLuint tex{};
-            glGenTextures(1, &tex);
-            m_texture = tex;
-        }
-        glBindTexture(GL_TEXTURE_2D, m_texture);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-        glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
-        glTexImage2D(
-            GL_TEXTURE_2D,
-            0,
-            GL_RGBA,
-            static_cast<GLsizei>(image.m_columns),
-            static_cast<GLsizei>(image.m_rows),
-            0,
-            GL_RGBA,
-            GL_UNSIGNED_BYTE,
-            pixels.data());
-    }
-
-    if(m_texture && m_spectrogram_key)
+        const auto texture = tile_texture_for(tile, settings);
+        if(!texture)
+            continue;
         ImPlot::PlotImage(
             "##Spectrogram",
-            static_cast<ImTextureID>(m_texture),
-            ImPlotPoint{m_spectrogram_key->m_start_s, -1.},
-            ImPlotPoint{m_spectrogram_key->m_stop_s, 1.});
+            static_cast<ImTextureID>(texture),
+            ImPlotPoint{tile->m_image.m_start_s, -1.},
+            ImPlotPoint{tile->m_image.m_stop_s, 1.});
+    }
 }
 
 void waveform_view::render_annotations(const project_model &project, app_state &state)

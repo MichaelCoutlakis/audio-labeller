@@ -27,6 +27,7 @@ add_library(audio_labeller_core STATIC
 
     "dsp/onset_snap.h" "dsp/onset_snap.cpp"
     "dsp/spectrogram.h" "dsp/spectrogram.cpp"
+    "dsp/spectrogram_tiles.h" "dsp/spectrogram_tiles.cpp"
 )
 target_include_directories(audio_labeller_core
     PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}
