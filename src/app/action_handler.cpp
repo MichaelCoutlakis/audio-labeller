@@ -211,20 +211,29 @@ void action_handler::operator()(const actions::clear_selection &c) { m_state.cle
 void action_handler::assign_class(const std::set<label_id> &ids, label_defn_id defn_id)
 {
     const auto &file = m_state.m_active_file.value();
+    // Onset classes are defined by their start alone, as when they're drawn
+    const auto *defn = m_proj.m_label_dict.find_ptr(defn_id);
+    const bool onset = defn && defn->m_kind == class_kind::onset;
+    const auto relabel = [&](label &l)
+    {
+        l.m_defn_id = defn_id;
+        if(onset)
+            l.m_stop_s = l.m_start_s;
+    };
     for(auto id : ids)
     {
         if(auto unlabelled = m_state.m_unlabelled.find_ptr(id))
         {
             auto l = *unlabelled;
             m_state.m_unlabelled.erase(unlabelled);
-            l.m_defn_id = defn_id;
+            relabel(l);
             m_proj.add_label(file, l);
         }
         else if(auto existing = m_proj.get_labels(file).find_ptr(id))
         {
             // Relabelling a suggestion (or a rejected one) confirms it
             auto l = *existing;
-            l.m_defn_id = defn_id;
+            relabel(l);
             l.m_state = label_state::confirmed;
             m_proj.update_label(file, l);
         }

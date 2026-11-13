@@ -24,6 +24,7 @@ constexpr static auto as_ms = [](auto t)
 namespace
 {
 constexpr float onset_hit_px = 6.f; ///< How near a click must be to an onset to select it
+constexpr double min_box_px = 6.;   ///< The narrowest a region's box is drawn or resized to
 
 /// Label text: the class, with the score of suggestions and an "x:" for rejected ones
 std::string display_name(const label &l, const label_defn *defn)
@@ -436,7 +437,9 @@ void waveform_view::render_annotations(const project_model &project, app_state &
             col = colours::brighter(col);
 
         const auto name = display_name(*label, defn);
-        if(label->is_onset())
+        // A region class keeps its box even at no length, so that it can be widened again
+        const bool onset_class = defn && defn->m_kind == class_kind::onset;
+        if(label->is_onset() && (onset_class || !defn))
             render_onset(state, *label, col, name);
         else
         {
@@ -541,8 +544,13 @@ void waveform_view::render_resize_label_rect(
     bool faint)
 {
     // ImPlot edits the values in place, so it gets a copy and any change becomes an action. The
-    // vertical extent is fixed by the label's lane.
-    double start{l.m_start_s}, stop{l.m_stop_s};
+    // vertical extent is fixed by the label's lane. A box is at least a few pixels wide, so that a
+    // short one can still be grabbed, and resizing doesn't make it narrower than that.
+    const double min_width = min_box_px * m_transform.view_duration() /
+        std::max(1.f, ImPlot::GetPlotSize().x);
+    const double length = l.m_stop_s - l.m_start_s;
+    const double shown_stop = std::max(l.m_stop_s, l.m_start_s + min_width);
+    double start{l.m_start_s}, stop{shown_stop};
     double top{y_max}, bottom{y_min};
     ImColor fill = col;
     if(faint)
@@ -553,7 +561,7 @@ void waveform_view::render_resize_label_rect(
     {
         // An outline, as the fill is faint
         const ImVec2 a = ImPlot::PlotToPixels(l.m_start_s, y_max);
-        const ImVec2 b = ImPlot::PlotToPixels(l.m_stop_s, y_min);
+        const ImVec2 b = ImPlot::PlotToPixels(shown_stop, y_min);
         ImPlot::GetPlotDrawList()->AddRect(a, b, ImColor(col.Value.x, col.Value.y, col.Value.z, 0.9f));
     }
 
@@ -562,7 +570,7 @@ void waveform_view::render_resize_label_rect(
         // Dashed outline, so suggestions stand out from labels at a glance
         auto *dl = ImPlot::GetPlotDrawList();
         const ImVec2 a = ImPlot::PlotToPixels(l.m_start_s, y_max);
-        const ImVec2 b = ImPlot::PlotToPixels(l.m_stop_s, y_min);
+        const ImVec2 b = ImPlot::PlotToPixels(shown_stop, y_min);
         const ImU32 outline = colours::brighter(ImColor(col.Value.x, col.Value.y, col.Value.z, 1.f));
         for(float x = a.x; x < b.x; x += 8.f)
         {
@@ -582,6 +590,13 @@ void waveform_view::render_resize_label_rect(
 
     if(was_resized)
     {
+        if(start > stop)
+            std::swap(start, stop); // Dragged one edge past the other
+        const double shown = shown_stop - l.m_start_s;
+        if(length < min_width && std::abs((stop - start) - shown) < 1e-9)
+            stop = start + length; // Moved, not resized: keep its length
+        else
+            stop = std::max(stop, start + min_width);
         m_drag_arm_id = l.m_id;
         state.add_action(actions::move_label{l.m_id, start, stop, m_drag_seq});
     }

@@ -199,7 +199,8 @@ The label palette uses a "paint class" style:
 - Selecting a class applies that class to all selected labels / regions
 - The selected class applies to regions created while its selected.
 - Label palette buttons have toggle state
-- Classes marked `"kind": "onset"` in the palette are shown with a bar
+- Classes marked `"kind": "onset"` in the palette are shown with a bar.
+  Labels given one, drawn or assigned, become onsets at their start.
 
 ### Labels
 - Ctrl click to select multiple
