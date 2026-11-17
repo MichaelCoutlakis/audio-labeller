@@ -6,6 +6,7 @@ add_library(audio_labeller_core STATIC
     "model/colour.h"
     "model/history.h"
     "model/label.h"
+    "model/new_project.h" "model/new_project.cpp"
     "model/ordered_registry.h"
     "model/paths.h"
     "model/project_model.h" "model/project_model.cpp"
@@ -16,6 +17,7 @@ add_library(audio_labeller_core STATIC
     "io/source_id.h" "io/source_id.cpp"
     "io/wav_writer.h" "io/wav_writer.cpp"
     "io/process.h" "io/process.cpp"
+    "io/reveal.h" "io/reveal.cpp"
 
     "export/clip_export.h" "export/clip_export.cpp"
 
@@ -30,6 +32,7 @@ add_library(audio_labeller_core STATIC
 
     "dsp/onset_snap.h" "dsp/onset_snap.cpp"
     "dsp/auto_gain.h" "dsp/auto_gain.cpp"
+    "dsp/high_pass.h" "dsp/high_pass.cpp"
     "dsp/loudness.h" "dsp/loudness.cpp"
     "dsp/spectrogram.h" "dsp/spectrogram.cpp"
     "dsp/spectrogram_tiles.h" "dsp/spectrogram_tiles.cpp"
@@ -43,6 +46,10 @@ target_link_libraries(audio_labeller_core PUBLIC
     nlohmann_json::nlohmann_json
     spdlog::spdlog
 )
+if(WIN32)
+    # SHOpenFolderAndSelectItems, to show a file in Explorer
+    target_link_libraries(audio_labeller_core PRIVATE shell32 ole32)
+endif()
 
 add_executable(AudioLabeller main.cpp
     "app/actions.h"
@@ -50,6 +57,7 @@ add_executable(AudioLabeller main.cpp
     "app/app_state.h" "app/app_state.cpp"
     "app/audio_labelling_app.h" "app/audio_labelling_app.cpp"
     "app/colours.h"
+    "app/file_dialogs.h" "app/file_dialogs.cpp"
     "app/lanes.h"
 
     "audio/audio_engine.h" "audio/audio_engine.cpp"
@@ -64,6 +72,8 @@ add_executable(AudioLabeller main.cpp
     "views/label_controls_view.h" "views/label_controls_view.cpp"
     "views/file_list_view.h" "views/file_list_view.cpp"
     "views/shortcuts.h" "views/shortcuts.cpp"
+    "views/project_view.h" "views/project_view.cpp"
+    "views/project_settings_view.h" "views/project_settings_view.cpp"
 )
 
 target_link_libraries(${PROJECT_NAME} PRIVATE

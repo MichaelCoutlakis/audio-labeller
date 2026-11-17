@@ -17,4 +17,6 @@ public:
 
 private:
     int m_index{0};
+    float m_cutoff_hz{100.f}; ///< The high-pass cutoff while it's dragged
+    bool m_editing_cutoff{false};
 };

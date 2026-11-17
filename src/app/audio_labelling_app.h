@@ -17,6 +17,8 @@
 #include "../views/file_list_view.h"
 #include "../views/label_controls_view.h"
 #include "../views/labels_view.h"
+#include "../views/project_settings_view.h"
+#include "../views/project_view.h"
 #include "../views/shortcuts.h"
 #include "../views/waveform_view.h"
 
@@ -41,6 +43,9 @@ private:
     export_settings_view m_export_settings;
     clip_manifest_view m_clip_manifest;
     assist_view m_assist;
+    file_dialogs m_dialogs;
+    project_view m_project_view{m_dialogs};
+    project_settings_view m_project_settings{m_dialogs};
 
     audio_engine m_audio_engine;
 
@@ -53,6 +58,14 @@ private:
     /// model so that the app still starts and can't overwrite whatever it failed to read.
     static project_model open_project(app_state &state);
 
+    /// Read the project's sections that the app keeps in its state (review, annotation trees,
+    /// assisted labellers). A mistake in one is reported rather than stopping labelling.
+    void load_project_sections();
+
+    /// Close the project, saving its labels, and open another. If either fails, the current
+    /// project stays open and the error is reported.
+    void switch_project(const std::filesystem::path &file);
+
     void autosave();
 
     void render_error_popup();
@@ -62,6 +75,8 @@ private:
     void on_frame() override;
 
     void on_shutdown() override;
+
+    void on_menu_bar() override;
 
     void render_main_dockspace();
 };

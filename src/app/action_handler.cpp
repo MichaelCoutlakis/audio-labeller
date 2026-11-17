@@ -9,10 +9,12 @@
 
 #include <spdlog/spdlog.h>
 
+#include "../dsp/high_pass.h"
 #include "../dsp/onset_snap.h"
 #include "../export/clip_export.h"
 #include "../interchange/annotation_tree.h"
 #include "../io/audio_source.h"
+#include "../io/reveal.h"
 #include "../manifest/clip_manifest.h"
 #include "../model/paths.h"
 #include "action_handler.h"
@@ -396,9 +398,16 @@ void action_handler::operator()(const actions::set_file_status &s)
 void action_handler::operator()(const actions::set_channel &c)
 {
     m_proj.set_channel(c.m_file, c.m_channel);
-    if(!m_state.is_selected_file(c.m_file))
+    if(m_state.is_selected_file(c.m_file))
+        reload_active_audio();
+}
+
+void action_handler::reload_active_audio()
+{
+    if(!m_state.m_active_file)
         return;
-    m_state.load_audio(c.m_file, m_proj.get_channel(c.m_file));
+    const auto &file = *m_state.m_active_file;
+    m_state.load_audio(file, m_proj.get_channel(file));
     m_state.m_playing_clip = false;
     const auto state = m_audio_engine.get_state();
     m_audio_engine.set_audio_clip(m_state.get_audio_buffer_ptr());
@@ -486,6 +495,9 @@ void action_handler::operator()(const actions::run_assist &r)
         settings.m_loudness = *r.m_loudness;
     auto job = std::make_shared<assist_job>(
         prepare_assist(m_proj, settings, r.m_scope, m_state.m_active_file, r.m_class));
+    // Built-ins see the audio as it's shown and played
+    for(auto &input : job->m_inputs)
+        input.m_high_pass = m_state.m_high_pass;
     if(job->m_inputs.empty())
     {
         m_state.m_assist_report = "No files to run on.";
@@ -568,6 +580,47 @@ void action_handler::poll_background()
         m_state.report_error(std::string{"Export failed: "} + e.what());
     }
     m_state.m_export_progress.reset();
+}
+
+void action_handler::operator()(const actions::reveal_file &r) { reveal_in_file_manager(r.m_file); }
+
+void action_handler::operator()(const actions::set_high_pass &h)
+{
+    if(h.m_settings == m_state.m_high_pass)
+        return;
+    m_state.m_high_pass = h.m_settings;
+    reload_active_audio();
+}
+
+void action_handler::operator()(const actions::set_project_settings &s)
+{
+    const auto channel_before =
+        m_state.m_active_file ? m_proj.get_channel(*m_state.m_active_file) : std::nullopt;
+    const auto high_pass_before = m_proj.config().m_high_pass;
+    if(m_proj.set_settings(s.m_settings))
+    {
+        // New roots or a new palette: read the project again, as at the start
+        m_state.m_project_request = m_proj.config().m_filename;
+        return;
+    }
+    m_state.m_review = review_settings::from_json(m_proj.config().m_review);
+    bool reload =
+        m_state.m_active_file && m_proj.get_channel(*m_state.m_active_file) != channel_before;
+    // A new project high-pass replaces any change made in Options for the session
+    if(m_proj.config().m_high_pass != high_pass_before)
+    {
+        m_state.m_high_pass = high_pass_settings::from_json(m_proj.config().m_high_pass);
+        reload = true;
+    }
+    // The active file follows a new default channel, unless it has its own
+    if(reload)
+        reload_active_audio();
+}
+
+void action_handler::operator()(const actions::open_project &o)
+{
+    // The app owns the project, so it makes the switch once the frame's actions are done
+    m_state.m_project_request = o.m_file;
 }
 
 void action_handler::cancel_background()
@@ -662,7 +715,9 @@ void action_handler::operator()(const actions::export_annotations &e)
 
 void action_handler::operator()(const actions::play_clip &p)
 {
-    auto clip = std::make_shared<const audio_buffer>(load_mono(p.m_clip));
+    auto decoded = load_mono(p.m_clip);
+    apply_high_pass(decoded.m_samples, decoded.m_sample_rate_hz, m_state.m_high_pass);
+    auto clip = std::make_shared<const audio_buffer>(std::move(decoded));
     m_audio_engine.set_audio_clip(clip);
     m_audio_engine.select_region(time_span{0., clip->duration_s()}, false);
     m_audio_engine.play();

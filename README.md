@@ -16,6 +16,9 @@ Features:
   exchanging labels with other tools
 - A clip export for training, and a checker for clips cut by another tool
 - Waveform and spectrogram views; WAV (including RF64), FLAC and MP3
+- A high-pass filter for wind noise, set per project: applied to the waveform,
+  spectrogram and playback, without moving sounds in time, but never to
+  exported clips
 
 ## Motivation
 - Audacity provides labelling but AFAIK these need to be manually typed 
@@ -57,10 +60,29 @@ app's own code) and `AUDIOLAB_SDL_SUBMODULE` (on).
 
 ## Project definition and files
 
+The quickest start is **File > New project from folder**: choose the folder of
+recordings, where to save the project (they can be in different places, so the
+data stays read only), and the classes to label, as a list of names or an
+existing palette to share. This writes `<name>.json` and `<name>-palette.json`,
+and saves labels to `<name>-labels.json` beside them. Nothing that already
+exists is overwritten.
+
+**File > Project settings** edits the common settings of the open project:
+its audio folders, palette, default channel for multichannel files, a
+high-pass filter for wind and handling noise, playback and review timings, and
+export prefix. It's shown after making a project too.
+It rewrites those keys of the project file and leaves the rest as they are.
+
+**File > Open project** opens any project file, and the app opens it again at the
+next start. Right-click a file in the list to show it in the system's file
+manager or copy its path.
+
+To write a project by hand:
+
 1. Create your project's label palette according to `schemas/label-palette.schema.json`
 2. Define your project's paths (data set, export path etc) according to `schemas/project.schema.json`
-3. Run the app, this should produce an app settings .json file in the working directory.
-4. In the app settings, set the project to point to your project .json
+3. Open it with File > Open project, or set `project` in the app settings file
+   (`audio-labelling-app-settings.json`, in the working directory) to its path
 
 Note that if paths in the project .json are relative then they are taken
 to be relative to the project.json location on disk rather than the app

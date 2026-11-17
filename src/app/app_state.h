@@ -12,6 +12,7 @@
 #include <string>
 #include <vector>
 
+#include "../dsp/high_pass.h"
 #include "../dsp/spectrogram.h"
 #include "../export/clip_export.h"
 #include "../interchange/annotation_tree.h"
@@ -151,8 +152,12 @@ public:
 
     bool has_active_file() const { return m_active_file.has_value(); }
 
-    /// Load a file's audio for viewing and playing, as one channel or a mix
+    /// Load a file's audio for viewing and playing, as one channel or a mix, with the high-pass
     void load_audio(const std::filesystem::path &path, std::optional<uint32_t> channel);
+
+    /// Applied to audio as it's read. From the project, and switched off or changed for this
+    /// session in Options.
+    high_pass_settings m_high_pass;
 
     const audio_buffer &get_audio_buffer() const { return *m_active_audio; }
     std::shared_ptr<const audio_buffer> get_audio_buffer_ptr() const { return m_active_audio; }
@@ -239,6 +244,17 @@ public:
     /* Clip manifest: */
     bool m_keys_captured{false}; ///< A view with focus handles the keys, eg. the clip list
     bool m_playing_clip{false};  ///< The audio engine has a manifest clip, not the active file
+
+    /* Projects: */
+    /// A project to switch to, taken by the app once the frame's actions are done
+    std::optional<std::filesystem::path> m_project_request;
+    bool m_browse_for_project{false}; ///< Show a dialog to choose a project to open
+    bool m_show_new_project{false};   ///< Show the New project dialog
+    bool m_show_project_settings{false};
+
+    /// Forget everything about the current project (the active file, selections, undo history,
+    /// review position and the project's own settings), ready for another
+    void reset_project_state();
 
     /* Actions: */
     void add_action(actions::app_action action) { m_actions.push_back(std::move(action)); }

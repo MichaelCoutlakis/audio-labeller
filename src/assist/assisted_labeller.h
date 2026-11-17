@@ -15,6 +15,7 @@
 
 #include <nlohmann/json.hpp>
 
+#include "../dsp/high_pass.h"
 #include "../dsp/loudness.h"
 #include "../interchange/annotation_tree.h"
 #include "../interchange/label_format.h"
@@ -64,6 +65,7 @@ struct suggest_input
     std::string m_class;               ///< For suggesters that don't name classes themselves
     std::filesystem::path m_project_dir;
     std::filesystem::path m_scratch_dir; ///< For temporary files, unique to the run
+    high_pass_settings m_high_pass;      ///< Applied by built-ins to the audio they read
 };
 
 /// Proposes labels for one recording at a time. Called on a worker thread; implementations must

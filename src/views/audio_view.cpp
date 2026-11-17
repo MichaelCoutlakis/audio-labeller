@@ -3,6 +3,7 @@
  * SPDX-FileCopyrightText: 2026 Michael Coutlakis
  *****************************************************************************/
 #include <algorithm>
+#include <cmath>
 #include <string>
 #include <vector>
 
@@ -50,6 +51,38 @@ void audio_view::render(const project_model &proj, app_state &state)
         ImGui::SliderFloat("Range", &settings.m_spectrogram_range_db, 20.f, 140.f, "%.0f dB");
     }
 
+    // High-pass, for wind and handling noise
+    {
+        auto hp = state.m_high_pass;
+        if(ImGui::Checkbox("High-pass", &hp.m_enabled))
+            state.add_action(actions::set_high_pass{hp});
+        if(ImGui::IsItemHovered())
+            ImGui::SetTooltip(
+                "Removes wind and handling rumble below the cutoff, from the waveform, "
+                "spectrogram and playback. Not from exported clips.\nChanged here for this "
+                "session; the project's default is in File > Project settings.");
+        ImGui::SameLine();
+        // Follows the setting, except while dragged (including the frame it's released on)
+        if(!m_editing_cutoff)
+            m_cutoff_hz = static_cast<float>(hp.m_cutoff_hz);
+        ImGui::BeginDisabled(!hp.m_enabled);
+        ImGui::SliderFloat(
+            "Cutoff",
+            &m_cutoff_hz,
+            10.f,
+            2000.f,
+            "%.0f Hz",
+            ImGuiSliderFlags_Logarithmic);
+        m_editing_cutoff = ImGui::IsItemActive();
+        // Applied on release, as each change reads the file again
+        if(ImGui::IsItemDeactivatedAfterEdit())
+        {
+            hp.m_cutoff_hz = std::round(m_cutoff_hz);
+            state.add_action(actions::set_high_pass{hp});
+        }
+        ImGui::EndDisabled();
+    }
+
     // Channel of the active file
     if(state.has_active_file())
     {
@@ -75,7 +108,9 @@ void audio_view::render(const project_model &proj, app_state &state)
                 ImGui::EndCombo();
             }
             if(ImGui::IsItemHovered())
-                ImGui::SetTooltip("Shown and played. Remembered for this file.");
+                ImGui::SetTooltip(
+                    "Shown and played. Remembered for this file. The default for other files is "
+                    "in File > Project settings.");
         }
     }
 

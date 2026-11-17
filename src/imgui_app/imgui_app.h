@@ -37,6 +37,9 @@ public:
     void request_quit() { m_running = false; }
 
 protected:
+    /// The main window, eg. as the parent of dialogs. Null before run() has created it.
+    SDL_Window *window() const { return m_window; }
+
     virtual void on_init() { }
     virtual void on_frame() = 0;
     virtual void on_shutdown() { }

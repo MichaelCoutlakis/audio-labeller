@@ -215,3 +215,16 @@ TEST_CASE("frequency positions invert the row frequencies, for the axis ticks")
         CHECK(frequency_position(hz, min_hz, 8000., scale) == doctest::Approx(0.3));
     }
 }
+
+TEST_CASE("review settings write only what differs from the defaults")
+{
+    CHECK(review_settings{}.to_json().empty());
+    review_settings s;
+    s.m_by_score = false;
+    s.m_pre_roll_s = 0.2;
+    const auto j = s.to_json();
+    CHECK(j.size() == 2U);
+    const auto back = review_settings::from_json(j);
+    CHECK(!back.m_by_score);
+    CHECK(back.m_pre_roll_s == 0.2);
+}

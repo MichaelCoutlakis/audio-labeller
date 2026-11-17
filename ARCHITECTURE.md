@@ -93,6 +93,23 @@ The model counts revisions: every change goes through its mutating functions,
 which increment the count, and autosave writes only when it differs from the
 revision last saved.
 
+### Switching projects
+
+The app owns the one `project_model`. `open_project` actions only record the
+request; after the frame's actions the app stops background work, saves the
+labels (staying on the current project if that fails), reads the new project,
+and move-assigns it into place, so the handler's and views' references stay
+valid. Then the per-project app state (active file, selection, undo history,
+review position, the project's sections) and the views holding copies of
+project settings are reset. File dialogs are SDL's, which may answer on another
+thread, so `file_dialogs` queues their answers for the UI to take, by purpose.
+
+Project settings (`project_settings`) are written back to the project file
+atomically, keeping its other keys and their order. The default channel, review
+timings and export prefix apply at once; new dataset roots or a new palette
+reopen the project, so that labels are first saved against the roots they were
+read with.
+
 ## Files
 
 All paths in a project file are relative to that project file. Saves are atomic:

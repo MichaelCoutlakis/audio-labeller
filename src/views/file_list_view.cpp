@@ -8,6 +8,7 @@
 
 #include <imgui.h>
 
+#include "../model/paths.h"
 #include "file_list_view.h"
 
 namespace
@@ -30,10 +31,12 @@ void file_list_view::render(const project_model &project, app_state &state)
 
     if(!project.has_project())
     {
-        const std::string hint = "No project loaded. Set \"project\" in " +
-            app_settings::m_filename +
-            " to the path of your project .json and restart.";
-        ImGui::TextWrapped("%s", hint.c_str());
+        ImGui::TextWrapped("No project loaded. Open one, or make one from a folder of audio:");
+        if(ImGui::Button("Open project..."))
+            state.m_browse_for_project = true;
+        ImGui::SameLine();
+        if(ImGui::Button("New project..."))
+            state.m_show_new_project = true;
     }
 
     // Filter
@@ -79,6 +82,21 @@ void file_list_view::render(const project_model &project, app_state &state)
             ImGui::PushID(id++); // Names are only unique within their dataset root
             if(ImGui::Selectable(text.c_str(), &is_selected) && is_selected)
                 state.add_action(actions::load_file{file->m_path});
+            if(ImGui::BeginPopupContextItem("##File menu"))
+            {
+#if defined(_WIN32)
+                const char *reveal = "Show in Explorer";
+#elif defined(__APPLE__)
+                const char *reveal = "Show in Finder";
+#else
+                const char *reveal = "Show in file manager";
+#endif
+                if(ImGui::MenuItem(reveal))
+                    state.add_action(actions::reveal_file{file->m_path});
+                if(ImGui::MenuItem("Copy path"))
+                    ImGui::SetClipboardText(native_utf8(file->m_path).c_str());
+                ImGui::EndPopup();
+            }
             if(exported && ImGui::IsItemHovered())
                 ImGui::SetTooltip(
                     "Exported %s and verified: the original is safe to delete",

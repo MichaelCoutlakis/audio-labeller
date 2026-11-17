@@ -6,6 +6,7 @@
 
 #include <cstdint>
 #include <filesystem>
+#include <functional>
 #include <limits>
 #include <map>
 #include <optional>
@@ -43,7 +44,22 @@ struct project_config
     nlohmann::json m_review;               ///< Playback and review settings, see review_settings
     nlohmann::json m_clip_manifest;        ///< Clips cut elsewhere, see clip_manifest_settings
     nlohmann::json m_assisted_labellers;   ///< Detectors, see assisted_labeller_settings
+    nlohmann::json m_high_pass; ///< Filter applied when reading audio, see high_pass_settings
     std::optional<uint32_t> m_channel;     ///< Channel to view and play by default, else a mix
+};
+
+/// The settings of a project that the app edits. The rest of the project file (annotation trees,
+/// assisted labellers, clip manifest, export) is left as it is.
+struct project_settings
+{
+    std::vector<std::string> m_dataset_roots; ///< UTF-8, as written in the project
+    std::string m_palette;                    ///< UTF-8, as written
+    std::string m_export_prefix;              ///< UTF-8, as written
+    std::optional<uint32_t> m_channel;        ///< Default channel from 0, nullopt for a mix
+    nlohmann::json m_review;                  ///< See review_settings
+    nlohmann::json m_high_pass;               ///< See high_pass_settings
+
+    bool operator==(const project_settings &) const = default;
 };
 
 /// A channel number meaning a mix of all channels
@@ -115,12 +131,26 @@ public:
     project_model(const project_model &) = delete;
     project_model &operator=(const project_model &) = delete;
 
+    /// Switch to another project: saves this one's labels first (if that throws, nothing
+    /// changes), then takes over other's, leaving other empty so that it never saves.
+    project_model &operator=(project_model &&other);
+
     bool has_project() const { return !m_cfg.m_filename.empty(); }
     const project_config &config() const { return m_cfg; }
 
     /// Replace the export section, in the project and atomically in its file. The file's other
     /// keys keep their values and order.
     void set_export_section(const nlohmann::json &section);
+
+    project_settings settings() const;
+
+    /// Write the settings to the project file atomically, keeping its other keys and their order.
+    /// The default channel, review settings and export prefix apply at once. Throws, writing
+    /// nothing, if there are no dataset roots or the palette doesn't exist.
+    /// @return true if the project must be reopened for them to apply: the dataset roots or the
+    /// palette changed. Until then the model keeps the old ones, so that its labels are saved
+    /// against the roots they were read with.
+    bool set_settings(const project_settings &s);
 
     // Rescans files - will reset the active file
     void rescan_files();
@@ -196,6 +226,9 @@ private:
         const std::string &filename,
         const std::optional<std::string> &root,
         const std::set<std::filesystem::path> &known_files) const;
+
+    /// Change the project file atomically, keeping its other keys and their order
+    void rewrite_project_file(const std::function<void(nlohmann::ordered_json &)> &change) const;
 
     void load_labels();
     std::string serialize_labels() const;

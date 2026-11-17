@@ -14,6 +14,7 @@
 #include <fmt/format.h>
 #include <spdlog/spdlog.h>
 
+#include "../dsp/high_pass.h"
 #include "../dsp/loudness.h"
 #include "../io/audio_source.h"
 #include "../io/process.h"
@@ -128,7 +129,8 @@ public:
         if(cls.empty())
             throw std::runtime_error("Choose a class for the suggestions");
 
-        const auto audio = load_mono(in.m_audio, in.m_channel);
+        auto audio = load_mono(in.m_audio, in.m_channel);
+        apply_high_pass(audio.m_samples, audio.m_sample_rate_hz, in.m_high_pass);
         std::vector<text_label> out;
         for(const auto &r : find_loud_regions(audio, m_settings.m_loudness))
         {

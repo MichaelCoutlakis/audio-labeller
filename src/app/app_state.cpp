@@ -161,6 +161,33 @@ bool app_state::is_selected_file(const std::filesystem::path &path) const
     return m_active_file.has_value() && m_active_file.value() == path;
 }
 
+void app_state::reset_project_state()
+{
+    m_active_file.reset();
+    m_active_audio = std::make_shared<audio_buffer>();
+    m_audio_min_max_map = {};
+    m_drag = {};
+    m_unlabelled.clear();
+    m_selected_labels.clear();
+    m_active_label_defn.reset();
+    m_history = {};
+    m_view_request.reset();
+    m_hover_time_s.reset();
+    m_review = {};
+    m_high_pass = {};
+    m_review_mode = false;
+    m_review_pos.reset();
+    m_annotation_trees.clear();
+    m_export_progress.reset();
+    m_export_result = {};
+    m_show_export_settings = false;
+    m_assisted_labellers.clear();
+    m_assist_progress.reset();
+    m_assist_result = {};
+    m_assist_report.clear();
+    m_playing_clip = false;
+}
+
 void app_state::set_selected_file(
     const std::filesystem::path &path,
     std::optional<uint32_t> channel)
@@ -177,7 +204,9 @@ void app_state::set_selected_file(
 
 void app_state::load_audio(const std::filesystem::path &path, std::optional<uint32_t> channel)
 {
-    m_active_audio = std::make_shared<const audio_buffer>(load_mono(path, channel));
+    auto audio = load_mono(path, channel);
+    apply_high_pass(audio.m_samples, audio.m_sample_rate_hz, m_high_pass);
+    m_active_audio = std::make_shared<const audio_buffer>(std::move(audio));
     spdlog::info("Loaded {}, SR={} Hz", generic_utf8(path), m_active_audio->m_sample_rate_hz);
     m_audio_min_max_map = audio_min_max_pyramid_map(*m_active_audio);
 }

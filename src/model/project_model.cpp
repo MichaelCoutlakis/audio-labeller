@@ -5,6 +5,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cstddef>
 #include <cstdint>
 #include <cstdio>
 #include <filesystem>
@@ -15,6 +16,7 @@
 #include <map>
 #include <stdexcept>
 #include <string>
+#include <utility>
 
 #include <nlohmann/json.hpp>
 #include <spdlog/spdlog.h>
@@ -187,6 +189,8 @@ project_config project_config::parse_from_file(const fs::path &filename)
         cfg.m_clip_manifest = *it;
     if(auto it = j.find("assisted-labellers"); it != j.end())
         cfg.m_assisted_labellers = *it;
+    if(auto it = j.find("high-pass"); it != j.end())
+        cfg.m_high_pass = *it;
     if(auto it = j.find("channel"); it != j.end() && !it->is_null())
     {
         // Channels are numbered from 1 in the project file, as in most audio software
@@ -198,7 +202,8 @@ project_config project_config::parse_from_file(const fs::path &filename)
     return cfg;
 }
 
-void project_model::set_export_section(const json &section)
+void project_model::rewrite_project_file(
+    const std::function<void(nlohmann::ordered_json &)> &change) const
 {
     if(!has_project())
         throw std::runtime_error("No project loaded");
@@ -208,9 +213,69 @@ void project_model::set_export_section(const json &section)
         throw std::runtime_error("Could not open " + generic_utf8(m_cfg.m_filename));
     auto j = nlohmann::ordered_json::parse(f);
     f.close();
-    j["export"] = nlohmann::ordered_json::parse(section.dump());
+    change(j);
     write_file_atomically(m_cfg.m_filename, j.dump(4) + "\n");
+}
+
+void project_model::set_export_section(const json &section)
+{
+    rewrite_project_file([&](nlohmann::ordered_json &j)
+                         { j["export"] = nlohmann::ordered_json::parse(section.dump()); });
     m_cfg.m_export = section;
+}
+
+project_settings project_model::settings() const
+{
+    project_settings s;
+    for(const auto &root : m_cfg.m_wav_paths)
+        s.m_dataset_roots.push_back(generic_utf8(root));
+    s.m_palette = generic_utf8(m_cfg.m_palette);
+    s.m_export_prefix = generic_utf8(m_cfg.m_export_prefix);
+    s.m_channel = m_cfg.m_channel;
+    s.m_review = m_cfg.m_review.is_object() ? m_cfg.m_review : json::object();
+    s.m_high_pass = m_cfg.m_high_pass.is_object() ? m_cfg.m_high_pass : json::object();
+    return s;
+}
+
+bool project_model::set_settings(const project_settings &s)
+{
+    if(s.m_dataset_roots.empty())
+        throw std::runtime_error("The project needs at least one folder of audio");
+    if(std::ranges::any_of(s.m_dataset_roots, [](const std::string &r) { return r.empty(); }))
+        throw std::runtime_error("A dataset root is empty");
+    if(s.m_export_prefix.empty())
+        throw std::runtime_error("The export prefix is empty");
+    const auto palette = m_cfg.resolve_proj(path_from_utf8(s.m_palette));
+    if(!fs::is_regular_file(palette))
+        throw std::runtime_error("The palette " + generic_utf8(palette) + " doesn't exist");
+
+    const auto old = settings();
+    rewrite_project_file(
+        [&](nlohmann::ordered_json &j)
+        {
+            j["dataset-roots"] = s.m_dataset_roots;
+            j["label-palette"] = s.m_palette;
+            j["export-prefix"] = s.m_export_prefix;
+            // Numbered from 1 in the file. No key is a mix, the default.
+            if(s.m_channel)
+                j["channel"] = *s.m_channel + 1U;
+            else
+                j.erase("channel");
+            if(s.m_review.empty())
+                j.erase("review");
+            else
+                j["review"] = nlohmann::ordered_json::parse(s.m_review.dump());
+            if(s.m_high_pass.empty())
+                j.erase("high-pass");
+            else
+                j["high-pass"] = nlohmann::ordered_json::parse(s.m_high_pass.dump());
+        });
+
+    m_cfg.m_export_prefix = path_from_utf8(s.m_export_prefix);
+    m_cfg.m_channel = s.m_channel;
+    m_cfg.m_review = s.m_review;
+    m_cfg.m_high_pass = s.m_high_pass;
+    return s.m_dataset_roots != old.m_dataset_roots || s.m_palette != old.m_palette;
 }
 
 fs::path project_config::resolve_proj(const fs::path &p) const
@@ -252,6 +317,24 @@ project_model::project_model(const project_config &cfg) :
     load_labels();
 }
 
+project_model &project_model::operator=(project_model &&other)
+{
+    if(this == &other)
+        return *this;
+    save_if_dirty();
+
+    m_label_dict = std::exchange(other.m_label_dict, {});
+    m_cfg = std::exchange(other.m_cfg, {});
+    m_files = std::exchange(other.m_files, {});
+    m_file_labels = std::exchange(other.m_file_labels, {});
+    m_file_states = std::exchange(other.m_file_states, {});
+    m_unresolved_labels = std::exchange(other.m_unresolved_labels, {});
+    m_unresolved_files = std::exchange(other.m_unresolved_files, {});
+    m_revision = std::exchange(other.m_revision, 0U);
+    m_saved_revision = std::exchange(other.m_saved_revision, 0U);
+    return *this;
+}
+
 project_model::~project_model()
 {
     try
@@ -285,6 +368,7 @@ void project_model::rescan_files()
         }
 
         spdlog::info("Scanning {}", generic_utf8(root));
+        const auto first = m_files.size();
         for(const auto &entry :
             fs::recursive_directory_iterator(root, fs::directory_options::skip_permission_denied))
         {
@@ -295,6 +379,14 @@ void project_model::rescan_files()
                 m_files.push_back(audio_file_entry{std::move(path), std::move(name)});
             }
         }
+        // Directory order depends on the filesystem, so the list is sorted to be the same on
+        // every machine. Path comparison goes component by component, keeping folders together.
+        // Roots stay in the project's order.
+        std::sort(
+            m_files.begin() + static_cast<std::ptrdiff_t>(first),
+            m_files.end(),
+            [](const audio_file_entry &a, const audio_file_entry &b)
+            { return a.m_path < b.m_path; });
     }
 }
 

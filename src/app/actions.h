@@ -13,6 +13,7 @@
 #include <nlohmann/json.hpp>
 
 #include "../assist/assisted_labeller.h"
+#include "../dsp/high_pass.h"
 #include "../manifest/clip_manifest.h"
 #include "../model/label.h"
 #include "../model/project_model.h"
@@ -227,6 +228,30 @@ struct cancel_assist
 {
 };
 
+/// Show a file in the system's file manager
+struct reveal_file
+{
+    std::filesystem::path m_file;
+};
+
+/// The high-pass for this session, applied by reading the active file again
+struct set_high_pass
+{
+    high_pass_settings m_settings;
+};
+
+/// Save the project's settings to its file, reopening it if its roots or palette changed
+struct set_project_settings
+{
+    project_settings m_settings;
+};
+
+/// Close the current project and open another, see audio_labeller_app::switch_project
+struct open_project
+{
+    std::filesystem::path m_file;
+};
+
 using app_action = std::variant<
     load_file,
     add_label,
@@ -262,6 +287,9 @@ using app_action = std::variant<
     judge_clip,
     jump_to,
     run_assist,
-    cancel_assist>;
-
+    cancel_assist,
+    reveal_file,
+    set_high_pass,
+    set_project_settings,
+    open_project>;
 }

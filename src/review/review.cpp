@@ -38,6 +38,25 @@ review_settings review_settings::from_json(const nlohmann::json &j)
     return s;
 }
 
+nlohmann::json review_settings::to_json() const
+{
+    const review_settings d;
+    auto j = nlohmann::json::object();
+    const auto put = [&](const char *key, auto value, auto fallback)
+    {
+        if(value != fallback)
+            j[key] = value;
+    };
+    put("onset_pre_s", m_onset_pre_s, d.m_onset_pre_s);
+    put("onset_post_s", m_onset_post_s, d.m_onset_post_s);
+    put("pre_roll_s", m_pre_roll_s, d.m_pre_roll_s);
+    put("view_pre_s", m_view_pre_s, d.m_view_pre_s);
+    put("view_post_s", m_view_post_s, d.m_view_post_s);
+    put("snap_window_s", m_snap_window_s, d.m_snap_window_s);
+    put("by_score", m_by_score, d.m_by_score);
+    return j;
+}
+
 time_span playback_window(const label &l, const review_settings &settings, double duration_s)
 {
     double start{}, stop{};

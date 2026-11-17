@@ -292,3 +292,74 @@ TEST_CASE("project default channel and palette kinds")
     CHECK(!m.get_channel(x));
     CHECK(m.find_file_state(x)->m_channel == mixed_channels);
 }
+
+TEST_CASE("files are listed sorted within each root, roots in the project's order")
+{
+    test_project p(R"(["z","a"])", {"z/b.wav", "z/a/y.wav", "z/a.wav", "a/c.wav", "a/b.wav"});
+    project_model m(p.config());
+    std::vector<std::string> names;
+    for(const auto &f : m.get_files())
+        names.push_back(f.m_display_name);
+    // Folder "a" sorts before "a.wav", as paths compare by component
+    CHECK(names == std::vector<std::string>{"a/y.wav", "a.wav", "b.wav", "b.wav", "c.wav"});
+    CHECK(m.get_files()[1].m_path == p.dir / "z/a.wav");
+    CHECK(m.get_files()[3].m_path == p.dir / "a/b.wav");
+}
+
+TEST_CASE("project settings are saved to the project file, keeping its other keys")
+{
+    test_project p(R"(["a"])", {"a/x.wav"});
+    // A key the settings don't cover, which must survive
+    auto file = json::parse(read_text(p.dir / "proj.json"));
+    file["annotations"] = json::array({{{"root", "trees"}}});
+    write_text(p.dir / "proj.json", file.dump());
+
+    project_model m(p.config());
+    auto s = m.settings();
+    CHECK(s.m_dataset_roots == std::vector<std::string>{"a"});
+    CHECK(s.m_palette == "pal.json");
+    CHECK(!s.m_channel);
+
+    s.m_channel = 1U; // Channel 2
+    s.m_review = json{{"onset_post_s", 0.3}};
+    s.m_export_prefix = "out/csv";
+    s.m_high_pass = json{{"enabled", true}, {"cutoff_hz", 80.}};
+    CHECK(!m.set_settings(s)); // Applies without reopening
+    CHECK(m.config().m_high_pass["cutoff_hz"] == 80.);
+    CHECK(m.get_channel(p.dir / "a/x.wav") == 1U);
+    CHECK(m.config().m_export_prefix == "out/csv");
+
+    auto saved = json::parse(read_text(p.dir / "proj.json"));
+    CHECK(saved["channel"] == 2);
+    CHECK(saved["review"]["onset_post_s"] == 0.3);
+    CHECK(saved["annotations"][0]["root"] == "trees");
+    CHECK(saved["high-pass"]["enabled"] == true);
+    CHECK(project_config::parse_from_file(p.dir / "proj.json").m_high_pass["cutoff_hz"] == 80.);
+    CHECK(project_config::parse_from_file(p.dir / "proj.json").m_channel == 1U);
+
+    // Back to a mix, the default, which is written as no key
+    s.m_channel.reset();
+    CHECK(!m.set_settings(s));
+    saved = json::parse(read_text(p.dir / "proj.json"));
+    CHECK(!saved.contains("channel"));
+
+    SUBCASE("new roots need the project reopened")
+    {
+        write_text(p.dir / "b/y.wav", "");
+        s.m_dataset_roots.push_back("b");
+        CHECK(m.set_settings(s));
+        CHECK(m.config().m_wav_paths.size() == 1U); // Until reopened
+        CHECK(project_config::parse_from_file(p.dir / "proj.json").m_wav_paths.size() == 2U);
+    }
+    SUBCASE("a missing palette or no roots are refused")
+    {
+        const auto before = read_text(p.dir / "proj.json");
+        auto bad = s;
+        bad.m_palette = "missing.json";
+        CHECK_THROWS(m.set_settings(bad));
+        bad = s;
+        bad.m_dataset_roots.clear();
+        CHECK_THROWS(m.set_settings(bad));
+        CHECK(read_text(p.dir / "proj.json") == before);
+    }
+}

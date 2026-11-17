@@ -28,6 +28,8 @@ struct review_settings
 
     /// Missing keys keep their defaults
     static review_settings from_json(const nlohmann::json &j);
+    /// Only the keys that differ from the defaults, so that a project file stays short
+    nlohmann::json to_json() const;
 };
 
 /// What to play for a label: an onset with its context either side, a region with any pre-roll

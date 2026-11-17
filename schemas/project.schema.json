@@ -50,6 +50,15 @@
                 "required": [ "root" ]
             }
         },
+        "high-pass": {
+            "description": "A high-pass filter for wind and handling noise, applied when audio is read: to the waveform, spectrogram, playback and the built-in loudness labeller, not to exported clips. Zero phase (forwards and backwards), so sounds don't move in time. Every key is optional.",
+            "type": "object",
+            "properties": {
+                "enabled": { "type": "boolean", "description": "Default: false" },
+                "cutoff_hz": { "type": "number", "exclusiveMinimum": 0, "description": "Default: 100" },
+                "order": { "enum": [ 2, 4, 6, 8 ], "description": "Butterworth order of each pass. Default: 4" }
+            }
+        },
         "review": {
             "description": "How labels are played and shown while checking them. Every key is optional.",
             "type": "object",

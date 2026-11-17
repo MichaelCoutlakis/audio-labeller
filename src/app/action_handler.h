@@ -51,6 +51,10 @@ struct action_handler
     void operator()(const actions::jump_to &j);
     void operator()(const actions::run_assist &r);
     void operator()(const actions::cancel_assist &c);
+    void operator()(const actions::reveal_file &r);
+    void operator()(const actions::set_high_pass &h);
+    void operator()(const actions::set_project_settings &s);
+    void operator()(const actions::open_project &o);
 
     /// Pick up the results of background exports and assisted labelling once they've finished.
     /// Call every frame.
@@ -92,6 +96,9 @@ private:
 
     /// Give the audio engine the active file again, after playing a manifest clip
     void restore_active_audio();
+
+    /// Read the active file's audio again with its current channel, playing on from where it was
+    void reload_active_audio();
 
     void report_export(const export_summary &summary);
     void poll_assist();
