@@ -21,6 +21,7 @@ struct action_handler
     void operator()(const actions::select_labels &s);
     void operator()(const actions::toggle_label_selection &t);
     void operator()(const actions::clear_selection &c);
+    void operator()(const actions::select_all_labels &);
     void operator()(const actions::set_active_class &a);
     void operator()(const actions::assign_class &a);
     void operator()(const actions::accept_labels &a);

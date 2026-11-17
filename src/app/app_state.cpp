@@ -11,6 +11,7 @@
 #include <spdlog/spdlog.h>
 
 #include "../io/audio_source.h"
+#include "../model/palette.h"
 #include "../model/paths.h"
 #include "actions.h"
 #include "app_state.h"
@@ -87,6 +88,7 @@ app_settings app_settings::load()
             s.m_spectrogram_range_db = spec->value("range_db", s.m_spectrogram_range_db);
             s.m_spectrogram_share = std::clamp(spec->value("share", s.m_spectrogram_share), 0.1f, 0.9f);
         }
+        s.m_favourite_classes = j.value("favourite_classes", s.m_favourite_classes);
     }
     catch(const nlohmann::json::exception &e)
     {
@@ -124,7 +126,8 @@ void app_settings::save()
           {"scale", enum_name(m_spectrogram_scale, scale_names)},
           {"gain_db", m_spectrogram_gain_db},
           {"range_db", m_spectrogram_range_db},
-          {"share", m_spectrogram_share}}}
+          {"share", m_spectrogram_share}}},
+        {"favourite_classes", m_favourite_classes}
     };
     if(!m_device_name.empty())
         j["audio_device"] = {{"name", m_device_name}};
@@ -221,6 +224,26 @@ std::vector<const label *> app_state::visible_labels(const project_model &projec
             if(l.m_state != label_state::rejected || settings.m_show_rejected)
                 out.push_back(&l);
     return out;
+}
+
+std::vector<label_defn_id> app_state::numbered_classes(const project_model &project) const
+{
+    return ::numbered_classes(project.m_label_dict, settings.m_favourite_classes);
+}
+
+bool app_state::is_favourite(const label_defn &defn) const
+{
+    return std::ranges::find(settings.m_favourite_classes, defn.m_class) !=
+        settings.m_favourite_classes.end();
+}
+
+void app_state::toggle_favourite(const label_defn &defn)
+{
+    auto &favourites = settings.m_favourite_classes;
+    if(auto it = std::ranges::find(favourites, defn.m_class); it != favourites.end())
+        favourites.erase(it);
+    else
+        favourites.push_back(defn.m_class);
 }
 
 std::map<label_id, lane> app_state::label_bands(const project_model &project) const

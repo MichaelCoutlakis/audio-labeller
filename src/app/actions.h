@@ -55,6 +55,11 @@ struct clear_selection
 {
 };
 
+/// Select every visible label in the active file
+struct select_all_labels
+{
+};
+
 /// Choose the palette class for new labels, also applying it to the selected labels
 struct set_active_class
 {
@@ -258,6 +263,7 @@ using app_action = std::variant<
     select_labels,
     toggle_label_selection,
     clear_selection,
+    select_all_labels,
     set_active_class,
     assign_class,
     accept_labels,

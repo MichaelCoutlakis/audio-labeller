@@ -8,6 +8,7 @@ add_library(audio_labeller_core STATIC
     "model/label.h"
     "model/new_project.h" "model/new_project.cpp"
     "model/ordered_registry.h"
+    "model/palette.h" "model/palette.cpp"
     "model/paths.h"
     "model/project_model.h" "model/project_model.cpp"
     "model/types.h"

@@ -65,6 +65,9 @@ struct app_settings
     float m_spectrogram_gain_db{0.f};   ///< Added to the levels before colouring
     float m_spectrogram_range_db{80.f}; ///< Levels this far below full scale are black
     float m_spectrogram_share{0.5f};    ///< Of the height, below the waveform
+    /// Palette classes pinned to the top of the palette, by name, in the order they were pinned.
+    /// Names the project doesn't have are kept, in case another project has them.
+    std::vector<std::string> m_favourite_classes;
 
     /// Set if the settings file exists but is unreadable, in which case it's left as is on save
     std::string m_load_error;
@@ -210,6 +213,12 @@ public:
     /// unclassified selections, and rejected ones only if they're shown
     std::vector<const label *> visible_labels(const project_model &project) const;
 
+    /// The classes that the number keys 1-9 choose, in order: the favourites if any are pinned,
+    /// otherwise the first nine of the palette
+    std::vector<label_defn_id> numbered_classes(const project_model &project) const;
+    bool is_favourite(const label_defn &defn) const;
+    void toggle_favourite(const label_defn &defn);
+
     /// The band of each visible label in the waveform
     std::map<label_id, lane> label_bands(const project_model &project) const;
 
@@ -243,6 +252,7 @@ public:
 
     /* Clip manifest: */
     bool m_keys_captured{false}; ///< A view with focus handles the keys, eg. the clip list
+    bool m_focus_class_filter{false}; ///< Ctrl+F: put the keyboard in the palette's filter box
     bool m_playing_clip{false};  ///< The audio engine has a manifest clip, not the active file
 
     /* Projects: */

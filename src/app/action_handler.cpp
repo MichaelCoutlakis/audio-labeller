@@ -210,6 +210,14 @@ void action_handler::operator()(const actions::toggle_label_selection &t)
 
 void action_handler::operator()(const actions::clear_selection &c) { m_state.clear_selections(); }
 
+void action_handler::operator()(const actions::select_all_labels &)
+{
+    std::set<label_id> ids;
+    for(const auto *l : m_state.visible_labels(m_proj))
+        ids.insert(l->m_id);
+    m_state.set_selection(std::move(ids));
+}
+
 void action_handler::assign_class(const std::set<label_id> &ids, label_defn_id defn_id)
 {
     const auto &file = m_state.m_active_file.value();

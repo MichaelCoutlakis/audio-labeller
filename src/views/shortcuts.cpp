@@ -38,7 +38,8 @@ bool any_selected_suggestion(const project_model &project, const app_state &stat
 const std::vector<std::pair<const char *, const char *>> &keyboard_controller::descriptions()
 {
     static const std::vector<std::pair<const char *, const char *>> keys = {
-        {"1-9", "Choose a palette class (applies to the selection, confirming suggestions)"},
+        {"1-9", "Choose a favourite class, or one of the first nine in the palette if none are pinned (applies to the selection, confirming suggestions)"},
+        {"Ctrl+F", "Find a palette class by name (Enter chooses the first match)"},
         {"Space", "Play / stop"},
         {"Tab, Shift+Tab", "Select and play the next / previous label (suggestion in review mode)"},
         {"R", "Review mode: step through suggestions in all files"},
@@ -52,6 +53,7 @@ const std::vector<std::pair<const char *, const char *>> &keyboard_controller::d
         {"Ctrl+Left, Ctrl+Right", "Move their start edges"},
         {"Shift+Left, Shift+Right", "Move their stop edges"},
         {"Delete", "Delete the selected labels"},
+        {"Ctrl+A", "Select all the labels in the file"},
         {"Escape", "Clear the selection and palette class"},
         {"Ctrl+Z, Ctrl+Y", "Undo, redo"},
         {"N, P", "Next / previous file in the list"},
@@ -79,6 +81,12 @@ void keyboard_controller::handle(const project_model &project, app_state &state)
         state.add_action(actions::set_active_class{std::nullopt});
     }
 
+    if(pressed(ImGuiKey_A, ImGuiMod_Ctrl) && state.has_active_file())
+        state.add_action(actions::select_all_labels{});
+
+    if(pressed(ImGuiKey_F, ImGuiMod_Ctrl))
+        state.m_focus_class_filter = true;
+
     if(pressed(ImGuiKey_Z, ImGuiMod_Ctrl))
         state.add_action(actions::undo{});
     if(pressed(ImGuiKey_Y, ImGuiMod_Ctrl) || pressed(ImGuiKey_Z, ImGuiMod_Ctrl | ImGuiMod_Shift))
@@ -95,11 +103,10 @@ void keyboard_controller::handle(const project_model &project, app_state &state)
 
     // Number keys choose a palette class, like clicking its button. In review mode they relabel
     // the selection and move on.
-    size_t index = 0U;
-    for(const auto &defn : project.m_label_dict)
+    const auto numbered = state.numbered_classes(project);
+    for(size_t index = 0U; index != numbered.size(); ++index)
     {
-        if(index == 9U)
-            break;
+        const auto id = numbered[index];
         const auto key = static_cast<ImGuiKey>(ImGuiKey_1 + index);
         const auto keypad = static_cast<ImGuiKey>(ImGuiKey_Keypad1 + index);
         if(pressed(key) || pressed(keypad))
@@ -109,19 +116,18 @@ void keyboard_controller::handle(const project_model &project, app_state &state)
                 any_selected_suggestion(project, state);
             if(advance)
             {
-                state.add_action(actions::assign_class{state.selected_labels(), defn.m_id});
+                state.add_action(actions::assign_class{state.selected_labels(), id});
                 state.add_action(actions::review_step{true});
             }
             else
             {
-                const bool active = state.m_active_label_defn == defn.m_id;
+                const bool active = state.m_active_label_defn == id;
                 state.add_action(
                     actions::set_active_class{
-                        active ? std::nullopt : std::optional<label_defn_id>{defn.m_id}
+                        active ? std::nullopt : std::optional<label_defn_id>{id}
                     });
             }
         }
-        ++index;
     }
 
     if(pressed(ImGuiKey_O) && state.has_active_file())

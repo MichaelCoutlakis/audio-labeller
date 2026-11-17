@@ -223,6 +223,13 @@ The label palette uses a "paint class" style:
 - Label palette buttons have toggle state
 - Classes marked `"kind": "onset"` in the palette are shown with a bar.
   Labels given one, drawn or assigned, become onsets at their start.
+- Favourites: right-click a class to pin it to the row at the top (and again to
+  unpin). While any are pinned, 1-9 choose the favourites in the order they
+  were pinned; otherwise the first nine classes of the palette. Each button
+  shows its number key. Favourites are remembered between runs, by class name.
+- Find: type in the box beside the favourites (Ctrl+F puts the keyboard there)
+  to show the classes whose names contain every word typed, those starting
+  with it first. Enter chooses the first match; Escape clears the box.
 
 ### Labels
 - Ctrl click to select multiple
@@ -231,8 +238,10 @@ The label palette uses a "paint class" style:
 ### Hot keys:
 The list is also in the app, under Options > Keyboard shortcuts.
 
-- 1-9: choose a palette class, which also applies it to the selected labels
-  (confirming suggestions)
+- 1-9: choose a favourite class (or one of the first nine in the palette if
+  none are pinned), which also applies it to the selected labels (confirming
+  suggestions)
+- Ctrl+F: find a palette class by name
 - Spacebar: toggle play/stop
 - Tab / Shift+Tab: select and play the next / previous label, or suggestion in
   review mode
@@ -248,6 +257,7 @@ The list is also in the app, under Options > Keyboard shortcuts.
 - Ctrl+Left / Ctrl+Right: move their start edges
 - Shift+Left / Shift+Right: move their stop edges
 - Delete: delete the selected labels
+- Ctrl+A: select all the labels in the file (rejected ones only if shown)
 - Escape: deselect all labels / selections and the active palette brush
 - Ctrl+Z: undo label changes
 - Ctrl+Y or Ctrl+Shift+Z: redo
