@@ -24,13 +24,7 @@ void audio_view::render(const project_model &proj, app_state &state)
         settings.m_layout = static_cast<label_layout>(layout);
     ImGui::Checkbox("Show rejected (H)", &settings.m_show_rejected);
 
-    ImGui::SliderFloat(
-        "Waveform gain",
-        &settings.m_waveform_gain,
-        1.f,
-        100.f,
-        "%.1fx",
-        ImGuiSliderFlags_Logarithmic);
+    ImGui::SliderFloat("Waveform gain", &settings.m_waveform_gain_db, 0.f, 40.f, "%.0f dB");
     ImGui::Checkbox("Follow the playhead", &settings.m_follow_playhead);
     ImGui::SliderFloat(
         "View on opening",

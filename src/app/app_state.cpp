@@ -3,6 +3,7 @@
  * SPDX-FileCopyrightText: 2026 Michael Coutlakis
  *****************************************************************************/
 #include <algorithm>
+#include <cmath>
 #include <filesystem>
 #include <fstream>
 #include <stdexcept>
@@ -79,7 +80,11 @@ app_settings app_settings::load()
         s.m_initial_view_s = std::max(0.f, j.value("initial_view_s", s.m_initial_view_s));
         s.m_show_rejected = j.value("show_rejected", s.m_show_rejected);
         s.m_auto_advance = j.value("auto_advance", s.m_auto_advance);
-        s.m_waveform_gain = std::clamp(j.value("waveform_gain", s.m_waveform_gain), 1.f, 1000.f);
+        // Earlier versions kept the gain as a factor
+        if(auto factor = j.find("waveform_gain"); factor != j.end() && factor->is_number())
+            s.m_waveform_gain_db = 20.f * std::log10(std::max(1.f, factor->get<float>()));
+        s.m_waveform_gain_db =
+            std::clamp(j.value("waveform_gain_db", s.m_waveform_gain_db), 0.f, 60.f);
         if(auto spec = j.find("spectrogram"); spec != j.end() && spec->is_object())
         {
             s.m_show_spectrogram = spec->value("show", s.m_show_spectrogram);
@@ -120,7 +125,7 @@ void app_settings::save()
         {"initial_view_s", m_initial_view_s},
         {"show_rejected", m_show_rejected},
         {"auto_advance", m_auto_advance},
-        {"waveform_gain", m_waveform_gain},
+        {"waveform_gain_db", m_waveform_gain_db},
         {"spectrogram",
          {{"show", m_show_spectrogram},
           {"scale", enum_name(m_spectrogram_scale, scale_names)},

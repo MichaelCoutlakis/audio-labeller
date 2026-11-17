@@ -59,7 +59,7 @@ struct app_settings
     float m_initial_view_s{0.f};     ///< Seconds shown when a file is opened, 0 for all of it
     bool m_show_rejected{false}; ///< Show rejected candidates, as a check on what was missed
     bool m_auto_advance{true};   ///< In review mode, go to the next suggestion after a verdict
-    float m_waveform_gain{1.f};  ///< Vertical zoom of the waveform, for quiet recordings
+    float m_waveform_gain_db{0.f}; ///< Vertical zoom of the waveform, for quiet recordings
     bool m_show_spectrogram{false};
     frequency_scale m_spectrogram_scale{frequency_scale::mel};
     float m_spectrogram_gain_db{0.f};   ///< Added to the levels before colouring

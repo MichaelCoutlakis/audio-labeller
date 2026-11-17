@@ -326,7 +326,7 @@ void waveform_view::render_waveform(app_state &state)
     if(audio_buf.num_frames() == 0)
         return;
 
-    const float gain = state.settings.m_waveform_gain;
+    const float gain = std::pow(10.f, state.settings.m_waveform_gain_db / 20.f);
     const auto plot_width = std::max<size_t>(1U, static_cast<size_t>(ImPlot::GetPlotSize().x));
     const double rate = audio_buf.m_sample_rate_hz;
     const auto frames = audio_buf.num_frames();
