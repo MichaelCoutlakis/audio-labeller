@@ -45,6 +45,7 @@ const std::vector<std::pair<const char *, const char *>> &keyboard_controller::d
         {"Enter", "Accept the selected suggestions"},
         {"X", "Reject the selected labels: not an event"},
         {"H", "Show / hide rejected candidates"},
+        {"Home", "Zoom out to the whole file"},
         {"O", "Add an onset under the mouse, or at the playhead"},
         {"A", "Snap the selected onsets to the sharpest rise nearby (Ctrl+Z undoes)"},
         {"Left, Right", "Move the selected labels (Alt: finer)"},
@@ -82,6 +83,10 @@ void keyboard_controller::handle(const project_model &project, app_state &state)
         state.add_action(actions::undo{});
     if(pressed(ImGuiKey_Y, ImGuiMod_Ctrl) || pressed(ImGuiKey_Z, ImGuiMod_Ctrl | ImGuiMod_Shift))
         state.add_action(actions::redo{});
+
+    // The whole file, as when it's opened with the view set to show all of it
+    if(pressed(ImGuiKey_Home) && state.has_active_file())
+        state.m_view_request = time_span{0., state.get_audio_buffer().duration_s()};
 
     if(pressed(ImGuiKey_H))
         state.settings.m_show_rejected = !state.settings.m_show_rejected;
