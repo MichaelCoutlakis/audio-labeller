@@ -203,7 +203,7 @@ re-cut.
 Labels use the full height and share it only where they overlap in time, like
 overlapping calendar events. A lane per class, or every label at full height,
 can be chosen under Options > Display, along with the channel of a
-multi-channel file, the waveform gain (in dB, up to 40), and a spectrogram (linear, log or mel
+multi-channel file, the waveform gain (in dB, up to 60), and a spectrogram (linear, log or mel
 scale) shown below the waveform. The two share a time axis, the split between
 them can be dragged, and labels can be selected, drawn and moved on either.
 
