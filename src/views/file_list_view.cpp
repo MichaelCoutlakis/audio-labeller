@@ -41,10 +41,10 @@ void file_list_view::render(const project_model &project, app_state &state)
 
     // Filter
     const char *filters[] = {"All", "To do", "Done", "Skipped", "With suggestions"};
-    int filter = static_cast<int>(state.settings.m_file_filter);
+    int filter = static_cast<int>(state.m_settings.m_file_filter);
     ImGui::SetNextItemWidth(-FLT_MIN);
     if(ImGui::Combo("##Filter", &filter, filters, IM_ARRAYSIZE(filters)))
-        state.settings.m_file_filter = static_cast<file_filter>(filter);
+        state.m_settings.m_file_filter = static_cast<file_filter>(filter);
 
     const auto files = state.filtered_files(project);
     size_t num_finished = 0U;

@@ -39,7 +39,7 @@ void imgui_app::init_sdl()
     SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE, 8);
 
     m_window = SDL_CreateWindow(
-        m_config.title.c_str(),
+        m_config.m_title.c_str(),
         m_config.m_width,
         m_config.m_height,
         SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE);
@@ -63,7 +63,7 @@ void imgui_app::init_imgui()
 {
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
-    if(m_config.m_bImPlotContext)
+    if(m_config.m_implot_context)
         ImPlot::CreateContext();
 
     auto &io = ImGui::GetIO();
@@ -162,7 +162,7 @@ void imgui_app::shutdown()
 {
     ImGui_ImplOpenGL3_Shutdown();
     ImGui_ImplSDL3_Shutdown();
-    if(m_config.m_bImPlotContext)
+    if(m_config.m_implot_context)
         ImPlot::DestroyContext();
     ImGui::DestroyContext();
 

@@ -39,7 +39,7 @@ struct app_settings
     void save();
 
     std::string m_device_name; ///< Previously used playback device, empty for the default
-    std::string project_file;
+    std::string m_project_file;
 
     /// Font file (UTF-8), empty for a system font with wide coverage, or "builtin" for ImGui's
     /// own (crisp, but ASCII only). Takes effect at the next start.
@@ -284,7 +284,7 @@ public:
         frequency_band band = {});
 
     // Settings between program runs
-    app_settings settings;
+    app_settings m_settings;
 
     /* Errors: */
     /// Log an error and queue it to be shown to the user

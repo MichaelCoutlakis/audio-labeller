@@ -25,14 +25,14 @@ struct frequency_band
 
 struct playback_state
 {
-    bool playing{false};
-    double playhead_s{};
-    float gain_db{}; ///< Applied to what's played, which changes when it's automatic
+    bool m_playing{false};
+    double m_playhead_s{};
+    float m_gain_db{}; ///< Applied to what's played, which changes when it's automatic
 };
 
 struct audio_dev
 {
-    uint32_t id{}; ///< Only valid for this run. Devices are remembered between runs by name.
-    std::string name;
+    uint32_t m_id{}; ///< Only valid for this run. Devices are remembered between runs by name.
+    std::string m_name;
     bool operator==(const audio_dev &other) const = default;
 };

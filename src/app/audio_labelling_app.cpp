@@ -19,7 +19,7 @@ audio_labeller_app::~audio_labeller_app()
 {
     try
     {
-        m_app_state.settings.save();
+        m_app_state.m_settings.save();
     }
     catch(const std::exception &e)
     {
@@ -29,19 +29,19 @@ audio_labeller_app::~audio_labeller_app()
 
 project_model audio_labeller_app::open_project(app_state &state)
 {
-    if(!state.settings.m_load_error.empty())
-        state.report_error(state.settings.m_load_error);
+    if(!state.m_settings.m_load_error.empty())
+        state.report_error(state.m_settings.m_load_error);
 
     try
     {
         // The settings file is UTF-8, so non-ASCII paths work on Windows too
         return project_model(
-            project_config::parse_from_file(path_from_utf8(state.settings.project_file)));
+            project_config::parse_from_file(path_from_utf8(state.m_settings.m_project_file)));
     }
     catch(const std::exception &e)
     {
         state.report_error(
-            "Could not open project " + state.settings.project_file + ":\n" + e.what());
+            "Could not open project " + state.m_settings.m_project_file + ":\n" + e.what());
         return project_model(project_config{});
     }
 }
@@ -105,10 +105,10 @@ void audio_labeller_app::switch_project(const std::filesystem::path &file)
     m_assist = {};
     m_project_settings.close();
 
-    m_app_state.settings.project_file = generic_utf8(m_project.config().m_filename);
+    m_app_state.m_settings.m_project_file = generic_utf8(m_project.config().m_filename);
     try
     {
-        m_app_state.settings.save();
+        m_app_state.m_settings.save();
     }
     catch(const std::exception &e)
     {
@@ -140,11 +140,11 @@ void audio_labeller_app::on_init()
 
     // Restore the previous device by name, or use the system default (always first):
     const auto &devs = m_app_state.m_audio_devs;
-    auto it = std::ranges::find(devs, m_app_state.settings.m_device_name, &audio_dev::name);
+    auto it = std::ranges::find(devs, m_app_state.m_settings.m_device_name, &audio_dev::m_name);
     m_app_state.add_action(actions::select_playback_device{it != devs.end() ? *it : devs.front()});
 
     // Written up front so that on a first run there's a file for the user to point at a project
-    m_app_state.settings.save();
+    m_app_state.m_settings.save();
 }
 
 void audio_labeller_app::on_frame()

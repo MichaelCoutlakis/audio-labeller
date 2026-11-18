@@ -26,7 +26,7 @@ namespace actions
 
 struct load_file
 {
-    std::filesystem::path file_path;
+    std::filesystem::path m_file_path;
 };
 
 struct add_label
@@ -155,14 +155,14 @@ struct set_channel
 
 struct select_playback_device
 {
-    audio_dev dev;
+    audio_dev m_dev;
 };
 
 /// Play a time range, filtered to a frequency band if it has one
 struct select_playback_region
 {
-    time_span t;
-    bool loop{false};
+    time_span m_t;
+    bool m_loop{false};
     frequency_band m_band{};
 };
 
@@ -172,7 +172,7 @@ struct toggle_playback
 
 struct playback_loop
 {
-    bool loop{false};
+    bool m_loop{false};
 };
 
 /// 1 is normal speed, 0.5 half speed and an octave lower

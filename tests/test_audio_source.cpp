@@ -79,10 +79,10 @@ TEST_CASE("RF64 and 32-bit multi-channel files at high sample rates")
     temp_dir dir;
     struct variant
     {
-        drwav_container container;
-        uint32_t format;
-        uint32_t bits;
-        uint32_t rate;
+        drwav_container m_container;
+        uint32_t m_format;
+        uint32_t m_bits;
+        uint32_t m_rate;
     };
     for(const auto v : {
             variant{drwav_container_rf64, DR_WAVE_FORMAT_PCM, 24, 96000},
@@ -91,32 +91,32 @@ TEST_CASE("RF64 and 32-bit multi-channel files at high sample rates")
             variant{drwav_container_rf64, DR_WAVE_FORMAT_IEEE_FLOAT, 32, 192000},
         })
     {
-        CAPTURE(v.bits);
-        CAPTURE(v.rate);
+        CAPTURE(v.m_bits);
+        CAPTURE(v.m_rate);
         const auto file = dir / "multi.wav";
         constexpr uint32_t channels = 4;
         constexpr uint64_t frames = 1000;
 
         drwav_data_format format{};
-        format.container = v.container;
-        format.format = v.format;
+        format.container = v.m_container;
+        format.format = v.m_format;
         format.channels = channels;
-        format.sampleRate = v.rate;
-        format.bitsPerSample = v.bits;
+        format.sampleRate = v.m_rate;
+        format.bitsPerSample = v.m_bits;
         std::vector<float> samples(frames * channels);
         for(uint64_t i = 0; i != frames; ++i)
             for(uint32_t c = 0; c != channels; ++c)
                 samples[i * channels + c] = 0.1f * float(c + 1U) * (i % 2 ? 1.f : -1.f);
 
-        std::vector<std::byte> data(frames * channels * v.bits / 8U);
+        std::vector<std::byte> data(frames * channels * v.m_bits / 8U);
         for(size_t s = 0; s != samples.size(); ++s)
         {
-            if(v.format == DR_WAVE_FORMAT_IEEE_FLOAT)
+            if(v.m_format == DR_WAVE_FORMAT_IEEE_FLOAT)
                 std::memcpy(data.data() + s * 4, &samples[s], 4);
             else
             {
                 const auto value = static_cast<int32_t>(samples[s] * 2147483647.f);
-                const auto bytes = v.bits / 8U;
+                const auto bytes = v.m_bits / 8U;
                 for(uint32_t b = 0; b != bytes; ++b)
                     data[s * bytes + b] = std::byte(uint32_t(value) >> (32U - 8U * bytes + 8U * b));
             }
@@ -132,7 +132,7 @@ TEST_CASE("RF64 and 32-bit multi-channel files at high sample rates")
 
         audio_source source(file);
         CHECK(source.format().m_channels == channels);
-        CHECK(source.format().m_sample_rate_hz == v.rate);
+        CHECK(source.format().m_sample_rate_hz == v.m_rate);
         CHECK(source.format().m_frames == frames);
         CHECK(source.format().is_raw_copyable());
 

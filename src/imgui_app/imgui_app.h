@@ -12,14 +12,14 @@
 /// App configuration, \sa imgui_app
 struct app_config
 {
-    std::string title{"ImGui App"};
+    std::string m_title{"ImGui App"};
     int m_width = 1600;
     int m_height = 900;
     bool m_docking = true;
     bool m_viewports = false;
     bool m_vsync = true;
     bool m_nav_keyboard = true; ///< ImGui keyboard navigation, which claims arrows, Tab and Space
-    bool m_bImPlotContext{true};
+    bool m_implot_context{true};
     /// Font files to try in order, for text beyond ASCII (eg. file names). The first that exists
     /// is used, else ImGui's built-in font.
     std::vector<std::string> m_fonts;

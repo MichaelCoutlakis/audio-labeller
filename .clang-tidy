@@ -1,28 +1,25 @@
 Checks: >
+  -*,
   readability-identifier-naming
+# Only the app's own headers, not those of the dependencies
+HeaderFilterRegex: '.*/(src|tests)/.*'
 CheckOptions:
-  # General variable naming
-  - { key: readability-identifier-naming.VariableCase,         value: snake_case }
+  # Types, as in the standard library
+  - { key: readability-identifier-naming.ClassCase,            value: lower_case }
+  - { key: readability-identifier-naming.StructCase,           value: lower_case }
+  - { key: readability-identifier-naming.EnumCase,             value: lower_case }
+  - { key: readability-identifier-naming.EnumConstantCase,     value: lower_case }
+  - { key: readability-identifier-naming.TypeAliasCase,        value: lower_case }
+  - { key: readability-identifier-naming.NamespaceCase,        value: lower_case }
 
-  # Member variable naming
-  - { key: readability-identifier-naming.MemberCase,           value: snake_case }
-  - { key: readability-identifier-naming.MemberPrefix,         value: m_ }
-
-  # Static member variable naming
-  - { key: readability-identifier-naming.StaticMemberCase,     value: snake_case }
-  - { key: readability-identifier-naming.StaticMemberPrefix,   value: ms_ }
-
-  # Function naming (optional)
-  - { key: readability-identifier-naming.FunctionCase,         value: snake_case }
-
-  # Constant naming (optional)
+  # Functions, variables and parameters
+  - { key: readability-identifier-naming.FunctionCase,         value: lower_case }
+  - { key: readability-identifier-naming.VariableCase,         value: lower_case }
+  - { key: readability-identifier-naming.ParameterCase,        value: lower_case }
   - { key: readability-identifier-naming.ConstantCase,         value: lower_case }
 
-  # Local variable naming (optional; can override VariableCase)
-  - { key: readability-identifier-naming.LocalVariableCase,    value: snake_case }
-
-  # Private member variables only
-  - { key: readability-identifier-naming.PrivateMemberPrefix,  value: m_ }
-
-  # Public member variables - POD don't use m_ prefix, e.g. see std::pair
-  - { key: readability-identifier-naming.PublicMemberPrefix,  value: "" }
+  # Member variables, public ones included: m_ for instance members, ms_ for static ones
+  - { key: readability-identifier-naming.MemberCase,           value: lower_case }
+  - { key: readability-identifier-naming.MemberPrefix,         value: m_ }
+  - { key: readability-identifier-naming.StaticMemberCase,     value: lower_case }
+  - { key: readability-identifier-naming.StaticMemberPrefix,   value: ms_ }

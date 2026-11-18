@@ -15,7 +15,7 @@
 void audio_view::render(const project_model &proj, app_state &state)
 {
     ImGui::Begin(m_window_name.c_str());
-    auto &settings = state.settings;
+    auto &settings = state.m_settings;
 
     ImGui::SeparatorText("Display");
     const char *layouts[] = {"Stacked where they overlap", "Lane per class", "Full height"};
@@ -146,7 +146,7 @@ void audio_view::render(const project_model &proj, app_state &state)
     if(settings.m_auto_gain)
     {
         ImGui::SameLine();
-        ImGui::TextDisabled("now %+.0f dB", state.m_playback_state.gain_db);
+        ImGui::TextDisabled("now %+.0f dB", state.m_playback_state.m_gain_db);
         gain_changed |= ImGui::SliderFloat(
             "Max gain", &settings.m_auto_gain_max_db, 0.f, 60.f, "%.0f dB");
     }
@@ -158,10 +158,10 @@ void audio_view::render(const project_model &proj, app_state &state)
 
     std::vector<const char *> names;
     for(auto &dev : state.m_audio_devs)
-        names.push_back((dev.name.c_str()));
+        names.push_back((dev.m_name.c_str()));
 
     // Devices are remembered by name, the first being the system default:
-    auto it = std::ranges::find(state.m_audio_devs, settings.m_device_name, &audio_dev::name);
+    auto it = std::ranges::find(state.m_audio_devs, settings.m_device_name, &audio_dev::m_name);
     m_index = it != state.m_audio_devs.end()
         ? static_cast<int>(std::distance(state.m_audio_devs.begin(), it))
         : 0;

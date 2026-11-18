@@ -180,7 +180,7 @@ void waveform_view::render(const project_model &project, app_state &state)
         if(!state.m_view_request)
         {
             const double duration = audio.duration_s();
-            const double initial = state.settings.m_initial_view_s;
+            const double initial = state.m_settings.m_initial_view_s;
             state.m_view_request =
                 time_span{0., initial > 0. ? std::min(initial, duration) : duration};
         }
@@ -208,7 +208,7 @@ void waveform_view::render(const project_model &project, app_state &state)
     ImPlot::GetInputMap().Fit = ImGuiMouseButton_Middle; // Double click middle to zoom to fit
 
     state.m_hover_time_s.reset();
-    auto &settings = state.settings;
+    auto &settings = state.m_settings;
     if(!settings.m_show_spectrogram)
         render_plot(project, state, false, true);
     else
@@ -235,16 +235,20 @@ void waveform_view::render(const project_model &project, app_state &state)
 void waveform_view::follow_playhead(app_state &state)
 {
     const auto &playback = state.m_playback_state;
-    const double t = playback.playhead_s, last = m_last_playhead_s;
-    const bool started = playback.playing && !m_was_playing;
-    const bool advancing = playback.playing && t != last;
+    const double t = playback.m_playhead_s, last = m_last_playhead_s;
+    const bool started = playback.m_playing && !m_was_playing;
+    const bool advancing = playback.m_playing && t != last;
     m_last_playhead_s = t;
-    m_was_playing = playback.playing;
+    m_was_playing = playback.m_playing;
 
     // Not while the user pans or zooms, or before the view is known
     const double width = m_transform.view_duration();
-    if(!state.settings.m_follow_playhead || !advancing || state.m_playing_clip || width <= 0. ||
-       ImGui::IsMouseDown(ImGuiMouseButton_Middle) || ImGui::IsMouseDown(ImGuiMouseButton_Right))
+    if(!state.m_settings.m_follow_playhead ||
+       !advancing ||
+       state.m_playing_clip ||
+       width <= 0. ||
+       ImGui::IsMouseDown(ImGuiMouseButton_Middle) ||
+       ImGui::IsMouseDown(ImGuiMouseButton_Right))
         return;
 
     // Page on when the playhead nears the right edge or loops out of view. Only if it was in view
@@ -263,7 +267,7 @@ void waveform_view::setup_frequency_ticks(const app_state &state)
     if(rate == 0U)
         return;
     spectrogram_settings s;
-    s.m_scale = state.settings.m_spectrogram_scale;
+    s.m_scale = state.m_settings.m_spectrogram_scale;
     const double max_hz = rate / 2.;
     const double min_hz = spectrogram_min_hz(s, max_hz);
 
@@ -306,7 +310,7 @@ void waveform_view::render_plot(
     if(spectrogram)
     {
         spectrogram_settings s;
-        s.m_scale = state.settings.m_spectrogram_scale;
+        s.m_scale = state.m_settings.m_spectrogram_scale;
         const double max_hz = std::max(1., state.get_audio_buffer().m_sample_rate_hz / 2.);
         m_axis.m_min_hz = spectrogram_min_hz(s, max_hz);
         m_axis.m_max_hz = max_hz;
@@ -355,7 +359,7 @@ void waveform_view::render_cursor(app_state &state)
         state.select_playback_region(start_time);
     }
 
-    double t = state.m_playback_state.playhead_s;
+    double t = state.m_playback_state.m_playhead_s;
     const ImVec2 p0 = ImPlot::PlotToPixels(t, -1.0);
     const ImVec2 p1 = ImPlot::PlotToPixels(t, 1.0);
 
@@ -368,7 +372,7 @@ void waveform_view::render_waveform(app_state &state)
     if(audio_buf.num_frames() == 0)
         return;
 
-    const float gain = std::pow(10.f, state.settings.m_waveform_gain_db / 20.f);
+    const float gain = std::pow(10.f, state.m_settings.m_waveform_gain_db / 20.f);
     const auto plot_width = std::max<size_t>(1U, static_cast<size_t>(ImPlot::GetPlotSize().x));
     const double rate = audio_buf.m_sample_rate_hz;
     const auto frames = audio_buf.num_frames();
@@ -429,7 +433,7 @@ void waveform_view::render_waveform(app_state &state)
 void waveform_view::render_spectrogram(app_state &state)
 {
     m_uploads_this_frame = 0;
-    const auto &settings = state.settings;
+    const auto &settings = state.m_settings;
     spectrogram_settings s;
     s.m_scale = settings.m_spectrogram_scale;
     s.m_max_frames_per_column = 16U; // Off the UI thread, so it can afford to miss less

@@ -56,18 +56,18 @@ TEST_CASE("audio_engine plays a region through SDL")
 
     engine.select_region({0.25, 0.5}, false);
     engine.play();
-    CHECK(engine.get_state().playing);
+    CHECK(engine.get_state().m_playing);
 
     // A quarter of a second plays, then stops at the end of the region
-    CHECK(wait_for([&] { return !engine.get_state().playing; }));
-    CHECK(engine.get_state().playhead_s == doctest::Approx(0.5).epsilon(1e-3));
+    CHECK(wait_for([&] { return !engine.get_state().m_playing; }));
+    CHECK(engine.get_state().m_playhead_s == doctest::Approx(0.5).epsilon(1e-3));
 
     engine.select_region({0.0, 0.1}, true);
     engine.play();
     std::this_thread::sleep_for(std::chrono::milliseconds(300));
-    CHECK(engine.get_state().playing); // Still looping
+    CHECK(engine.get_state().m_playing); // Still looping
     engine.stop();
-    CHECK(!engine.get_state().playing);
+    CHECK(!engine.get_state().m_playing);
 
     engine.close();
 }
@@ -100,7 +100,7 @@ TEST_CASE("audio_engine plays an excerpt in the recording's time")
     engine.select_region({10.25, 10.75}, false);
     CHECK(engine.get_region().first == doctest::Approx(10.25));
     CHECK(engine.get_region().second == doctest::Approx(10.75));
-    CHECK(engine.get_state().playhead_s == doctest::Approx(10.25));
+    CHECK(engine.get_state().m_playhead_s == doctest::Approx(10.25));
 
     engine.set_audio_clip(excerpt); // Back to a whole file
     engine.select_region({0.25, 0.5}, false);

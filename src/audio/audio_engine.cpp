@@ -76,15 +76,15 @@ void audio_engine::set_device(const audio_dev &device)
     close();
 
     const auto spec = clip_spec();
-    m_stream = SDL_OpenAudioDeviceStream(device.id, &spec, &audio_engine::feed, this);
+    m_stream = SDL_OpenAudioDeviceStream(device.m_id, &spec, &audio_engine::feed, this);
     if(!m_stream)
         throw std::runtime_error(
-            "Could not open audio device " + device.name + ": " + SDL_GetError());
+            "Could not open audio device " + device.m_name + ": " + SDL_GetError());
 
     set_speed(m_speed);
     if(!SDL_ResumeAudioStreamDevice(m_stream))
         spdlog::error("audio: could not start device: {}", SDL_GetError());
-    spdlog::info("audio: set device to {}", device.name);
+    spdlog::info("audio: set device to {}", device.m_name);
 }
 
 void audio_engine::set_audio_clip(std::shared_ptr<const audio_buffer> clip, double offset_s)

@@ -35,25 +35,25 @@ constexpr auto palette =
 
 struct tree_project
 {
-    temp_dir dir;
+    temp_dir m_dir;
 
     explicit tree_project(const std::string &annotations)
     {
-        write_text(dir / "pal.json", palette);
+        write_text(m_dir / "pal.json", palette);
         write_text(
-            dir / "proj.json",
+            m_dir / "proj.json",
             R"({"dataset-roots":["data"],"export-prefix":"out","label-palette":"pal.json",)"
             R"("label-file":"labels.json","annotations":)" +
                 annotations +
                 "}");
-        write_text(dir / "data/site1/rec1.wav", "");
-        write_text(dir / "data/site1/rec2.WAV", "");
-        write_text(dir / "data/rec3.wav", "");
+        write_text(m_dir / "data/site1/rec1.wav", "");
+        write_text(m_dir / "data/site1/rec2.WAV", "");
+        write_text(m_dir / "data/rec3.wav", "");
     }
 
     project_config config() const
     {
-        return project_config::parse_from_file((dir / "proj.json").string());
+        return project_config::parse_from_file((m_dir / "proj.json").string());
     }
 
     annotation_tree tree(const project_model &m, size_t i = 0U) const
@@ -125,9 +125,9 @@ TEST_CASE("annotation trees mirror the dataset root")
     project_model m(p.config());
     CHECK(m.get_files().size() == 3); // .WAV is found too
 
-    const auto rec1 = m.to_portable(p.dir / "data/site1/rec1.wav");
-    CHECK(p.tree(m).path_for(rec1) == p.dir / "ann/site1/rec1.txt");
-    CHECK(p.tree(m, 1).path_for(rec1) == p.dir / "ann2/site1/rec1.wav.tsv");
+    const auto rec1 = m.to_portable(p.m_dir / "data/site1/rec1.wav");
+    CHECK(p.tree(m).path_for(rec1) == p.m_dir / "ann/site1/rec1.txt");
+    CHECK(p.tree(m, 1).path_for(rec1) == p.m_dir / "ann2/site1/rec1.wav.tsv");
     CHECK(!p.tree(m).path_for({{}, "elsewhere.wav"}));
 }
 
@@ -135,15 +135,15 @@ TEST_CASE("importing proposals adds suggestions once, and empty files as done")
 {
     tree_project p(R"([{"name":"pipeline","root":"ann","import":"suggestions"},
                         {"name":"reviewed","root":"ann","import":"labels"}])");
-    write_text(p.dir / "ann/site1/rec1.txt", "1\t1\tclick\t0.4\n2\t3\tx:Dog\n5\t6\tBird\n");
-    write_text(p.dir / "ann/site1/rec2.txt", "");
-    write_text(p.dir / "ann/rec3.txt", "");
-    write_text(p.dir / "ann/gone.txt", "1\t2\tDog\n");
+    write_text(p.m_dir / "ann/site1/rec1.txt", "1\t1\tclick\t0.4\n2\t3\tx:Dog\n5\t6\tBird\n");
+    write_text(p.m_dir / "ann/site1/rec2.txt", "");
+    write_text(p.m_dir / "ann/rec3.txt", "");
+    write_text(p.m_dir / "ann/gone.txt", "1\t2\tDog\n");
 
-    const auto rec1 = p.dir / "data/site1/rec1.wav";
-    const auto rec2 = p.dir / "data/site1/rec2.WAV";
+    const auto rec1 = p.m_dir / "data/site1/rec1.wav";
+    const auto rec2 = p.m_dir / "data/site1/rec2.WAV";
     project_model m(p.config());
-    m.add_label(p.dir / "data/rec3.wav", label{get_next_label_id(), label_defn_id{0}, 1., 2.});
+    m.add_label(p.m_dir / "data/rec3.wav", label{get_next_label_id(), label_defn_id{0}, 1., 2.});
 
     auto summary = import_annotations(m, p.tree(m));
     CHECK(summary.m_files == 3);
@@ -170,15 +170,15 @@ TEST_CASE("importing proposals adds suggestions once, and empty files as done")
     summary = import_annotations(m, p.tree(m, 1));
     CHECK(summary.m_marked_done == 1);
     CHECK(m.get_status(rec2) == file_status::done);
-    CHECK(m.get_status(p.dir / "data/rec3.wav") == file_status::todo); // It has a label
+    CHECK(m.get_status(p.m_dir / "data/rec3.wav") == file_status::todo); // It has a label
 }
 
 TEST_CASE("exporting writes done files, empty when they have no events")
 {
     tree_project p(R"([{"root":"out/ann"}, {"root":"out/all","export-files":"all","include-suggestions":true}])");
-    const auto rec1 = p.dir / "data/site1/rec1.wav";
-    const auto rec2 = p.dir / "data/site1/rec2.WAV";
-    const auto rec3 = p.dir / "data/rec3.wav";
+    const auto rec1 = p.m_dir / "data/site1/rec1.wav";
+    const auto rec2 = p.m_dir / "data/site1/rec2.WAV";
+    const auto rec3 = p.m_dir / "data/rec3.wav";
 
     project_model m(p.config());
     m.add_label(rec1, label{get_next_label_id(), label_defn_id{0}, 2., 3.});
@@ -191,19 +191,20 @@ TEST_CASE("exporting writes done files, empty when they have no events")
     auto summary = export_annotations(m, p.tree(m));
     CHECK(summary.m_errors.empty());
     CHECK(summary.m_files == 2);
-    CHECK(read_text(p.dir / "out/ann/site1/rec1.txt") ==
-          "1.000000\t1.000000\tx:Click\n2.000000\t3.000000\tDog\n");
-    CHECK(fs::exists(p.dir / "out/ann/site1/rec2.txt"));
-    CHECK(read_text(p.dir / "out/ann/site1/rec2.txt").empty());
-    CHECK(!fs::exists(p.dir / "out/ann/rec3.txt"));
+    CHECK(
+        read_text(p.m_dir / "out/ann/site1/rec1.txt") ==
+        "1.000000\t1.000000\tx:Click\n2.000000\t3.000000\tDog\n");
+    CHECK(fs::exists(p.m_dir / "out/ann/site1/rec2.txt"));
+    CHECK(read_text(p.m_dir / "out/ann/site1/rec2.txt").empty());
+    CHECK(!fs::exists(p.m_dir / "out/ann/rec3.txt"));
 
     summary = export_annotations(m, p.tree(m));
     CHECK(summary.m_unchanged == 2);
 
     summary = export_annotations(m, p.tree(m, 1));
     CHECK(summary.m_files == 3);
-    CHECK(read_text(p.dir / "out/all/site1/rec1.txt").find("Click\n") != std::string::npos);
-    CHECK(fs::exists(p.dir / "out/all/rec3.txt"));
+    CHECK(read_text(p.m_dir / "out/all/site1/rec1.txt").find("Click\n") != std::string::npos);
+    CHECK(fs::exists(p.m_dir / "out/all/rec3.txt"));
 }
 
 TEST_CASE("environment variables in project paths")

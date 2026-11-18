@@ -19,20 +19,20 @@ constexpr auto palette = R"({"label-palette":[{"class-id":0,"class":"Dog","colou
 /// A project in a temp dir with the given dataset roots, and empty wav files
 struct test_project
 {
-    temp_dir dir;
+    temp_dir m_dir;
 
     explicit test_project(const std::string &roots_json, std::initializer_list<const char *> wavs)
     {
-        write_text(dir / "pal.json", palette);
+        write_text(m_dir / "pal.json", palette);
         write_roots(roots_json);
         for(auto wav : wavs)
-            write_text(dir / wav, "");
+            write_text(m_dir / wav, "");
     }
 
     void write_roots(const std::string &roots_json)
     {
         write_text(
-            dir / "proj.json",
+            m_dir / "proj.json",
             R"({"dataset-roots":)" +
                 roots_json +
                 R"(,"export-prefix":"out","label-palette":"pal.json","label-file":"labels.json"})");
@@ -40,10 +40,10 @@ struct test_project
 
     project_config config() const
     {
-        return project_config::parse_from_file((dir / "proj.json").string());
+        return project_config::parse_from_file((m_dir / "proj.json").string());
     }
-    void write_labels(const std::string &text) const { write_text(dir / "labels.json", text); }
-    json saved() const { return json::parse(read_text(dir / "labels.json")); }
+    void write_labels(const std::string &text) const { write_text(m_dir / "labels.json", text); }
+    json saved() const { return json::parse(read_text(m_dir / "labels.json")); }
 };
 
 std::string labels_v2(const std::string &records)
@@ -55,8 +55,8 @@ std::string labels_v2(const std::string &records)
 TEST_CASE("labels round trip with portable paths")
 {
     test_project p(R"(["a","b/"])", {"a/x.wav", "a/sub/y.wav", "b/x.wav"});
-    const auto ax = p.dir / "a/x.wav";
-    const auto bx = p.dir / "b/x.wav";
+    const auto ax = p.m_dir / "a/x.wav";
+    const auto bx = p.m_dir / "b/x.wav";
     {
         project_model m(p.config());
         CHECK(m.get_files().size() == 3);
@@ -72,18 +72,18 @@ TEST_CASE("labels round trip with portable paths")
     CHECK(j["labels"][1]["dataset-root"] == "b/");
     CHECK(j["labels"][0]["start_s"] == 1.);
 
-    const auto text = read_text(p.dir / "labels.json");
+    const auto text = read_text(p.m_dir / "labels.json");
     {
         project_model m(p.config());
         CHECK(m.get_labels(ax).size() == 1);
         CHECK(m.get_labels(bx).size() == 1);
         CHECK(!m.is_dirty());
     }
-    CHECK(read_text(p.dir / "labels.json") == text);
+    CHECK(read_text(p.m_dir / "labels.json") == text);
 
     // Same project from another working directory
     const auto old = fs::current_path();
-    fs::current_path(p.dir / "a");
+    fs::current_path(p.m_dir / "a");
     {
         project_model m(project_config::parse_from_file("../proj.json"));
         CHECK(m.get_labels(ax).size() == 1);
@@ -102,7 +102,7 @@ TEST_CASE("loading repairs IDs and keeps labels it can't place")
 
     {
         project_model m(p.config());
-        const auto &ls = m.get_labels(p.dir / "a/x.wav");
+        const auto &ls = m.get_labels(p.m_dir / "a/x.wav");
         REQUIRE(ls.size() == 3);
         CHECK(ls.begin()->m_start_s == 0.); // Clamped
         CHECK(m.m_label_dict.find_ptr(label_defn_id{99}) != nullptr);
@@ -124,7 +124,7 @@ TEST_CASE("version 1 label files are migrated")
         {"filename":"..\\nowhere.wav","label-id":2,"start [s]":2,"stop [s]":3,"class-id":0,"class-name":"Dog"}]})");
     {
         project_model m(p.config());
-        const auto &ls = m.get_labels(p.dir / "data/Dog goes woof.wav");
+        const auto &ls = m.get_labels(p.m_dir / "data/Dog goes woof.wav");
         REQUIRE(ls.size() == 1);
         CHECK(ls.begin()->m_stop_s == 1.5);
     }
@@ -145,14 +145,14 @@ TEST_CASE("labels follow an unambiguously moved dataset root only")
     p.write_labels(labels_v2(record));
     {
         project_model m(p.config());
-        CHECK(m.get_labels(p.dir / "moved/x.wav").size() == 1);
+        CHECK(m.get_labels(p.m_dir / "moved/x.wav").size() == 1);
     }
 
     p.write_roots(R"(["moved","other"])");
     p.write_labels(labels_v2(record));
     {
         project_model m(p.config());
-        CHECK(m.get_labels(p.dir / "moved/x.wav").size() == 0);
+        CHECK(m.get_labels(p.m_dir / "moved/x.wav").size() == 0);
         CHECK(m.num_unresolved() == 1);
     }
 }
@@ -160,7 +160,7 @@ TEST_CASE("labels follow an unambiguously moved dataset root only")
 TEST_CASE("label changes track the dirty flag")
 {
     test_project p(R"(["a"])", {"a/x.wav"});
-    const auto x = p.dir / "a/x.wav";
+    const auto x = p.m_dir / "a/x.wav";
     project_model m(p.config());
     m.save_if_dirty();
     CHECK(!m.is_dirty());
@@ -187,8 +187,8 @@ TEST_CASE("label changes track the dirty flag")
 TEST_CASE("file status and source IDs persist")
 {
     test_project p(R"(["a"])", {"a/x.wav", "a/y.wav"});
-    write_text(p.dir / "a/x.wav", "some audio");
-    const auto x = p.dir / "a/x.wav";
+    write_text(p.m_dir / "a/x.wav", "some audio");
+    const auto x = p.m_dir / "a/x.wav";
     std::string id;
     {
         project_model m(p.config());
@@ -201,7 +201,7 @@ TEST_CASE("file status and source IDs persist")
     {
         project_model m(p.config());
         CHECK(m.get_status(x) == file_status::done);
-        CHECK(m.get_status(p.dir / "a/y.wav") == file_status::todo);
+        CHECK(m.get_status(p.m_dir / "a/y.wav") == file_status::todo);
         const auto *state = m.find_file_state(x);
         REQUIRE(state);
         REQUIRE(state->m_export);
@@ -216,16 +216,16 @@ TEST_CASE("a failed save leaves the previous file intact")
 {
     test_project p(R"(["a"])", {"a/x.wav"});
     project_model m(p.config());
-    m.add_label(p.dir / "a/x.wav", label{get_next_label_id(), label_defn_id{0}, 1., 2.});
+    m.add_label(p.m_dir / "a/x.wav", label{get_next_label_id(), label_defn_id{0}, 1., 2.});
     m.save_if_dirty();
-    const auto before = read_text(p.dir / "labels.json");
+    const auto before = read_text(p.m_dir / "labels.json");
 
-    fs::create_directories(p.dir / "labels.json.tmp"); // Blocks the temporary file
-    m.add_label(p.dir / "a/x.wav", label{get_next_label_id(), label_defn_id{0}, 3., 4.});
+    fs::create_directories(p.m_dir / "labels.json.tmp"); // Blocks the temporary file
+    m.add_label(p.m_dir / "a/x.wav", label{get_next_label_id(), label_defn_id{0}, 3., 4.});
     CHECK_THROWS(m.save_if_dirty());
     CHECK(m.is_dirty());
-    CHECK(read_text(p.dir / "labels.json") == before);
-    fs::remove_all(p.dir / "labels.json.tmp");
+    CHECK(read_text(p.m_dir / "labels.json") == before);
+    fs::remove_all(p.m_dir / "labels.json.tmp");
 }
 
 TEST_CASE("unreadable label files fail to load")
@@ -244,7 +244,7 @@ TEST_CASE("unreadable label files fail to load")
 TEST_CASE("suggestions, scores, onsets and channels round trip")
 {
     test_project p(R"(["a"])", {"a/x.wav"});
-    const auto x = p.dir / "a/x.wav";
+    const auto x = p.m_dir / "a/x.wav";
     const label onset{get_next_label_id(), label_defn_id{0}, 1., 1., label_state::suggested, 0.25f};
     const label rejected{get_next_label_id(), label_defn_id{0}, 2., 3., label_state::rejected};
     {
@@ -278,12 +278,12 @@ TEST_CASE("project default channel, and palettes that mark classes as onsets")
 {
     test_project p(R"(["a"])", {"a/x.wav"});
     write_text(
-        p.dir / "pal.json",
+        p.m_dir / "pal.json",
         R"({"label-palette":[{"class-id":0,"class":"Dog","colour":"#ccb42aab","kind":"onset"},{"class-id":1,"class":"Rain","colour":"#ccb42aab"}]})");
     write_text(
-        p.dir / "proj.json",
+        p.m_dir / "proj.json",
         R"({"dataset-roots":["a"],"export-prefix":"out","label-palette":"pal.json","label-file":"labels.json","channel":2})");
-    const auto x = p.dir / "a/x.wav";
+    const auto x = p.m_dir / "a/x.wav";
     project_model m(p.config());
     // Every class marks regions: an old palette's "kind" is ignored, with a notice naming them
     CHECK(m.m_label_dict.size() == 2);
@@ -304,17 +304,17 @@ TEST_CASE("files are listed sorted within each root, roots in the project's orde
         names.push_back(f.m_display_name);
     // Folder "a" sorts before "a.wav", as paths compare by component
     CHECK(names == std::vector<std::string>{"a/y.wav", "a.wav", "b.wav", "b.wav", "c.wav"});
-    CHECK(m.get_files()[1].m_path == p.dir / "z/a.wav");
-    CHECK(m.get_files()[3].m_path == p.dir / "a/b.wav");
+    CHECK(m.get_files()[1].m_path == p.m_dir / "z/a.wav");
+    CHECK(m.get_files()[3].m_path == p.m_dir / "a/b.wav");
 }
 
 TEST_CASE("project settings are saved to the project file, keeping its other keys")
 {
     test_project p(R"(["a"])", {"a/x.wav"});
     // A key the settings don't cover, which must survive
-    auto file = json::parse(read_text(p.dir / "proj.json"));
+    auto file = json::parse(read_text(p.m_dir / "proj.json"));
     file["annotations"] = json::array({{{"root", "trees"}}});
-    write_text(p.dir / "proj.json", file.dump());
+    write_text(p.m_dir / "proj.json", file.dump());
 
     project_model m(p.config());
     auto s = m.settings();
@@ -328,48 +328,48 @@ TEST_CASE("project settings are saved to the project file, keeping its other key
     s.m_high_pass = json{{"enabled", true}, {"cutoff_hz", 80.}};
     CHECK(!m.set_settings(s)); // Applies without reopening
     CHECK(m.config().m_high_pass["cutoff_hz"] == 80.);
-    CHECK(m.get_channel(p.dir / "a/x.wav") == 1U);
+    CHECK(m.get_channel(p.m_dir / "a/x.wav") == 1U);
     CHECK(m.config().m_export_prefix == "out/csv");
 
-    auto saved = json::parse(read_text(p.dir / "proj.json"));
+    auto saved = json::parse(read_text(p.m_dir / "proj.json"));
     CHECK(saved["channel"] == 2);
     CHECK(saved["review"]["point_post_s"] == 0.3);
     CHECK(saved["annotations"][0]["root"] == "trees");
     CHECK(saved["high-pass"]["enabled"] == true);
-    CHECK(project_config::parse_from_file(p.dir / "proj.json").m_high_pass["cutoff_hz"] == 80.);
-    CHECK(project_config::parse_from_file(p.dir / "proj.json").m_channel == 1U);
+    CHECK(project_config::parse_from_file(p.m_dir / "proj.json").m_high_pass["cutoff_hz"] == 80.);
+    CHECK(project_config::parse_from_file(p.m_dir / "proj.json").m_channel == 1U);
 
     // Back to a mix, the default, which is written as no key
     s.m_channel.reset();
     CHECK(!m.set_settings(s));
-    saved = json::parse(read_text(p.dir / "proj.json"));
+    saved = json::parse(read_text(p.m_dir / "proj.json"));
     CHECK(!saved.contains("channel"));
 
     SUBCASE("new roots need the project reopened")
     {
-        write_text(p.dir / "b/y.wav", "");
+        write_text(p.m_dir / "b/y.wav", "");
         s.m_dataset_roots.push_back("b");
         CHECK(m.set_settings(s));
         CHECK(m.config().m_wav_paths.size() == 1U); // Until reopened
-        CHECK(project_config::parse_from_file(p.dir / "proj.json").m_wav_paths.size() == 2U);
+        CHECK(project_config::parse_from_file(p.m_dir / "proj.json").m_wav_paths.size() == 2U);
     }
     SUBCASE("a missing palette or no roots are refused")
     {
-        const auto before = read_text(p.dir / "proj.json");
+        const auto before = read_text(p.m_dir / "proj.json");
         auto bad = s;
         bad.m_palette = "missing.json";
         CHECK_THROWS(m.set_settings(bad));
         bad = s;
         bad.m_dataset_roots.clear();
         CHECK_THROWS(m.set_settings(bad));
-        CHECK(read_text(p.dir / "proj.json") == before);
+        CHECK(read_text(p.m_dir / "proj.json") == before);
     }
 }
 
 TEST_CASE("frequency bands round trip, and labels without one have none in the file")
 {
     test_project p(R"(["a"])", {"a/x.wav"});
-    const auto x = p.dir / "a/x.wav";
+    const auto x = p.m_dir / "a/x.wav";
     label banded{get_next_label_id(), label_defn_id{0}, 1., 2.};
     banded.m_band = {8000., 9000.};
     label from_bottom{get_next_label_id(), label_defn_id{0}, 3., 4.};

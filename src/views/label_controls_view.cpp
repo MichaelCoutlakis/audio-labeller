@@ -109,7 +109,7 @@ void label_control_view::render_favourites(
     float width)
 {
     std::vector<const label_defn *> favourites;
-    for(const auto &name : state.settings.m_favourite_classes)
+    for(const auto &name : state.m_settings.m_favourite_classes)
         for(const auto &defn : project.m_label_dict)
             if(defn.m_class == name)
                 favourites.push_back(&defn);

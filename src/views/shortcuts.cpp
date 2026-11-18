@@ -102,7 +102,7 @@ void keyboard_controller::handle(const project_model &project, app_state &state)
         state.m_view_request = time_span{0., state.get_audio_buffer().duration_s()};
 
     if(pressed(ImGuiKey_H))
-        state.settings.m_show_rejected = !state.settings.m_show_rejected;
+        state.m_settings.m_show_rejected = !state.m_settings.m_show_rejected;
     if(pressed(ImGuiKey_R))
         state.m_review_mode = !state.m_review_mode;
 
@@ -117,7 +117,7 @@ void keyboard_controller::handle(const project_model &project, app_state &state)
         if(pressed(key) || pressed(keypad))
         {
             const bool advance = state.m_review_mode &&
-                state.settings.m_auto_advance &&
+                state.m_settings.m_auto_advance &&
                 any_selected_suggestion(project, state);
             if(advance)
             {
@@ -137,7 +137,7 @@ void keyboard_controller::handle(const project_model &project, app_state &state)
 
     if(pressed(ImGuiKey_O) && state.has_active_file())
     {
-        const double t = state.m_hover_time_s.value_or(state.m_playback_state.playhead_s);
+        const double t = state.m_hover_time_s.value_or(state.m_playback_state.m_playhead_s);
         state.add_action(
             actions::mark_sound{t, state.m_active_file.value(), state.m_active_label_defn});
     }
@@ -153,7 +153,7 @@ void keyboard_controller::handle(const project_model &project, app_state &state)
 
 void keyboard_controller::handle_review(const project_model &project, app_state &state)
 {
-    const bool advance = state.m_review_mode && state.settings.m_auto_advance;
+    const bool advance = state.m_review_mode && state.m_settings.m_auto_advance;
     const auto &selection = state.selected_labels();
 
     if((pressed(ImGuiKey_Enter) || pressed(ImGuiKey_KeypadEnter)) && !selection.empty())
@@ -198,7 +198,7 @@ void keyboard_controller::select_adjacent_label(
     std::vector<label>::iterator next;
     if(current == all.end())
     {
-        const double t = state.m_playback_state.playhead_s;
+        const double t = state.m_playback_state.m_playhead_s;
         next = std::ranges::find_if(all, [&](const label &l) { return l.m_start_s >= t; });
         if(!forward)
             next = next == all.begin() ? all.end() - 1 : next - 1;
@@ -230,7 +230,7 @@ void keyboard_controller::handle_nudges(const project_model &project, app_state 
         for(const bool fine : {false, true})
         {
             const ImGuiKeyChord mods = edge | (fine ? ImGuiMod_Alt : ImGuiMod_None);
-            const double step = fine ? state.settings.m_fine_nudge_s : state.settings.m_nudge_s;
+            const double step = fine ? state.m_settings.m_fine_nudge_s : state.m_settings.m_nudge_s;
             double delta = 0.;
             if(pressed(ImGuiKey_LeftArrow, mods, true))
                 delta = -step;

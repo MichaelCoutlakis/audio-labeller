@@ -36,21 +36,21 @@ audio_buffer tone_burst(uint32_t rate, double length_s, double onset_s, double h
 
 struct review_project
 {
-    temp_dir dir;
+    temp_dir m_dir;
     review_project()
     {
         write_text(
-            dir / "pal.json",
+            m_dir / "pal.json",
             R"({"label-palette":[{"class-id":0,"class":"Dog","colour":"#ccb42aab"}]})");
         write_text(
-            dir / "proj.json",
+            m_dir / "proj.json",
             R"({"dataset-roots":["d"],"export-prefix":"out","label-palette":"pal.json","label-file":"l.json"})");
         for(auto name : {"d/a.wav", "d/b.wav", "d/c.wav"})
-            write_text(dir / name, "");
+            write_text(m_dir / name, "");
     }
     project_config config() const
     {
-        return project_config::parse_from_file((dir / "proj.json").string());
+        return project_config::parse_from_file((m_dir / "proj.json").string());
     }
 };
 
@@ -102,7 +102,7 @@ TEST_CASE("the review queue runs across files, by score if there is one")
 {
     review_project p;
     project_model m(p.config());
-    const auto a = p.dir / "d/a.wav", b = p.dir / "d/b.wav", c = p.dir / "d/c.wav";
+    const auto a = p.m_dir / "d/a.wav", b = p.m_dir / "d/b.wav", c = p.m_dir / "d/c.wav";
     const auto a2 = suggestion(2.), a1 = suggestion(1.), b1 = suggestion(1.);
     m.add_label(a, a2);
     m.add_label(a, a1);

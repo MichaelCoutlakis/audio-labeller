@@ -57,7 +57,7 @@ app_settings app_settings::load()
     try
     {
         auto j = nlohmann::json::parse(settings_file);
-        s.project_file = j.value("project", std::string{});
+        s.m_project_file = j.value("project", std::string{});
         if(auto dev = j.find("audio_device"); dev != j.end())
             s.m_device_name = dev->value("name", std::string{});
         s.m_font = j.value("font", s.m_font);
@@ -115,7 +115,7 @@ void app_settings::save()
         return;
 
     nlohmann::json j{
-        {"project", project_file},
+        {"project", m_project_file},
         {"font", m_font},
         {"font_size", m_font_size},
         {"layout", enum_name(m_layout, layout_names)},
@@ -164,7 +164,7 @@ void app_state::report_info(const std::string &message)
 }
 
 app_state::app_state() :
-    settings(app_settings::load())
+    m_settings(app_settings::load())
 {
 }
 
@@ -233,25 +233,25 @@ std::vector<const label *> app_state::visible_labels(const project_model &projec
         out.push_back(&l);
     if(m_active_file)
         for(const auto &l : project.get_labels(*m_active_file))
-            if(l.m_state != label_state::rejected || settings.m_show_rejected)
+            if(l.m_state != label_state::rejected || m_settings.m_show_rejected)
                 out.push_back(&l);
     return out;
 }
 
 std::vector<label_defn_id> app_state::numbered_classes(const project_model &project) const
 {
-    return ::numbered_classes(project.m_label_dict, settings.m_favourite_classes);
+    return ::numbered_classes(project.m_label_dict, m_settings.m_favourite_classes);
 }
 
 bool app_state::is_favourite(const label_defn &defn) const
 {
-    return std::ranges::find(settings.m_favourite_classes, defn.m_class) !=
-        settings.m_favourite_classes.end();
+    return std::ranges::find(m_settings.m_favourite_classes, defn.m_class) !=
+        m_settings.m_favourite_classes.end();
 }
 
 void app_state::toggle_favourite(const label_defn &defn)
 {
-    auto &favourites = settings.m_favourite_classes;
+    auto &favourites = m_settings.m_favourite_classes;
     if(auto it = std::ranges::find(favourites, defn.m_class); it != favourites.end())
         favourites.erase(it);
     else
@@ -260,7 +260,7 @@ void app_state::toggle_favourite(const label_defn &defn)
 
 std::map<label_id, lane> app_state::label_bands(const project_model &project) const
 {
-    return layout_labels(visible_labels(project), project.m_label_dict, settings.m_layout);
+    return layout_labels(visible_labels(project), project.m_label_dict, m_settings.m_layout);
 }
 
 time_span app_state::playback_window(const label &l) const
@@ -274,7 +274,7 @@ std::vector<const audio_file_entry *> app_state::filtered_files(const project_mo
     for(const auto &file : project.get_files())
     {
         const auto status = project.get_status(file.m_path);
-        const auto filter = settings.m_file_filter;
+        const auto filter = m_settings.m_file_filter;
         const auto has_suggestions = [&]
         {
             return std::ranges::any_of(

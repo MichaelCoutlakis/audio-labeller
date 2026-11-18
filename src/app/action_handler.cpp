@@ -120,7 +120,7 @@ void action_handler::restore_active_audio()
 void action_handler::select_region(time_span t, frequency_band band)
 {
     const auto &audio = m_state.get_audio_buffer();
-    const auto &settings = m_state.settings;
+    const auto &settings = m_state.m_settings;
     const band_playback_settings bp{settings.m_band_shift, settings.m_band_shift_to_hz};
     if(!plan_band(band, audio.m_sample_rate_hz, bp).filters())
     {
@@ -147,13 +147,13 @@ void action_handler::play_label(const label &l)
 
 void action_handler::operator()(const actions::load_file &f)
 {
-    if(m_state.is_selected_file(f.file_path))
+    if(m_state.is_selected_file(f.m_file_path))
     {
         restore_active_audio();
         return;
     }
-    spdlog::info("loading file {}", generic_utf8(f.file_path));
-    m_state.set_selected_file(f.file_path, m_proj.get_channel(f.file_path));
+    spdlog::info("loading file {}", generic_utf8(f.m_file_path));
+    m_state.set_selected_file(f.m_file_path, m_proj.get_channel(f.m_file_path));
     m_state.m_playing_clip = false;
     m_playing_band = false;
 
@@ -314,7 +314,7 @@ void action_handler::operator()(const actions::reject_labels &r)
                 if(m_state.m_unlabelled.erase(id))
                     m_state.deselect(id);
             edit_labels(r.m_ids, [](label &l) { l.m_state = label_state::rejected; });
-            if(!m_state.settings.m_show_rejected)
+            if(!m_state.m_settings.m_show_rejected)
                 for(auto id : r.m_ids)
                     m_state.deselect(id);
         });
@@ -487,30 +487,30 @@ void action_handler::reload_active_audio()
     const auto state = m_audio_engine.get_state();
     m_audio_engine.set_audio_clip(m_state.get_audio_buffer_ptr());
     m_audio_engine.select_region(
-        time_span{state.playhead_s, m_state.get_audio_buffer().duration_s()},
+        time_span{state.m_playhead_s, m_state.get_audio_buffer().duration_s()},
         m_state.m_loop);
 }
 
 void action_handler::operator()(const actions::select_playback_device &dev)
 {
-    m_audio_engine.set_device(dev.dev);
-    m_audio_engine.set_speed(m_state.settings.m_playback_speed);
+    m_audio_engine.set_device(dev.m_dev);
+    m_audio_engine.set_speed(m_state.m_settings.m_playback_speed);
     (*this)(actions::set_playback_gain{});
-    m_state.settings.m_device_name = dev.dev.name;
+    m_state.m_settings.m_device_name = dev.m_dev.m_name;
 }
 
 void action_handler::operator()(const actions::select_playback_region &r)
 {
     restore_active_audio();
-    select_region(r.t, r.m_band);
-    m_audio_engine.set_playback_loop(r.loop);
+    select_region(r.m_t, r.m_band);
+    m_audio_engine.set_playback_loop(r.m_loop);
     if(m_state.m_auto_start)
         m_audio_engine.play();
 }
 
 void action_handler::operator()(const actions::toggle_playback &a)
 {
-    if(m_audio_engine.get_state().playing)
+    if(m_audio_engine.get_state().m_playing)
         m_audio_engine.stop();
     else
         m_audio_engine.play();
@@ -518,18 +518,18 @@ void action_handler::operator()(const actions::toggle_playback &a)
 
 void action_handler::operator()(const actions::playback_loop &p)
 {
-    m_audio_engine.set_playback_loop(p.loop);
+    m_audio_engine.set_playback_loop(p.m_loop);
 }
 
 void action_handler::operator()(const actions::set_playback_speed &s)
 {
-    m_state.settings.m_playback_speed = std::clamp(s.m_speed, 0.1f, 2.f);
-    m_audio_engine.set_speed(m_state.settings.m_playback_speed);
+    m_state.m_settings.m_playback_speed = std::clamp(s.m_speed, 0.1f, 2.f);
+    m_audio_engine.set_speed(m_state.m_settings.m_playback_speed);
 }
 
 void action_handler::operator()(const actions::set_playback_gain &)
 {
-    const auto &s = m_state.settings;
+    const auto &s = m_state.m_settings;
     auto_gain::settings g;
     g.m_automatic = s.m_auto_gain;
     g.m_gain_db = s.m_playback_gain_db;
