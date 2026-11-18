@@ -93,7 +93,7 @@
                     "class": { "type": "string", "description": "Class of a built-in's suggestions. Default: chosen in the app" },
                     "options": {
                         "type": "object",
-                        "description": "Loudness: margin_db (12), min_level_db (-70), floor_percentile (0.2), frame_s (0.01), min_length_s (0.03), merge_gap_s (0.1), padding_s (0.01), onsets (false)"
+                        "description": "Loudness: margin_db (12), min_level_db (-70), floor_percentile (0.2), frame_s (0.01), min_length_s (0.03), merge_gap_s (0.1), padding_s (0.01), snap_starts (false: start each region at its sharpest rise rather than padding before it; read from onsets in older projects)"
                     }
                 },
                 "required": [ "name" ]

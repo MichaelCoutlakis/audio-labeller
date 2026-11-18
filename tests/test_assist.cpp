@@ -97,12 +97,19 @@ TEST_CASE("loud regions stand out from the noise floor")
     CHECK(regions[1].m_start_s == doctest::Approx(2.99).epsilon(0.02));
     CHECK(regions[1].m_above_db > 20.);
 
-    s.m_onsets = true;
+    // Regions from the snapped rise to where the level falls back
+    s.m_snap_starts = true;
     s.m_merge_gap_s = 0.;
-    const auto onsets = find_loud_regions(audio, s);
-    REQUIRE(onsets.size() == 3);
-    CHECK(onsets[1].m_start_s == doctest::Approx(1.15).epsilon(0.002));
-    CHECK(onsets[1].m_stop_s == onsets[1].m_start_s);
+    const auto snapped = find_loud_regions(audio, s);
+    REQUIRE(snapped.size() == 3);
+    CHECK(snapped[1].m_start_s == doctest::Approx(1.15).epsilon(0.002));
+    CHECK(snapped[1].m_stop_s == doctest::Approx(1.26).epsilon(0.02));
+    CHECK(snapped[2].m_stop_s == doctest::Approx(3.11).epsilon(0.02));
+
+    // Older projects' "onsets" option now snaps the regions' starts
+    CHECK(loudness_settings::from_json({{"onsets", true}}).m_snap_starts);
+    CHECK(!loudness_settings::from_json({{"onsets", true}, {"snap_starts", false}}).m_snap_starts);
+    CHECK(loudness_settings::from_json(s.to_json()).m_snap_starts);
 
     // Silence has nothing above the absolute minimum
     audio_buffer silent;

@@ -110,7 +110,7 @@ and easy to turn into regions.
       for regions.
 - [x] Snapping (A): apply it to a region's start only as an option, since the
       start no longer has to be an onset.
-- [ ] Loudness assisted labeller: drop its `onsets` option, or have it write
+- [x] Loudness assisted labeller: drop its `onsets` option, or have it write
       regions from the snapped rise to where the level falls back.
 - [ ] Clip export: check the padded and fixed modes with long regions (a
       region longer than a fixed clip), and that DCASE output keeps the full

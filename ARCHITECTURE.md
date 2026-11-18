@@ -270,7 +270,8 @@ two kinds, both listed in one dropdown:
   annotation trees.
 - **Built-ins**, compiled in: currently loudness (`dsp/loudness.cpp`): frames
   some margin above the noise floor (a low percentile of frame levels), joined
-  across short gaps, as regions or as onsets snapped to their rise. A new
+  across short gaps, as regions from the rise (padded, or snapped to the
+  sharpest rise with `snap_starts`) to where the level falls back. A new
   built-in is a `suggester` and a case in `make_suggester`.
 
 A run is copied into an `assist_job` (the recordings, their portable paths and

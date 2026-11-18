@@ -54,7 +54,7 @@ loudness_settings loudness_settings::from_json(const nlohmann::json &j)
     s.m_min_length_s = j.value("min_length_s", s.m_min_length_s);
     s.m_merge_gap_s = j.value("merge_gap_s", s.m_merge_gap_s);
     s.m_padding_s = j.value("padding_s", s.m_padding_s);
-    s.m_onsets = j.value("onsets", s.m_onsets);
+    s.m_snap_starts = j.value("snap_starts", j.value("onsets", s.m_snap_starts));
     return s;
 }
 
@@ -68,7 +68,7 @@ nlohmann::json loudness_settings::to_json() const
         {"min_length_s", m_min_length_s},
         {"merge_gap_s", m_merge_gap_s},
         {"padding_s", m_padding_s},
-        {"onsets", m_onsets}
+        {"snap_starts", m_snap_starts}
     };
 }
 
@@ -112,17 +112,11 @@ std::vector<loud_region> find_loud_regions(const audio_buffer &audio, const loud
     for(auto &r : out)
     {
         r.m_above_db = r.m_peak_db - threshold;
-        if(s.m_onsets)
-        {
-            // The rise is within the first frame or so of the region
-            r.m_start_s = snap_onset(audio, r.m_start_s + frame_s / 2., frame_s);
-            r.m_stop_s = r.m_start_s;
-        }
-        else
-        {
-            r.m_start_s = std::max(0., r.m_start_s - s.m_padding_s);
-            r.m_stop_s = std::min(duration, r.m_stop_s + s.m_padding_s);
-        }
+        // The rise is within the first frame or so of the region
+        r.m_start_s = s.m_snap_starts ? snap_onset(audio, r.m_start_s + frame_s / 2., frame_s)
+                                      : std::max(0., r.m_start_s - s.m_padding_s);
+        // Where the level fell back below the threshold
+        r.m_stop_s = std::min(duration, r.m_stop_s + s.m_padding_s);
     }
     return out;
 }

@@ -80,8 +80,10 @@ void assist_view::render(const project_model &project, app_state &state)
              "of the recording.");
         ImGui::InputDouble("Shortest (s)", &l.m_min_length_s, 0.01, 0.1, "%.3f");
         ImGui::InputDouble("Join gaps under (s)", &l.m_merge_gap_s, 0.01, 0.1, "%.3f");
-        ImGui::Checkbox("Onsets rather than regions", &l.m_onsets);
-        help("Each sound's start, snapped to its sharpest rise");
+        ImGui::Checkbox("Start at the sharpest rise", &l.m_snap_starts);
+        help(
+            "Start each region at its sharpest rise in energy, rather than a little before the "
+            "level rises. It still ends where the level falls back.");
         l.m_min_length_s = std::max(0., l.m_min_length_s);
         l.m_merge_gap_s = std::max(0., l.m_merge_gap_s);
     }

@@ -22,7 +22,9 @@ struct loudness_settings
     double m_min_length_s{0.03};    ///< Shorter sounds are dropped
     double m_merge_gap_s{0.1};      ///< Sounds closer than this are joined
     double m_padding_s{0.01};       ///< Added either side of each region
-    bool m_onsets{false};           ///< Suggest onsets (snapped to the rise) rather than regions
+    /// Start each region at its sharpest rise rather than padding before it. Read from "onsets",
+    /// which older projects used for onsets at the rise, if it's missing.
+    bool m_snap_starts{false};
 
     /// Missing keys keep their defaults
     static loudness_settings from_json(const nlohmann::json &j);

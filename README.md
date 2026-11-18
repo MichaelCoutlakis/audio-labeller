@@ -169,7 +169,7 @@ in the project's `assisted-labellers`, plus a built-in loudness detector:
       "command": ["python", "${MODELS}/detect.py", "{audio}", "{output}"],
       "format": "audacity", "timeout_s": 300 },
     { "name": "Loud sounds", "builtin": "loudness", "class": "Bird",
-      "options": { "margin_db": 15, "onsets": true } }
+      "options": { "margin_db": 15, "snap_starts": true } }
 ]
 ```
 
@@ -178,7 +178,8 @@ suggestions to `{output}` in the given format (or prints them, if there's no
 `{output}`), exiting with 0. An optional score column orders the review. Its
 output is logged, and shown if it fails. `examples/example_detector.py` is a
 template. The built-in finds sounds some decibels above the background
-(regions, or onsets snapped to their rise), with its settings adjustable in the
+(regions until the level falls back, optionally starting at the sharpest
+rise), with its settings adjustable in the
 window. Running again doesn't add the same suggestion twice.
 
 ## Checking cut clips
