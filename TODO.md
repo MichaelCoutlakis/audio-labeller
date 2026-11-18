@@ -92,7 +92,7 @@ Whatever uses the labels can find its own onset inside the span. So: regions
 only, with zero-length labels still read (old files, imported point labels)
 and easy to turn into regions.
 
-- [ ] Drop the `"kind"` key from the palette (and `class_kind`): every class is
+- [x] Drop the `"kind"` key from the palette (and `class_kind`): every class is
       a region class. Ignore the key when reading old palettes, with a notice.
       Update the palette schema, README and ARCHITECTURE.
 - [ ] Zero-length labels: keep reading and drawing them, but give a quick way

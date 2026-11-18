@@ -48,6 +48,8 @@ project_model audio_labeller_app::open_project(app_state &state)
 
 void audio_labeller_app::load_project_sections()
 {
+    for(const auto &notice : m_project.notices())
+        m_app_state.report_info(notice);
     try
     {
         m_app_state.m_review = review_settings::from_json(m_project.config().m_review);

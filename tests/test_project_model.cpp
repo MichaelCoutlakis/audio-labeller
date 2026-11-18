@@ -274,7 +274,7 @@ TEST_CASE("suggestions, scores, onsets and channels round trip")
     CHECK(!p.saved()["files"].dump().contains("channel"));
 }
 
-TEST_CASE("project default channel and palette kinds")
+TEST_CASE("project default channel, and palettes that mark classes as onsets")
 {
     test_project p(R"(["a"])", {"a/x.wav"});
     write_text(
@@ -285,8 +285,10 @@ TEST_CASE("project default channel and palette kinds")
         R"({"dataset-roots":["a"],"export-prefix":"out","label-palette":"pal.json","label-file":"labels.json","channel":2})");
     const auto x = p.dir / "a/x.wav";
     project_model m(p.config());
-    CHECK(m.m_label_dict.find_ptr(label_defn_id{0})->m_kind == class_kind::onset);
-    CHECK(m.m_label_dict.find_ptr(label_defn_id{1})->m_kind == class_kind::region);
+    // Every class marks regions: an old palette's "kind" is ignored, with a notice naming them
+    CHECK(m.m_label_dict.size() == 2);
+    REQUIRE(m.notices().size() == 1);
+    CHECK(m.notices().front().contains("(Dog)"));
     CHECK(m.get_channel(x) == 1U);
     m.set_channel(x, std::nullopt); // An explicit mix overrides the project's channel
     CHECK(!m.get_channel(x));

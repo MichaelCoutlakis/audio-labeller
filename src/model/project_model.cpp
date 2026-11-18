@@ -134,8 +134,6 @@ uint32_t from_hex(std::string col)
 void to_json(json &j, const label_defn &d)
 {
     j = json{{"class-id", d.m_id.m_id}, {"class", d.m_class}, {"colour", to_hex(d.m_color_rgba)}};
-    if(d.m_kind == class_kind::onset)
-        j["kind"] = "onset";
 }
 
 void from_json(const json &j, label_defn &d)
@@ -143,11 +141,7 @@ void from_json(const json &j, label_defn &d)
     j.at("class-id").get_to(d.m_id.m_id);
     j.at("class").get_to(d.m_class);
     d.m_color_rgba = from_hex(j.at("colour").get<std::string>());
-    const auto kind = j.value("kind", std::string{"region"});
-    if(kind == "onset")
-        d.m_kind = class_kind::onset;
-    else if(kind != "region")
-        throw std::runtime_error("Unknown class kind " + kind + ", expected region or onset");
+    // "kind" is ignored: every class marks regions. See project_model::notices.
 }
 
 void to_json(json &j, const label_dict &p)
@@ -315,6 +309,26 @@ project_model::project_model(const project_config &cfg) :
     auto j = json::parse(f);
     j.at("label-palette").get_to(m_label_dict);
 
+    // Palettes used to mark classes as onsets, labelled by a point in time
+    std::vector<std::string> point_classes;
+    for(const auto &defn : j.at("label-palette"))
+        if(defn.is_object() && defn.contains("kind") && defn["kind"] != "region")
+            point_classes.push_back(defn.value("class", std::string{}));
+    if(!point_classes.empty())
+    {
+        std::string names;
+        for(const auto &name : point_classes)
+            names += (names.empty() ? "" : ", ") + name;
+        m_notices.push_back(
+            fmt::format(
+                "The palette marks some classes as onsets ({}). Every class marks regions now, "
+                "from where the sound starts to where it stops, so \"kind\" is ignored and can be "
+                "removed from {}. Existing zero-length labels are kept; widen them by dragging an "
+                "edge.",
+                names,
+                generic_utf8(palette_path)));
+    }
+
     load_labels();
 }
 
@@ -331,6 +345,7 @@ project_model &project_model::operator=(project_model &&other)
     m_file_states = std::exchange(other.m_file_states, {});
     m_unresolved_labels = std::exchange(other.m_unresolved_labels, {});
     m_unresolved_files = std::exchange(other.m_unresolved_files, {});
+    m_notices = std::exchange(other.m_notices, {});
     m_revision = std::exchange(other.m_revision, 0U);
     m_saved_revision = std::exchange(other.m_saved_revision, 0U);
     return *this;

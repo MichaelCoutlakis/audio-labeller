@@ -4,8 +4,8 @@ This is an application for strong labelling of audio.
 
 Features:
 - Multi audio file projects export to a single label file
-- Define the temporal location of the sound in addition to the class: regions
-  with a start and stop, or onsets (a point in time) for transients
+- Define the temporal location of the sound in addition to the class: a region
+  from where it starts to where it stops
 - Playback of the audio and labels, at reduced speed if needed, with fixed or
   automatic gain for quiet recordings
 - Review of labels proposed by a detector or pipeline: accept, reject or
@@ -196,7 +196,7 @@ onset to the clip's stop, if the manifest has a stop or duration column, or of
 ## Controls:
 
 ### Waveform
-- Left click drag to define region (an onset, for classes marked as onsets)
+- Left click drag to define region
 - Ctrl left click to set playhead cursor
 - Left click to toggle label selection
 - Wheel to zoom
@@ -238,8 +238,8 @@ The label palette uses a "paint class" style:
 - Selecting a class applies that class to all selected labels / regions
 - The selected class applies to regions created while its selected.
 - Label palette buttons have toggle state
-- Classes marked `"kind": "onset"` in the palette are shown with a bar.
-  Labels given one, drawn or assigned, become onsets at their start.
+- Every class marks regions. Palettes that mark classes `"kind": "onset"`
+  still load, with a notice, and the key is ignored.
 - Favourites: right-click a class to pin it to the row at the top (and again to
   unpin). While any are pinned, 1-9 choose the favourites in the order they
   were pinned; otherwise the first nine classes of the palette. Each button

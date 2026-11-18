@@ -67,8 +67,7 @@ void label_control_view::class_button(
     ImGui::PushStyleColor(ImGuiCol_Button, col_v);
 
     // Toggles. Selecting a class also applies it to the selected labels.
-    // Onset classes are marked with a bar, as they're placed as points in time
-    std::string text = def.m_kind == class_kind::onset ? "| " + def.m_class : def.m_class;
+    std::string text = def.m_class;
     if(hotkey)
         text = std::to_string(*hotkey + 1) + "   " + text;
     if(state.is_favourite(def))

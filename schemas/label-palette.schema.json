@@ -24,8 +24,9 @@
                         "format": "color-hex"
                     },
                     "kind": {
-                        "description": "region: a start and a stop (eg. context like rain). onset: a point in time (eg. a call or click), drawn as a line; dragging with an onset class makes an onset. Default: region",
-                        "enum": [ "region", "onset" ]
+                        "description": "Ignored: every class marks regions, from where the sound starts to where it stops. Palettes with \"onset\" still load, with a notice.",
+                        "enum": [ "region", "onset" ],
+                        "deprecated": true
                     }
                 },
                 "required": [ "class-id", "class", "colour" ]

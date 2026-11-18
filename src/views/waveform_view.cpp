@@ -480,9 +480,8 @@ void waveform_view::render_annotations(const project_model &project, app_state &
             col = colours::brighter(col);
 
         const auto name = display_name(*label, defn);
-        // A region class keeps its box even at no length, so that it can be widened again
-        const bool onset_class = defn && defn->m_kind == class_kind::onset;
-        if(label->is_onset() && (onset_class || !defn))
+        // A zero-length label of a class keeps a box, so that it can be widened into a region
+        if(label->is_onset() && !defn)
             render_onset(state, *label, col, name);
         else
         {
@@ -531,7 +530,6 @@ void waveform_view::update_waveform_drag(const project_model &proj, app_state &s
     const label_defn *active_defn = state.m_active_label_defn
         ? proj.m_label_dict.find_ptr(state.m_active_label_defn.value())
         : nullptr;
-    const bool onset_class = active_defn && active_defn->m_kind == class_kind::onset;
 
     // End drag
     if(drag.is_dragging() && ImGui::IsMouseReleased(ImGuiMouseButton_Left))
@@ -550,12 +548,6 @@ void waveform_view::update_waveform_drag(const project_model &proj, app_state &s
 
         if(commit)
         {
-            // Classes marked as onsets are defined by their start alone, at every frequency
-            if(onset_class)
-            {
-                drag_range.second = drag_range.first;
-                band = {};
-            }
             state.add_action(
                 actions::add_label{
                     drag_range,
@@ -579,7 +571,7 @@ void waveform_view::update_waveform_drag(const project_model &proj, app_state &s
 
         // The band only on the spectrogram it's drawn on
         double y0 = -1., y1 = 1.;
-        if(spectrogram && !onset_class)
+        if(spectrogram)
             if(const auto band = drag_band(); !band.is_full())
             {
                 y0 = m_axis.y_of(band.m_low_hz);

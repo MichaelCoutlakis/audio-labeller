@@ -205,6 +205,10 @@ public:
     /// Labels that refer to audio that couldn't be found
     size_t num_unresolved() const { return m_unresolved_labels.size(); }
 
+    /// Things worth telling the user that were found while opening the project, eg. palette keys
+    /// that are no longer used
+    const std::vector<std::string> &notices() const { return m_notices; }
+
 private:
     project_config m_cfg;
     std::vector<audio_file_entry> m_files; //!< Available files for labelling
@@ -215,6 +219,7 @@ private:
     /// Records whose audio file couldn't be found, written back verbatim so they aren't lost
     std::vector<nlohmann::json> m_unresolved_labels;
     std::vector<nlohmann::json> m_unresolved_files;
+    std::vector<std::string> m_notices;
 
     uint64_t m_revision{};       ///< Incremented by every change
     uint64_t m_saved_revision{}; ///< Revision matching the label file on disk

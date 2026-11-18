@@ -251,15 +251,7 @@ void action_handler::operator()(const actions::select_all_labels &)
 void action_handler::assign_class(const std::set<label_id> &ids, label_defn_id defn_id)
 {
     const auto &file = m_state.m_active_file.value();
-    // Onset classes are defined by their start alone, as when they're drawn
-    const auto *defn = m_proj.m_label_dict.find_ptr(defn_id);
-    const bool onset = defn && defn->m_kind == class_kind::onset;
-    const auto relabel = [&](label &l)
-    {
-        l.m_defn_id = defn_id;
-        if(onset)
-            l.m_stop_s = l.m_start_s;
-    };
+    const auto relabel = [&](label &l) { l.m_defn_id = defn_id; };
     for(auto id : ids)
     {
         if(auto unlabelled = m_state.m_unlabelled.find_ptr(id))

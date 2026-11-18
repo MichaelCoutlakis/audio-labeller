@@ -122,7 +122,7 @@ leave a truncated file. A file that can't be read is never overwritten.
 | --------------------------------------------- | ---------- | -------------------------------------------------------------- |
 | `audio-labelling-app-settings.json`           | App        | Current project, audio device, view and editing options. In the working directory. |
 | Project (`schemas/project.schema.json`)       | User       | Dataset roots, palette path, label file path, export, annotation trees, review and clip manifest settings. The export settings window rewrites its `export` section. |
-| Palette (`schemas/label-palette.schema.json`) | User       | Classes: stable integer ID, name, colour, kind (region or onset). |
+| Palette (`schemas/label-palette.schema.json`) | User       | Classes: stable integer ID, name, colour.                      |
 | Label file (`schemas/labels.schema.json`)     | App        | Labels and suggestions, per-file status and channel, source IDs and export records. |
 | Annotation trees                              | Both       | Per-recording label files for other tools, see below.          |
 
@@ -164,16 +164,22 @@ Version 1 files are migrated on load. Version 2 adds:
 ### Label file version 3
 
 Adds to each label an optional `state`, `suggested` or `rejected` (absent for a
-label), and an optional `score`, the proposer's confidence. A label whose
-`stop_s` equals its `start_s` is an **onset**: a transient defined by its start
-alone. Files gain an optional `channel` (numbered from 1, or `mix`). The version
+label), and an optional `score`, the proposer's confidence. A label's `stop_s`
+may equal its `start_s` (a zero-length label, see below). Files gain an optional `channel` (numbered from 1, or `mix`). The version
 was bumped so that an older app can't read suggestions as labels.
 
-## Labels, onsets and suggestions
+## Labels and suggestions
 
-A label is a region (start and stop) or an onset (a point). Palette classes can
-be marked `"kind": "onset"`, so that dragging with them makes onsets; a
-recording can carry context regions and onsets overlapping them.
+A label is a region: it marks a sound from where it starts to where it stops,
+as AudioSet's strong labels, DCASE and Audacity do. There's no separate onset
+kind, since an exact onset isn't always well defined by ear, and whatever uses
+the labels can find its own onset inside the span. Every palette class marks
+regions; an old palette's `"kind"` is ignored, with a notice
+(`project_model::notices`).
+
+Zero-length labels (`is_onset`: a point in time, from an older label file or an
+imported point label) are still read, kept and drawn, and are easy to widen
+into regions.
 
 Suggestions come from importing an annotation tree as suggestions. They're drawn
 faded with a dashed outline and their score, and become labels when accepted,
