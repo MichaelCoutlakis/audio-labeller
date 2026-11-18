@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <chrono>
 #include <cmath>
+#include <tuple>
 
 #include <spdlog/spdlog.h>
 
@@ -370,7 +371,7 @@ void action_handler::operator()(const actions::snap_labels &s)
     if(!m_state.has_active_file())
         return;
     const auto &audio = m_state.get_audio_buffer();
-    const double window = m_state.m_review.m_snap_window_s;
+    const auto &review = m_state.m_review;
     undoable(
         m_state.m_active_file.value(),
         [&]
@@ -379,10 +380,9 @@ void action_handler::operator()(const actions::snap_labels &s)
                 s.m_ids,
                 [&](label &l)
                 {
-                    const double start = snap_onset(audio, l.m_start_s, window);
-                    if(l.is_onset())
-                        l.m_stop_s = start;
-                    l.m_start_s = std::min(start, l.m_stop_s);
+                    const double onset = snap_onset(audio, l.m_start_s, review.m_snap_window_s);
+                    if(const auto times = snapped(l, onset, review))
+                        std::tie(l.m_start_s, l.m_stop_s) = *times;
                 });
         });
 }

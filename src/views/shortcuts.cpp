@@ -51,7 +51,9 @@ const std::vector<std::pair<const char *, const char *>> &keyboard_controller::d
         {"Home", "Zoom out to the whole file"},
         {"O", "Add a region from under the mouse (or the playhead) to where the sound there ends"},
         {"E", "Widen the selected zero-length labels to where the sound at each ends"},
-        {"A", "Snap the selected onsets to the sharpest rise nearby (Ctrl+Z undoes)"},
+        {"A",
+         "Snap the selected zero-length labels to the sharpest rise nearby, and region starts if "
+         "set in the project (Ctrl+Z undoes)"},
         {"Left, Right", "Move the selected labels (Alt: finer)"},
         {"Ctrl+Left, Ctrl+Right", "Move their start edges"},
         {"Shift+Left, Shift+Right", "Move their stop edges"},

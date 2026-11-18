@@ -108,7 +108,7 @@ and easy to turn into regions.
       labels now; regions are played with `pre_roll_s` to their stop. Rename or
       fold them together, keep reading the old keys, and retune the defaults
       for regions.
-- [ ] Snapping (A): apply it to a region's start only as an option, since the
+- [x] Snapping (A): apply it to a region's start only as an option, since the
       start no longer has to be an onset.
 - [ ] Loudness assisted labeller: drop its `onsets` option, or have it write
       regions from the snapped rise to where the level falls back.

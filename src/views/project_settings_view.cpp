@@ -290,7 +290,12 @@ void project_settings_view::render(const project_model &project, app_state &stat
         "Shown after",
         m_review.m_view_post_s,
         "Shown at least this long after a suggestion's start in review mode");
-    input_ms("Snap window", m_review.m_snap_window_s, "How far snapping may move an onset");
+    input_ms("Snap window", m_review.m_snap_window_s, "How far snapping (A) may move a start");
+    ImGui::SameLine();
+    ImGui::Checkbox("Snap region starts", &m_review.m_snap_regions);
+    help(
+        "Whether A also moves the starts of regions to the sharpest rise nearby, not only "
+        "zero-length labels. A region's start needn't be its sharpest onset.");
     ImGui::Checkbox("Review lowest scores first", &m_review.m_by_score);
     help("If the suggestions have scores. Otherwise in file order.");
 

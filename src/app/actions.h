@@ -112,7 +112,8 @@ struct move_label
     std::optional<frequency_band> m_band; ///< A new band, if moved on the spectrogram
 };
 
-/// Move the onsets (and region starts) to the sharpest rise nearby, as one undo step
+/// Move the zero-length labels (and region starts, if the review settings ask) to the sharpest rise
+/// nearby, as one undo step
 struct snap_labels
 {
     std::set<label_id> m_ids;

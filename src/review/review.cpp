@@ -34,6 +34,7 @@ review_settings review_settings::from_json(const nlohmann::json &j)
     s.m_view_pre_s = j.value("view_pre_s", s.m_view_pre_s);
     s.m_view_post_s = j.value("view_post_s", s.m_view_post_s);
     s.m_snap_window_s = j.value("snap_window_s", s.m_snap_window_s);
+    s.m_snap_regions = j.value("snap_regions", s.m_snap_regions);
     s.m_by_score = j.value("by_score", s.m_by_score);
     return s;
 }
@@ -52,8 +53,21 @@ nlohmann::json review_settings::to_json() const
     put("view_pre_s", m_view_pre_s, d.m_view_pre_s);
     put("view_post_s", m_view_post_s, d.m_view_post_s);
     put("snap_window_s", m_snap_window_s, d.m_snap_window_s);
+    put("snap_regions", m_snap_regions, d.m_snap_regions);
     put("by_score", m_by_score, d.m_by_score);
     return j;
+}
+
+std::optional<time_span> snapped(const label &l, double onset_s, const review_settings &settings)
+{
+    if(!l.is_onset() && !settings.m_snap_regions)
+        return std::nullopt;
+    if(l.is_onset())
+        return time_span{onset_s, onset_s};
+    // A start snapped past the stop would turn the region inside out
+    if(onset_s >= l.m_stop_s)
+        return std::nullopt;
+    return time_span{onset_s, l.m_stop_s};
 }
 
 time_span playback_window(const label &l, const review_settings &settings, double duration_s)

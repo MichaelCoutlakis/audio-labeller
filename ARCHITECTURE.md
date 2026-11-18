@@ -228,8 +228,11 @@ from where it was.
 A label plays from `pre_roll_s` (0.2 s) before its start to its stop; a
 zero-length label, with no stop, to `point_post_s` (0.5 s) after its start.
 Older projects' `onset_pre_s` and `onset_post_s` are read as those when they're
-missing. Snapping moves an onset to the sharpest rise in Teager-Kaiser energy within
-`snap_window_s`, as one undo step.
+missing.
+
+Snapping (A) moves a zero-length label to the sharpest rise in Teager-Kaiser
+energy within `snap_window_s`, as one undo step. A region's start moves only if
+`snap_regions` is set, since it needn't be the sound's sharpest onset.
 
 ## Annotation trees
 

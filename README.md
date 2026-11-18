@@ -275,8 +275,9 @@ The list is also in the app, under Options > Keyboard shortcuts.
 - O: add a region from under the mouse (or the playhead) to where the sound
   there ends, estimated from its level falling back to the background
 - E: widen the selected zero-length labels the same way
-- A: snap the selected onsets to the sharpest rise within a few milliseconds
-  (Ctrl+Z undoes it)
+- A: snap the selected zero-length labels to the sharpest rise within a few
+  milliseconds (Ctrl+Z undoes it). Region starts move too only if "Snap region
+  starts" is set in the project settings (`snap_regions` in `review`).
 - Left / Right: move the selected labels by the nudge step (10 ms by default,
   set under Options); with Alt, by the fine step (1 ms)
 - Ctrl+Left / Ctrl+Right: move their start edges

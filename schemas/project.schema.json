@@ -69,7 +69,8 @@
                 "onset_post_s": { "type": "number", "description": "Read as point_post_s if that's missing", "deprecated": true },
                 "view_pre_s": { "type": "number", "description": "Shown before a suggestion, and after its stop, in review mode. Default: 0.5" },
                 "view_post_s": { "type": "number", "description": "Shown at least this long after a suggestion's start in review mode. Default: 1" },
-                "snap_window_s": { "type": "number", "description": "How far snapping may move an onset. Default: 0.005" },
+                "snap_window_s": { "type": "number", "description": "How far snapping (A) may move a label's start. Default: 0.005" },
+                "snap_regions": { "type": "boolean", "description": "Whether snapping also moves the starts of regions, not only zero-length labels. Default: false" },
                 "by_score": { "type": "boolean", "description": "Review the lowest scores first, if suggestions have scores. Default: true" }
             }
         },

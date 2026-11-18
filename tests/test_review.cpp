@@ -144,6 +144,20 @@ TEST_CASE("onsets snap to the sharpest rise nearby")
     CHECK(snap_onset(audio, 0.8, 0.005) == 0.8);
 }
 
+TEST_CASE("snapping moves zero-length labels, and region starts only if asked")
+{
+    review_settings s;
+    const label point{1, label_defn_id{0}, 1., 1.};
+    const label region{2, label_defn_id{0}, 1., 3.};
+    CHECK(snapped(point, 1.002, s) == time_span{1.002, 1.002});
+    CHECK_FALSE(snapped(region, 1.002, s));
+    s.m_snap_regions = true;
+    CHECK(snapped(region, 1.002, s) == time_span{1.002, 3.});
+    CHECK(snapped(region, 0.998, s) == time_span{0.998, 3.});
+    CHECK_FALSE(snapped(label{3, label_defn_id{0}, 1., 1.001}, 1.002, s)); // Past its stop
+    CHECK(review_settings::from_json(s.to_json()).m_snap_regions);
+}
+
 TEST_CASE("FFT and spectrogram find a tone")
 {
     std::vector<std::complex<float>> data(8, {0.f, 0.f});
