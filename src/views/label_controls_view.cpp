@@ -66,13 +66,17 @@ void label_control_view::class_button(
     }
     ImGui::PushStyleColor(ImGuiCol_Button, col_v);
 
-    // Toggles. Selecting a class also applies it to the selected labels.
+    // Toggles. Selecting a class also applies it to the selected labels. Ctrl+click adds a label of
+    // it over each selected one instead.
     std::string text = def.m_class;
     if(hotkey)
         text = std::to_string(*hotkey + 1) + "   " + text;
     if(state.is_favourite(def))
         text += " *";
-    if(ImGui::Button(text.c_str(), {width, button_h}))
+    const bool clicked = ImGui::Button(text.c_str(), {width, button_h});
+    if(clicked && ImGui::GetIO().KeyMods == ImGuiMod_Ctrl)
+        state.add_action(actions::add_class{def.m_id});
+    else if(clicked)
         state.add_action(
             actions::set_active_class{
                 active ? std::nullopt : std::optional<label_defn_id>{def.m_id}
@@ -88,7 +92,9 @@ void label_control_view::class_button(
             state.toggle_favourite(def);
         ImGui::EndPopup();
     }
-    ImGui::SetItemTooltip("Right-click to %s", state.is_favourite(def) ? "unpin" : "pin");
+    ImGui::SetItemTooltip(
+        "Ctrl+click to add it over the selected labels\nRight-click to %s",
+        state.is_favourite(def) ? "unpin" : "pin");
     ImGui::PopID();
 }
 

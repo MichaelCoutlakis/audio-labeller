@@ -19,6 +19,7 @@
 #include "../io/audio_source.h"
 #include "../io/reveal.h"
 #include "../manifest/clip_manifest.h"
+#include "../model/add_classes.h"
 #include "../model/paths.h"
 #include "action_handler.h"
 #include "actions.h"
@@ -303,6 +304,72 @@ void action_handler::operator()(const actions::set_active_class &a)
     undoable(
         m_state.m_active_file.value(),
         [&] { assign_class(m_state.selected_labels(), a.m_defn_id.value()); });
+}
+
+void action_handler::operator()(const actions::add_class &a)
+{
+    if(!m_state.has_active_file() || m_state.selected_labels().empty())
+        return;
+    const auto &file = m_state.m_active_file.value();
+
+    std::vector<label> unclassified;
+    std::vector<label> selected;
+    for(const auto *l : m_state.visible_labels(m_proj))
+        if(m_state.is_label_selected(l->m_id))
+            (m_state.m_unlabelled.find_ptr(l->m_id) ? unclassified : selected).push_back(*l);
+
+    const auto plan = plan_add_class(m_proj.get_labels(file), unclassified, selected, a.m_defn_id);
+    const auto *defn = m_proj.m_label_dict.find_ptr(a.m_defn_id);
+    const auto name = defn ? defn->m_class : std::to_string(a.m_defn_id.m_id);
+    const auto skipped = plan.m_skipped + plan.m_merged.size();
+    if(skipped)
+        spdlog::warn(
+            "{} already has a label over {} of the {} selected spans, skipped",
+            name,
+            skipped,
+            unclassified.size() + selected.size());
+    if(plan.empty())
+        return;
+
+    // The selection and active class stay, so more classes can be added over the same spans
+    undoable(
+        file,
+        [&]
+        {
+            for(const auto &l : plan.m_classified)
+            {
+                m_state.m_unlabelled.erase(l.m_id);
+                m_proj.add_label(file, l);
+            }
+            auto selection = m_state.selected_labels();
+            for(const auto &[dropped, there] : plan.m_merged)
+            {
+                m_state.m_unlabelled.erase(dropped);
+                selection.erase(dropped);
+                selection.insert(there);
+            }
+            m_state.set_selection(std::move(selection));
+            for(const auto &l : plan.m_added)
+                m_proj.add_label(file, l);
+        });
+}
+
+void action_handler::operator()(const actions::select_whole_file &)
+{
+    if(!m_state.has_active_file())
+        return;
+    const auto &file = m_state.m_active_file.value();
+    const time_span whole{0., m_state.get_audio_buffer().duration_s()};
+
+    const auto &defn = m_state.m_active_label_defn;
+    const auto there = defn ? find_over(m_proj.get_labels(file), *defn, whole)
+                            : find_over(m_state.m_unlabelled, label_defn_id{}, whole);
+    if(there)
+    {
+        m_state.set_selection({*there});
+        return;
+    }
+    (*this)(actions::add_label{whole, file, defn});
 }
 
 void action_handler::operator()(const actions::assign_class &a)
@@ -780,9 +847,8 @@ void action_handler::operator()(const actions::import_annotations &i)
             "\n{} empty files: their recordings were marked done (no events).",
             summary.m_marked_done);
     if(summary.m_unmatched)
-        message += fmt::format(
-            "\n{} label files have no recording in the project.",
-            summary.m_unmatched);
+        message +=
+            fmt::format("\n{} label files have no recording in the project.", summary.m_unmatched);
     if(!summary.m_new_classes.empty())
     {
         message += "\n\nNot in the palette, so added for this session (grey):";

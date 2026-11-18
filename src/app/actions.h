@@ -83,6 +83,20 @@ struct set_active_class
     std::optional<label_defn_id> m_defn_id;
 };
 
+/// Add a label of a class over each selected label's span, keeping the selection and the active
+/// class. Unclassified selections are given the class instead. Spans the class already has a
+/// label over are skipped.
+struct add_class
+{
+    label_defn_id m_defn_id;
+};
+
+/// Add a region of the active class over the whole active file and select just it, or select the
+/// one already there
+struct select_whole_file
+{
+};
+
 /// Give labels a class, confirming any suggestions among them
 struct assign_class
 {
@@ -253,7 +267,7 @@ struct run_assist
 {
     size_t m_labeller{};
     assist_scope m_scope{assist_scope::active_file};
-    std::string m_class; ///< For built-ins that need one
+    std::string m_class;                         ///< For built-ins that need one
     std::optional<loudness_settings> m_loudness; ///< Overrides the built-in's settings
 };
 
@@ -293,6 +307,8 @@ using app_action = std::variant<
     clear_selection,
     select_all_labels,
     set_active_class,
+    add_class,
+    select_whole_file,
     assign_class,
     accept_labels,
     reject_labels,

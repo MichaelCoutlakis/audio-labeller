@@ -23,6 +23,8 @@ struct action_handler
     void operator()(const actions::clear_selection &c);
     void operator()(const actions::select_all_labels &);
     void operator()(const actions::set_active_class &a);
+    void operator()(const actions::add_class &a);
+    void operator()(const actions::select_whole_file &);
     void operator()(const actions::assign_class &a);
     void operator()(const actions::accept_labels &a);
     void operator()(const actions::reject_labels &r);

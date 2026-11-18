@@ -41,6 +41,9 @@ const std::vector<std::pair<const char *, const char *>> &keyboard_controller::d
         {"1-9",
          "Choose a favourite class, or one of the first nine in the palette if none are pinned "
          "(applies to the selection, confirming suggestions)"},
+        {"Ctrl+1-9",
+         "Add a label of that class over each selected label, keeping the selection and the "
+         "active class (like Ctrl+clicking it in the palette)"},
         {"Ctrl+F", "Find a palette class by name (Enter chooses the first match)"},
         {"Space", "Play / stop"},
         {"Tab, Shift+Tab", "Select and play the next / previous label (suggestion in review mode)"},
@@ -59,6 +62,9 @@ const std::vector<std::pair<const char *, const char *>> &keyboard_controller::d
         {"Shift+Left, Shift+Right", "Move their stop edges"},
         {"Delete", "Delete the selected labels"},
         {"Ctrl+A", "Select all the labels in the file"},
+        {"Ctrl+Shift+A",
+         "Add a region of the active class over the whole file and select it (or select the one "
+         "already there)"},
         {"Escape", "Clear the selection and palette class"},
         {"Ctrl+Z, Ctrl+Y", "Undo, redo"},
         {"N, P", "Next / previous file in the list"},
@@ -88,6 +94,8 @@ void keyboard_controller::handle(const project_model &project, app_state &state)
 
     if(pressed(ImGuiKey_A, ImGuiMod_Ctrl) && state.has_active_file())
         state.add_action(actions::select_all_labels{});
+    if(pressed(ImGuiKey_A, ImGuiMod_Ctrl | ImGuiMod_Shift) && state.has_active_file())
+        state.add_action(actions::select_whole_file{});
 
     if(pressed(ImGuiKey_F, ImGuiMod_Ctrl))
         state.m_focus_class_filter = true;
@@ -114,7 +122,9 @@ void keyboard_controller::handle(const project_model &project, app_state &state)
         const auto id = numbered[index];
         const auto key = static_cast<ImGuiKey>(ImGuiKey_1 + index);
         const auto keypad = static_cast<ImGuiKey>(ImGuiKey_Keypad1 + index);
-        if(pressed(key) || pressed(keypad))
+        if(pressed(key, ImGuiMod_Ctrl) || pressed(keypad, ImGuiMod_Ctrl))
+            state.add_action(actions::add_class{id});
+        else if(pressed(key) || pressed(keypad))
         {
             const bool advance = state.m_review_mode &&
                 state.m_settings.m_auto_advance &&

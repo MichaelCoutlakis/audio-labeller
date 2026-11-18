@@ -13,9 +13,10 @@ per-file state, content-based source IDs, and SDL3 playback replacing PortAudio.
 
 Done: per-file status with a filter, keyboard-first controls (see README), a
 notice for labels whose audio is missing, a configurable nudge step with a
-finer one on Alt, view and editing options remembered between runs, and
+finer one on Alt, view and editing options remembered between runs,
 stacked labels that share the height only where they overlap (class lanes and
-full height remain as options).
+full height remain as options), and adding classes over a selection (Ctrl+click
+a class or Ctrl+1-9, with Ctrl+Shift+A for a region over the whole file).
 
 ## Phase 3: Export
 

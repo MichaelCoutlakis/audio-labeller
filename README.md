@@ -258,6 +258,13 @@ The label palette uses a "paint class" style:
 - Selecting a class applies that class to all selected labels / regions
 - The selected class applies to regions created while its selected.
 - Label palette buttons have toggle state
+- Ctrl+click a class (or Ctrl+1-9) to add a label of it over each selected
+  label's span, instead of relabelling. The selection and the active class
+  stay, so several classes can be added in a row: Ctrl+Shift+A for a region
+  over the whole recording, then Ctrl+click "wind" and "insects". Each is one
+  undo step. An unclassified selection (drawn with no class active) is given
+  the class instead, since it has none to keep. A span the class already has a
+  label over is skipped, with a warning in the console.
 - Every class marks regions. Palettes that mark classes `"kind": "onset"`
   still load, with a notice, and the key is ignored.
 - Favourites: right-click a class to pin it to the row at the top (and again to
@@ -278,6 +285,8 @@ The list is also in the app, under Options > Keyboard shortcuts.
 - 1-9: choose a favourite class (or one of the first nine in the palette if
   none are pinned), which also applies it to the selected labels (confirming
   suggestions)
+- Ctrl+1-9: add a label of that class over each selected label, keeping the
+  selection and the active class
 - Ctrl+F: find a palette class by name
 - Spacebar: toggle play/stop
 - Tab / Shift+Tab: select and play the next / previous label, or suggestion in
@@ -298,6 +307,8 @@ The list is also in the app, under Options > Keyboard shortcuts.
 - Shift+Left / Shift+Right: move their stop edges
 - Delete: delete the selected labels
 - Ctrl+A: select all the labels in the file (rejected ones only if shown)
+- Ctrl+Shift+A: add a region of the active class over the whole file and
+  select just it (or select the one already there)
 - Escape: deselect all labels / selections and the active palette brush
 - Ctrl+Z: undo label changes
 - Ctrl+Y or Ctrl+Shift+Z: redo
