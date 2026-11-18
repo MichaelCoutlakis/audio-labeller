@@ -60,6 +60,9 @@ struct select_labels
     bool m_one_at_a_time{false};
     /// A click on a label's flag, which selects just it
     std::optional<label_id> m_flag;
+    /// Ctrl+click: add the hit labels to the selection, or remove them, keeping the rest. Otherwise
+    /// the click selects only them, and a click on nothing clears the selection.
+    bool m_toggle{false};
 };
 
 struct toggle_label_selection
@@ -81,6 +84,9 @@ struct select_all_labels
 struct set_active_class
 {
     std::optional<label_defn_id> m_defn_id;
+    /// Choosing the class that is already active turns it off, unless a selected label lacks it,
+    /// which it is then applied to
+    bool m_toggle{false};
 };
 
 /// Add a label of a class over each selected label's span, keeping the selection and the active
@@ -183,6 +189,7 @@ struct select_playback_region
     time_span m_t;
     bool m_loop{false};
     frequency_band m_band{};
+    bool m_play{false}; ///< Start playing, whatever auto play says
 };
 
 struct toggle_playback

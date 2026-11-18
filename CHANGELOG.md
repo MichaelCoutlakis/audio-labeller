@@ -14,6 +14,17 @@
   order.
 - The search, filters and order are remembered between runs.
 
+### Selecting and playing
+
+- A click on a label in the waveform or spectrogram selects only it, as in the
+  Labels list; a click on empty space clears the selection. Ctrl+click adds a
+  label to the selection or removes it. Before, every click added to it.
+- Shift+click places the playhead and plays from there, which Ctrl+click did.
+- Selecting a label in the Labels list sets the playback window to it, as Tab
+  does, so Space plays it.
+- Clicking the highlighted palette class (or pressing its number) applies it to
+  selected labels that don't have it, rather than turning it off first.
+
 ### Building
 
 - Every dependency is a submodule in `external/` (nlohmann/json, spdlog,

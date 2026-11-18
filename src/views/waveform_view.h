@@ -81,6 +81,7 @@ private:
         double m_grab_s; ///< From the label's start to where it was grabbed
         bool m_was_selected;
         bool m_moved{false};
+        bool m_toggled{false}; ///< Ctrl+click: toggled its selection, not to be dragged
     };
     std::optional<flag_press> m_flag_press;
     bool m_rect_held{false}; ///< The selected box on the spectrogram is being resized

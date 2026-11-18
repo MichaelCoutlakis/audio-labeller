@@ -213,8 +213,10 @@ onset to the clip's stop, if the manifest has a stop or duration column, or of
 
 ### Waveform
 - Left click drag to define region
-- Ctrl left click to set playhead cursor
-- Left click to toggle label selection
+- Left click a label to select only it (on the spectrogram, where boxes nest,
+  each click selects the next one); click empty space to clear the selection
+- Ctrl+click to add a label to the selection, or remove it
+- Shift+click to place the playhead there and play
 - Wheel to zoom
 - Right drag to zoom
 - Middle double click to unzoom
@@ -276,8 +278,9 @@ The label palette uses a "paint class" style:
   with it first. Enter chooses the first match; Escape clears the box.
 
 ### Labels
-- Ctrl click to select multiple
+The list selects the same way as the waveform:
 - Single click selects only that label
+- Ctrl click to add to or remove from the selection
 
 ### Hot keys:
 The list is also in the app, under Options > Keyboard shortcuts.

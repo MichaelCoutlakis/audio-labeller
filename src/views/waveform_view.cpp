@@ -7,6 +7,7 @@
 #include <chrono>
 #include <cmath>
 #include <cstdint>
+#include <limits>
 
 #include <SDL3/SDL_opengl.h>
 #include <imgui.h>
@@ -28,6 +29,9 @@ constexpr double min_box_px = 6.;    ///< The narrowest a region's box is drawn 
 constexpr double min_band_px = 8.;   ///< A drag on the spectrogram shorter than this is time only
 constexpr double edge_px = 3.;       ///< A band this near the top or bottom reaches the edge
 constexpr size_t max_flag_rows = 4U; ///< Flags of more overlapping regions share the last row
+
+/// Shift+click places the playhead, so selects and draws nothing
+bool shift_click() { return ImGui::GetIO().KeyShift; }
 
 /// A label's colour: its class's, faded until reviewed, grey if rejected, brighter if selected
 ImColor label_colour(const label &l, const label_defn *defn, const app_state &state)
@@ -136,9 +140,10 @@ unsigned waveform_view::tile_texture_for(
         m_map_range_db = settings.m_spectrogram_range_db;
         m_colour_map.resize(256);
         for(size_t i = 0U; i != 256U; ++i)
-            m_colour_map[i] = i == 0U ? IM_COL32(0, 0, 0, 255)
-                                      : ImGui::ColorConvertFloat4ToU32(
-                                            ImPlot::SampleColormap(float(i) / 255.f, ImPlotColormap_Viridis));
+            m_colour_map[i] = i == 0U
+                ? IM_COL32(0, 0, 0, 255)
+                : ImGui::ColorConvertFloat4ToU32(
+                      ImPlot::SampleColormap(float(i) / 255.f, ImPlotColormap_Viridis));
     }
 
     const auto &image = tile->m_image;
@@ -214,7 +219,7 @@ void waveform_view::render(const project_model &project, app_state &state)
     }
 
     /*
-        LMB = place cursor / drag labels
+        LMB = select / drag labels, Ctrl to add to the selection, Shift to place the playhead
         MMB = pan, double click zoom to fit
         wheel = zoom
         RMB drag = zoom selection
@@ -242,7 +247,8 @@ void waveform_view::render(const project_model &project, app_state &state)
             render_plot(project, state, false, false);
             render_plot(project, state, true, true);
             ImPlot::EndSubplots();
-            settings.m_spectrogram_share = std::clamp(ratios[1] / (ratios[0] + ratios[1]), 0.1f, 0.9f);
+            settings.m_spectrogram_share =
+                std::clamp(ratios[1] / (ratios[0] + ratios[1]), 0.1f, 0.9f);
         }
     }
     ImGui::End();
@@ -289,7 +295,8 @@ void waveform_view::setup_frequency_ticks(const app_state &state)
 
     std::vector<double> positions;
     std::vector<std::string> names;
-    for(const double hz : {0., 100., 200., 500., 1000., 2000., 5000., 10000., 20000., 50000., 100000.})
+    for(const double hz :
+        {0., 100., 200., 500., 1000., 2000., 5000., 10000., 20000., 50000., 100000.})
     {
         if(hz < min_hz || hz > max_hz || (hz == 0. && s.m_scale != frequency_scale::linear))
             continue;
@@ -303,7 +310,11 @@ void waveform_view::setup_frequency_ticks(const app_state &state)
     std::vector<const char *> labels;
     for(const auto &n : names)
         labels.push_back(n.c_str());
-    ImPlot::SetupAxisTicks(ImAxis_Y1, positions.data(), static_cast<int>(positions.size()), labels.data());
+    ImPlot::SetupAxisTicks(
+        ImAxis_Y1,
+        positions.data(),
+        static_cast<int>(positions.size()),
+        labels.data());
 }
 
 void waveform_view::render_plot(
@@ -312,7 +323,10 @@ void waveform_view::render_plot(
     bool spectrogram,
     bool bottom)
 {
-    if(!ImPlot::BeginPlot(spectrogram ? "##Spectrogram" : "##Waveform", ImVec2{-1.f, -1.f}, ImPlotFlags_NoLegend))
+    if(!ImPlot::BeginPlot(
+           spectrogram ? "##Spectrogram" : "##Waveform",
+           ImVec2{-1.f, -1.f},
+           ImPlotFlags_NoLegend))
         return;
 
     ImPlot::SetupAxes(
@@ -387,13 +401,17 @@ void waveform_view::render_cursor(app_state &state)
     if(state.get_audio_buffer().m_sample_rate_hz == 0)
         return;
 
-    // Ctrl click for now to place the cursor:
-    if(ImPlot::IsPlotHovered() &&
-       ImGui::IsMouseClicked(ImGuiMouseButton_Left) &&
-       ImGui::GetIO().KeyCtrl)
+    // Shift+click places the playhead and plays from there
+    if(ImPlot::IsPlotHovered() && ImGui::IsMouseClicked(ImGuiMouseButton_Left) && shift_click())
     {
         const double start_time = ImPlot::GetPlotMousePos(ImAxis_X1, ImAxis_Y1).x;
-        state.select_playback_region(start_time);
+        state.add_action(
+            actions::select_playback_region{
+                {start_time, std::numeric_limits<double>::max()},
+                state.m_loop,
+                {},
+                true
+            });
     }
 
     double t = state.m_playback_state.m_playhead_s;
@@ -502,7 +520,10 @@ void waveform_view::render_spectrogram(app_state &state)
     }
 }
 
-void waveform_view::render_annotations(const project_model &project, app_state &state, bool spectrogram)
+void waveform_view::render_annotations(
+    const project_model &project,
+    app_state &state,
+    bool spectrogram)
 {
     const bool faint = spectrogram;
     if(!state.m_active_file)
@@ -625,15 +646,17 @@ void waveform_view::update_flag_drag(const project_model &project, app_state &st
        m_hovered_flag &&
        !m_rect_held &&
        ImGui::IsMouseClicked(ImGuiMouseButton_Left) &&
-       !ImGui::GetIO().KeyCtrl)
+       !shift_click())
     {
         if(const auto *l = find(*m_hovered_flag))
         {
             const bool selected = state.is_label_selected(l->m_id);
-            m_flag_press = flag_press{l->m_id, mouse_s - l->m_start_s, selected};
-            if(!selected)
+            const bool ctrl = ImGui::GetIO().KeyCtrl;
+            m_flag_press = flag_press{l->m_id, mouse_s - l->m_start_s, selected, false, ctrl};
+            // Ctrl toggles it at once. A selected one is only reselected on release, if not moved.
+            if(ctrl || !selected)
                 state.add_action(
-                    actions::select_labels{mouse_s, 0., 0., std::nullopt, false, l->m_id});
+                    actions::select_labels{mouse_s, 0., 0., std::nullopt, false, l->m_id, ctrl});
         }
         return;
     }
@@ -642,6 +665,7 @@ void waveform_view::update_flag_drag(const project_model &project, app_state &st
 
     const auto *l = find(m_flag_press->m_id);
     if(l &&
+       !m_flag_press->m_toggled &&
        ImGui::IsMouseDown(ImGuiMouseButton_Left) &&
        ImGui::IsMouseDragging(ImGuiMouseButton_Left))
     {
@@ -662,7 +686,7 @@ void waveform_view::update_flag_drag(const project_model &project, app_state &st
     }
     if(ImGui::IsMouseReleased(ImGuiMouseButton_Left))
     {
-        if(l && !m_flag_press->m_moved && m_flag_press->m_was_selected)
+        if(l && !m_flag_press->m_moved && !m_flag_press->m_toggled && m_flag_press->m_was_selected)
             state.add_action(actions::select_labels{mouse_s, 0., 0., std::nullopt, false, l->m_id});
         m_flag_press.reset();
     }
@@ -719,7 +743,10 @@ void waveform_view::update_waveform_drag(
     const tp t_now = std::chrono::steady_clock::now();
 
     // Start drag initial timer: Prevent drag on double clicks, single clicks to set the cursor etc
-    if(!drag.is_dragging() && ImGui::IsMouseClicked(ImGuiMouseButton_Left) && !m_flag_press)
+    if(!drag.is_dragging() &&
+       ImGui::IsMouseClicked(ImGuiMouseButton_Left) &&
+       !m_flag_press &&
+       !shift_click())
     {
         m_drag_start = t_now;
         drag.begin_drag(start_time);
@@ -804,6 +831,7 @@ void waveform_view::process_selections(app_state &state, bool spectrogram)
     // Hit test:
     if(ImGui::IsMouseClicked(ImGuiMouseButton_Left) &&
        !m_flag_press &&
+       !shift_click() &&
        !(spectrogram && m_rect_held))
     {
         const auto pos = ImPlot::GetPlotMousePos(ImAxis_X1, ImAxis_Y1);
@@ -814,7 +842,9 @@ void waveform_view::process_selections(app_state &state, bool spectrogram)
                 pos.y,
                 onset_hit_px * px_s,
                 spectrogram ? std::optional<double>{m_axis.hz_of(pos.y)} : std::nullopt,
-                spectrogram
+                spectrogram,
+                std::nullopt,
+                ImGui::GetIO().KeyCtrl
             });
     }
 }

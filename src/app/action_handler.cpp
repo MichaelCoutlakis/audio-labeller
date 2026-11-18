@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <chrono>
 #include <cmath>
+#include <set>
 #include <tuple>
 
 #include <spdlog/spdlog.h>
@@ -213,32 +214,60 @@ void action_handler::operator()(const actions::select_labels &s)
         if(s.m_flag ? l->m_id == *s.m_flag : hit(*l))
             under.push_back(l);
 
-    // Which to toggle: all of them, or one at a time
-    std::vector<label_id> toggle;
-    if(s.m_one_at_a_time && !s.m_flag)
-    {
+    // Which are hit: all of them, or one at a time
+    const bool cycle = s.m_one_at_a_time && !s.m_flag;
+    if(cycle)
         order_by_area(under, m_state.get_audio_buffer().m_sample_rate_hz / 2.);
-        const auto [off, on] =
-            cycle_pick(under, [&](label_id id) { return m_state.is_label_selected(id); });
-        if(off)
-            toggle.push_back(*off);
-        if(on)
-            toggle.push_back(*on);
-    }
-    else
-        for(const auto *l : under)
-            toggle.push_back(l->m_id);
-
-    std::vector<const label *> hits;
-    for(const auto id : toggle)
+    const auto is_selected = [&](label_id id) { return m_state.is_label_selected(id); };
+    const auto label_of = [&](label_id id) { return *std::ranges::find(under, id, &label::m_id); };
+    // Prevent the selected label palette from going out of sync with the selections:
+    const auto sync_palette = [&](const label *l)
     {
-        const auto *l = *std::ranges::find(under, id, &label::m_id);
-        // Prevent the selected label palette from going out of sync with the selections:
         if(!m_state.is_label_selected(l->m_id) && l->m_defn_id != m_state.m_active_label_defn)
             m_state.m_active_label_defn.reset();
+    };
 
-        if(m_state.toggle_label_selection(l->m_id))
-            hits.push_back(l);
+    std::vector<const label *> hits;
+    if(s.m_toggle)
+    {
+        std::vector<label_id> toggle;
+        if(cycle)
+        {
+            const auto [off, on] = cycle_pick(under, is_selected);
+            if(off)
+                toggle.push_back(*off);
+            if(on)
+                toggle.push_back(*on);
+        }
+        else
+            for(const auto *l : under)
+                toggle.push_back(l->m_id);
+        for(const auto id : toggle)
+        {
+            const auto *l = label_of(id);
+            sync_palette(l);
+            if(m_state.toggle_label_selection(l->m_id))
+                hits.push_back(l);
+        }
+    }
+    else
+    {
+        // Select only what's hit. Nested boxes: the next one each click, back round to the first.
+        std::vector<const label *> pick = under;
+        if(cycle && !under.empty())
+        {
+            const auto on = cycle_pick(under, is_selected).second;
+            pick = {label_of(on.value_or(under.front()->m_id))};
+        }
+        std::set<label_id> ids;
+        for(const auto *l : pick)
+        {
+            if(l->m_defn_id != m_state.m_active_label_defn)
+                m_state.m_active_label_defn.reset();
+            ids.insert(l->m_id);
+        }
+        m_state.set_selection(std::move(ids));
+        hits = std::move(pick);
     }
 
     // Set the playback selection to the most recently selected region:
@@ -258,7 +287,12 @@ void action_handler::operator()(const actions::select_labels &s)
 
 void action_handler::operator()(const actions::toggle_label_selection &t)
 {
-    m_state.toggle_label_selection(t.m_id, t.m_clear_others);
+    if(!m_state.toggle_label_selection(t.m_id, t.m_clear_others))
+        return;
+    // A newly selected label becomes the playback region, so Space plays it
+    const auto labels = m_state.visible_labels(m_proj);
+    if(auto it = std::ranges::find(labels, t.m_id, &label::m_id); it != labels.end())
+        play_label(**it);
 }
 
 void action_handler::operator()(const actions::clear_selection &c) { m_state.clear_selections(); }
@@ -297,6 +331,19 @@ void action_handler::assign_class(const std::set<label_id> &ids, label_defn_id d
 
 void action_handler::operator()(const actions::set_active_class &a)
 {
+    if(a.m_toggle && a.m_defn_id && a.m_defn_id == m_state.m_active_label_defn)
+    {
+        const auto labels = m_state.visible_labels(m_proj);
+        const bool lacking = std::ranges::any_of(
+            labels,
+            [&](const label *l)
+            { return m_state.is_label_selected(l->m_id) && l->m_defn_id != *a.m_defn_id; });
+        if(!lacking)
+        {
+            m_state.m_active_label_defn.reset();
+            return;
+        }
+    }
     m_state.m_active_label_defn = a.m_defn_id;
     if(!a.m_defn_id || !m_state.has_active_file())
         return;
@@ -591,7 +638,7 @@ void action_handler::operator()(const actions::select_playback_region &r)
     restore_active_audio();
     select_region(r.m_t, r.m_band);
     m_audio_engine.set_playback_loop(r.m_loop);
-    if(m_state.m_auto_start)
+    if(m_state.m_auto_start || r.m_play)
         m_audio_engine.play();
 }
 

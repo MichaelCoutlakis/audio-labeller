@@ -77,10 +77,7 @@ void label_control_view::class_button(
     if(clicked && ImGui::GetIO().KeyMods == ImGuiMod_Ctrl)
         state.add_action(actions::add_class{def.m_id});
     else if(clicked)
-        state.add_action(
-            actions::set_active_class{
-                active ? std::nullopt : std::optional<label_defn_id>{def.m_id}
-            });
+        state.add_action(actions::set_active_class{def.m_id, true});
 
     if(active)
         ImGui::PopStyleVar();
@@ -102,7 +99,8 @@ void label_control_view::class_button(
         ImGui::EndPopup();
     }
     ImGui::SetItemTooltip(
-        "Ctrl+click to add it over the selected labels\nRight-click to %s, or to filter files by it",
+        "Ctrl+click to add it over the selected labels\nRight-click to %s, or to filter files by "
+        "it",
         state.is_favourite(def) ? "unpin" : "pin");
     ImGui::PopID();
 }
@@ -148,10 +146,7 @@ void label_control_view::render_favourites(
     ImGui::PopID();
 }
 
-void label_control_view::render_filter(
-    const project_model &project,
-    app_state &state,
-    float width)
+void label_control_view::render_filter(const project_model &project, app_state &state, float width)
 {
     const auto matches = filter_classes(project.m_label_dict, m_filter.data());
 
@@ -187,7 +182,11 @@ void label_control_view::render_filter(
     ImGui::PushID("matches");
     if(ImGui::BeginChild("matches", {width, height}))
         for(const auto *def : matches)
-            class_button(*def, state, ImGui::GetContentRegionAvail().x, hotkey_of(numbered, def->m_id));
+            class_button(
+                *def,
+                state,
+                ImGui::GetContentRegionAvail().x,
+                hotkey_of(numbered, def->m_id));
     ImGui::EndChild();
     ImGui::PopID();
 }

@@ -139,13 +139,7 @@ void keyboard_controller::handle(const project_model &project, app_state &state)
                 state.add_action(actions::review_step{true});
             }
             else
-            {
-                const bool active = state.m_active_label_defn == id;
-                state.add_action(
-                    actions::set_active_class{
-                        active ? std::nullopt : std::optional<label_defn_id>{id}
-                    });
-            }
+                state.add_action(actions::set_active_class{id, true});
         }
     }
 
@@ -217,7 +211,10 @@ void keyboard_controller::select_adjacent_label(
 {
     const auto visible = active_labels(project, state);
     std::vector<label> all;
-    std::ranges::copy_if(visible, std::back_inserter(all), [&](const label &l) { return !keep || keep(l); });
+    std::ranges::copy_if(
+        visible,
+        std::back_inserter(all),
+        [&](const label &l) { return !keep || keep(l); });
     if(all.empty())
         return;
     const auto order = [](const label &l) { return std::pair{l.m_start_s, l.m_id}; };
@@ -257,9 +254,8 @@ void keyboard_controller::select_adjacent_label(
         next = all.begin();
 
     state.add_action(actions::clear_selection{});
+    // Selecting it also makes its playback window the playback region
     state.add_action(actions::toggle_label_selection{next->m_id});
-    const auto window = state.playback_window(*next);
-    state.select_playback_region(window.first, window.second, next->m_band);
 }
 
 void keyboard_controller::handle_nudges(const project_model &project, app_state &state)
