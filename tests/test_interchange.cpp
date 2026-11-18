@@ -207,6 +207,52 @@ TEST_CASE("exporting writes done files, empty when they have no events")
     CHECK(fs::exists(p.m_dir / "out/all/rec3.txt"));
 }
 
+TEST_CASE("exporting removes the files it wrote for recordings no longer done")
+{
+    tree_project p(R"([{"root":"out/ann"}])");
+    const auto rec1 = p.m_dir / "data/site1/rec1.wav";
+    const auto rec2 = p.m_dir / "data/site1/rec2.WAV";
+    const auto ann1 = p.m_dir / "out/ann/site1/rec1.txt";
+    const auto ann2 = p.m_dir / "out/ann/site1/rec2.txt";
+    const auto foreign = p.m_dir / "out/ann/rec3.txt"; // Not written by the app
+    write_text(foreign, "1\t2\tDog\n");
+
+    {
+        project_model m(p.config());
+        m.add_label(rec1, label{get_next_label_id(), label_defn_id{0}, 2., 3.});
+        m.set_status(rec1, file_status::done);
+        m.set_status(rec2, file_status::done);
+        auto summary = export_annotations(m, p.tree(m));
+        REQUIRE(summary.m_files == 2);
+        REQUIRE(fs::exists(ann1));
+        REQUIRE(fs::exists(ann2));
+        m.save_if_dirty(); // The records outlast the session
+    }
+
+    project_model m(p.config());
+    m.set_status(rec1, file_status::skip);
+    m.set_status(rec2, file_status::todo);
+    write_text(ann2, "0\t1\tDog\n"); // Edited by someone since
+    auto summary = export_annotations(m, p.tree(m));
+    CHECK(summary.m_errors.empty());
+    CHECK(summary.m_files == 0);
+    CHECK(summary.m_removed == 1);
+    CHECK(!fs::exists(ann1));
+    CHECK(summary.m_changed == std::vector<std::string>{generic_utf8(ann2)});
+    CHECK(fs::exists(ann2));
+    CHECK(fs::exists(foreign)); // Never recorded, so never removed
+
+    // Done again: written again, and removed again once not
+    m.set_status(rec1, file_status::done);
+    summary = export_annotations(m, p.tree(m));
+    CHECK(fs::exists(ann1));
+    m.set_status(rec1, file_status::todo);
+    summary = export_annotations(m, p.tree(m));
+    CHECK(summary.m_removed == 1);
+    CHECK(!fs::exists(ann1));
+    CHECK(summary.m_changed.size() == 1U); // Still listed each time
+}
+
 TEST_CASE("environment variables in project paths")
 {
     temp_dir dir;

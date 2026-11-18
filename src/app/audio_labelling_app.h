@@ -17,6 +17,7 @@
 #include "../views/file_list_view.h"
 #include "../views/label_controls_view.h"
 #include "../views/labels_view.h"
+#include "../views/paste_dialog_view.h"
 #include "../views/project_settings_view.h"
 #include "../views/project_view.h"
 #include "../views/shortcuts.h"
@@ -45,6 +46,7 @@ private:
     assist_view m_assist;
     file_dialogs m_dialogs;
     project_view m_project_view{m_dialogs};
+    paste_dialog_view m_paste_dialog;
     project_settings_view m_project_settings{m_dialogs};
 
     audio_engine m_audio_engine;

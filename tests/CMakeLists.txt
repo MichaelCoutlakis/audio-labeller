@@ -2,6 +2,7 @@ add_executable(audio_labeller_tests
     "test_main.cpp"
     "test_utils.h"
     "test_add_classes.cpp"
+    "test_copy_labels.cpp"
     "test_assist.cpp"
     "test_auto_gain.cpp"
     "test_band_playback.cpp"

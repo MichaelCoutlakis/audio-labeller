@@ -5,7 +5,9 @@
 #include <algorithm>
 #include <cctype>
 #include <cmath>
+#include <cstdint>
 #include <fstream>
+#include <iterator>
 #include <set>
 #include <sstream>
 #include <stdexcept>
@@ -24,6 +26,24 @@ namespace
 {
 constexpr const char *rejected_prefix = "x:";
 constexpr double same_time_s = 0.001; ///< Labels this close are taken to be the same
+
+/// 16 hex digits of a 64-bit FNV-1a hash
+std::string content_hash(const std::string &contents)
+{
+    uint64_t hash = 14695981039346656037ULL;
+    for(const char c : contents)
+    {
+        hash ^= static_cast<uint8_t>(c);
+        hash *= 1099511628211ULL;
+    }
+    return fmt::format("{:016x}", hash);
+}
+
+std::string read_whole_file(const fs::path &path)
+{
+    std::ifstream in(path, std::ios::binary);
+    return {std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>()};
+}
 
 bool iequals(const std::string &a, const std::string &b)
 {
@@ -295,27 +315,59 @@ annotation_export_summary export_annotations(project_model &project, const annot
 {
     annotation_export_summary summary;
     const auto &settings = tree.settings();
+    const auto key = generic_utf8(settings.m_root);
+
+    // A label file written earlier: removed if it's as written, else left for someone to look at
+    const auto remove_earlier = [&](const fs::path &file, const annotation_export_record &earlier)
+    {
+        const auto path = (tree.root() / path_from_utf8(earlier.m_path)).lexically_normal();
+        std::error_code ec;
+        if(!fs::is_regular_file(path, ec))
+        {
+            project.record_annotation_export(file, key, std::nullopt);
+            return;
+        }
+        if(content_hash(read_whole_file(path)) != earlier.m_hash)
+        {
+            summary.m_changed.push_back(generic_utf8(path));
+            return;
+        }
+        if(fs::remove(path, ec))
+        {
+            ++summary.m_removed;
+            project.record_annotation_export(file, key, std::nullopt);
+        }
+        else
+            summary.m_errors.push_back(generic_utf8(path) + ": " + ec.message());
+    };
 
     for(const auto &file : project.get_files())
     {
         const auto status = project.get_status(file.m_path);
-        if(status == file_status::skip)
-            continue;
-
         const auto text_labels = labels_for_export(
             project.get_labels(file.m_path),
             project.m_label_dict,
             settings.m_include_suggestions);
 
         const bool write = status == file_status::done ||
-            (settings.m_export_files == annotation_tree_settings::export_files::all &&
+            (status == file_status::todo &&
+             settings.m_export_files == annotation_tree_settings::export_files::all &&
              !text_labels.empty());
-        if(!write)
-            continue;
 
-        const auto path = tree.path_for(project.to_portable(file.m_path));
+        std::optional<annotation_export_record> earlier;
+        if(const auto *state = project.find_file_state(file.m_path))
+            if(const auto it = state->m_annotation_exports.find(key);
+               it != state->m_annotation_exports.end())
+                earlier = it->second;
+
+        const auto path = write ? tree.path_for(project.to_portable(file.m_path)) : std::nullopt;
         if(!path)
+        {
+            // No longer done (or with labels, for "all"): its file would be read as reviewed
+            if(earlier)
+                remove_earlier(file.m_path, *earlier);
             continue;
+        }
 
         try
         {
@@ -326,32 +378,37 @@ annotation_export_summary export_annotations(project_model &project, const annot
             std::ostringstream out;
             tree.format().write(out, text_labels, info);
             const auto contents = out.str();
+            const annotation_export_record record{
+                generic_utf8(path->lexically_relative(tree.root())),
+                content_hash(contents)
+            };
 
             ++summary.m_files;
             summary.m_labels += text_labels.size();
 
+            // Written elsewhere before, say under another naming
+            if(earlier && earlier->m_path != record.m_path)
+                remove_earlier(file.m_path, *earlier);
+
             std::error_code ec;
-            if(fs::is_regular_file(*path, ec))
+            if(fs::is_regular_file(*path, ec) && read_whole_file(*path) == contents)
+                ++summary.m_unchanged;
+            else
             {
-                std::ifstream in(*path, std::ios::binary);
-                const std::string existing{
-                    std::istreambuf_iterator<char>(in),
-                    std::istreambuf_iterator<char>()
-                };
-                if(existing == contents)
-                {
-                    ++summary.m_unchanged;
-                    continue;
-                }
+                fs::create_directories(path->parent_path());
+                write_file_atomically(*path, contents);
             }
-            fs::create_directories(path->parent_path());
-            write_file_atomically(*path, contents);
+            project.record_annotation_export(file.m_path, key, record);
         }
         catch(const std::exception &e)
         {
             summary.m_errors.push_back(file.m_display_name + ": " + e.what());
         }
     }
-    spdlog::info("Wrote {} label files to {}", summary.m_files, generic_utf8(tree.root()));
+    spdlog::info(
+        "Wrote {} label files to {}, removed {}",
+        summary.m_files,
+        generic_utf8(tree.root()),
+        summary.m_removed);
     return summary;
 }

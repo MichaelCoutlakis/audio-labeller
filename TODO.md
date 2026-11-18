@@ -66,6 +66,11 @@ Still to do:
 - [ ] Check the review flow against a real pipeline's files and a real
       multichannel recording, with region suggestions of varied length.
 - [ ] Remember the clip manifest's filter and sort between runs.
+- [x] Export leaves a stale file behind when a recording stops being done
+      (marked skipped or to do after an earlier export): a reader takes it as
+      that recording's reviewed labels. Export now records each file it writes
+      (path and a hash of its contents, per tree) and removes it once the
+      recording is no longer done, or lists it if someone changed it since.
 
 ## Phase 4: Seeing and hearing
 
@@ -128,19 +133,15 @@ detector for regions or onsets.
       range, or template matching against confirmed labels.
 - [ ] Let a command run once over many recordings (a batch mode), for models
       that are slow to load.
-- [ ] Labels from another recording of the same scene: several recorders (or
+- [x] Labels from another recording of the same scene: several recorders (or
       microphones) at one site hear mostly the same sounds, so once one file
-      is labelled, copy its labels into another as suggestions, with a time
-      offset (the files' start times, if known, else nudged by hand for the
-      whole set). The delay to each recorder differs per sound with where the
-      sound was, so after the shift each suggestion still needs its start
-      aligned: snapping (A) per suggestion, or a cross-correlation of the two
-      files around each label. Only labels the other file can hear should be
-      kept, so this is a review, not a copy: Enter accepts, X drops a sound
-      the second recorder missed. The review doesn't cover sounds only the
-      second recorder heard, so run the assisted labellers on the file as
-      well, and keep the file's status at "in progress" until someone has
-      listened through the rest.
+      is labelled, its labels are copied (Ctrl+C) and pasted into another as
+      suggestions (Ctrl+V), or with a shift for the recordings' start offset
+      (Ctrl+Shift+V). They stay selected, so the arrow keys nudge the whole
+      set by hand; snapping (A) aligns each start. It's a review,
+      not a copy: Enter accepts, X drops a sound the second recorder missed.
+      Sounds only the second recorder heard still need the assisted labellers
+      or a listen through.
 - [ ] Class statistics panel.
 - [ ] Annotator field, with merge and agreement checks.
 

@@ -221,6 +221,8 @@ void app_state::reset_project_state()
     m_export_progress.reset();
     m_export_result = {};
     m_show_export_settings = false;
+    m_label_clipboard = {}; // Its class IDs are the old palette's
+    m_show_paste_dialog = false;
     m_assisted_labellers.clear();
     m_assist_progress.reset();
     m_assist_result = {};

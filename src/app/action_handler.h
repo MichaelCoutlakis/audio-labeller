@@ -29,6 +29,8 @@ struct action_handler
     void operator()(const actions::accept_labels &a);
     void operator()(const actions::reject_labels &r);
     void operator()(const actions::delete_labels &d);
+    void operator()(const actions::copy_labels &c);
+    void operator()(const actions::paste_labels &p);
     void operator()(const actions::move_label &m);
     void operator()(const actions::snap_labels &s);
     void operator()(const actions::extend_labels &e);

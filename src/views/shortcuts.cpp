@@ -64,6 +64,12 @@ const std::vector<std::pair<const char *, const char *>> &keyboard_controller::d
         {"Shift+Left, Shift+Right", "Move their stop edges"},
         {"Delete", "Delete the selected labels"},
         {"Ctrl+A", "Select all the labels in the file"},
+        {"Ctrl+C", "Copy the selected labels (not rejected candidates)"},
+        {"Ctrl+V",
+         "Paste them at the same times as suggestions, eg. into another recording of the same "
+         "scene. They stay selected, so the arrow keys move them together."},
+        {"Ctrl+Shift+V",
+         "Paste with a shift (eg. the recordings' start offset), as suggestions or labels"},
         {"Ctrl+Shift+A",
          "Add a region of the active class over the whole file and select it (or select the one "
          "already there)"},
@@ -81,7 +87,7 @@ const std::vector<std::pair<const char *, const char *>> &keyboard_controller::d
 void keyboard_controller::handle(const project_model &project, app_state &state)
 {
     const auto &io = ImGui::GetIO();
-    if(io.WantTextInput || state.m_keys_captured)
+    if(io.WantTextInput || state.m_keys_captured || state.m_show_paste_dialog)
         return;
 
     if(pressed(ImGuiKey_Space))
@@ -100,6 +106,16 @@ void keyboard_controller::handle(const project_model &project, app_state &state)
         state.add_action(actions::select_all_labels{});
     if(pressed(ImGuiKey_A, ImGuiMod_Ctrl | ImGuiMod_Shift) && state.has_active_file())
         state.add_action(actions::select_whole_file{});
+
+    // Copy and paste labels, eg. into another recording of the same scene. Plain Ctrl+V pastes
+    // suggestions, as labels from elsewhere are only a guess at what this recording heard.
+    if(pressed(ImGuiKey_C, ImGuiMod_Ctrl) && !state.selected_labels().empty())
+        state.add_action(actions::copy_labels{state.selected_labels()});
+    const bool can_paste = state.has_active_file() && !state.m_label_clipboard.m_labels.empty();
+    if(pressed(ImGuiKey_V, ImGuiMod_Ctrl) && can_paste)
+        state.add_action(actions::paste_labels{0., label_state::suggested});
+    if(pressed(ImGuiKey_V, ImGuiMod_Ctrl | ImGuiMod_Shift) && can_paste)
+        state.m_show_paste_dialog = true;
 
     if(pressed(ImGuiKey_F, ImGuiMod_Ctrl))
         state.m_focus_class_filter = true;

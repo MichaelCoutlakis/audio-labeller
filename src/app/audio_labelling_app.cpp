@@ -166,6 +166,7 @@ void audio_labeller_app::on_frame()
     m_assist.render(m_project, m_app_state);
     m_project_settings.render(m_project, m_app_state);
     m_project_view.render(m_project, m_app_state);
+    m_paste_dialog.render(m_app_state);
 
     // Dispatch the actions (controller):
     for(auto &action : m_app_state.m_actions)

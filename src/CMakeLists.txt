@@ -74,6 +74,7 @@ add_executable(AudioLabeller main.cpp
     "views/labels_view.h" "views/labels_view.cpp"
     "views/label_controls_view.h" "views/label_controls_view.cpp"
     "views/file_list_view.h" "views/file_list_view.cpp"
+    "views/paste_dialog_view.h" "views/paste_dialog_view.cpp"
     "views/shortcuts.h" "views/shortcuts.cpp"
     "views/project_view.h" "views/project_view.cpp"
     "views/project_settings_view.h" "views/project_settings_view.cpp"

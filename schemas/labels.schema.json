@@ -110,6 +110,17 @@
                             "clips": { "type": "integer" },
                             "verified": { "type": "boolean", "description": "Every clip was read back and matched" }
                         }
+                    },
+                    "annotation-exports": {
+                        "description": "Label files written into annotation trees, by the tree's root as written in the project, so that they can be removed once the file stops being done",
+                        "type": "object",
+                        "additionalProperties": {
+                            "type": "object",
+                            "properties": {
+                                "path": { "type": "string", "description": "Relative to the tree's root, with forward slashes" },
+                                "hash": { "type": "string", "description": "FNV-1a of the contents written" }
+                            }
+                        }
                     }
                 },
                 "required": [ "status" ]

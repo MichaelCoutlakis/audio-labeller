@@ -134,6 +134,13 @@ private:
     double m_drag_current{};
 };
 
+/// Labels copied with Ctrl+C, to paste into the same or another recording
+struct label_clipboard
+{
+    std::filesystem::path m_source;
+    std::vector<label> m_labels;
+};
+
 class app_state
 {
 public:
@@ -236,6 +243,12 @@ public:
     std::future<export_outcome> m_export_result;
     bool is_exporting() const { return m_export_result.valid(); }
     bool m_show_export_settings{false};
+
+    /* Copy and paste of labels, eg. into another recording of the same scene: */
+    label_clipboard m_label_clipboard;
+    bool m_show_paste_dialog{false}; ///< Ctrl+Shift+V: choose the shift and state, then paste
+    double m_paste_offset_s{};       ///< Remembered between pastes
+    bool m_paste_as_labels{false};   ///< Else as suggestions
 
     /* Assisted labelling: */
     std::vector<assisted_labeller_settings> m_assisted_labellers;

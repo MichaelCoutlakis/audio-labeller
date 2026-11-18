@@ -554,6 +554,26 @@ void project_model::record_export(const fs::path &file, export_record record)
     ++m_revision;
 }
 
+void project_model::record_annotation_export(
+    const fs::path &file,
+    const std::string &tree_root,
+    std::optional<annotation_export_record> record)
+{
+    auto &exports = m_file_states[file].m_annotation_exports;
+    const auto it = exports.find(tree_root);
+    if(!record)
+    {
+        if(it == exports.end())
+            return;
+        exports.erase(it);
+    }
+    else if(it != exports.end() && it->second == *record)
+        return;
+    else
+        exports[tree_root] = std::move(*record);
+    ++m_revision;
+}
+
 void project_model::export_csv()
 {
     if(!has_project())
@@ -815,6 +835,13 @@ void project_model::load_labels()
                 it->value("verified", false)
             };
 
+        if(auto it = record.find("annotation-exports"); it != record.end())
+            for(const auto &[root, e] : it->items())
+                state.m_annotation_exports[root] = annotation_export_record{
+                    e.value("path", std::string{}),
+                    e.value("hash", std::string{})
+                };
+
         if(!state.is_default())
             m_file_states[*path] = std::move(state);
     }
@@ -893,6 +920,12 @@ std::string project_model::serialize_labels() const
                 {"clips", state.m_export->m_clips},
                 {"verified", state.m_export->m_verified}
             };
+        if(!state.m_annotation_exports.empty())
+        {
+            auto &exports = r["annotation-exports"];
+            for(const auto &[root, e] : state.m_annotation_exports)
+                exports[root] = json{{"path", e.m_path}, {"hash", e.m_hash}};
+        }
         file_records.push_back(std::move(r));
     }
     for(const auto &r : m_unresolved_files)

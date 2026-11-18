@@ -21,6 +21,7 @@
 #include "../io/reveal.h"
 #include "../manifest/clip_manifest.h"
 #include "../model/add_classes.h"
+#include "../model/copy_labels.h"
 #include "../model/paths.h"
 #include "action_handler.h"
 #include "actions.h"
@@ -473,6 +474,73 @@ void action_handler::operator()(const actions::delete_labels &d)
         });
 }
 
+void action_handler::operator()(const actions::copy_labels &c)
+{
+    if(!m_state.has_active_file())
+        return;
+    // Rejected candidates aren't sounds to look for, and unclassified selections have no class
+    std::vector<label> copied;
+    for(const auto &l : m_proj.get_labels(m_state.m_active_file.value()))
+        if(c.m_ids.contains(l.m_id) && l.m_state != label_state::rejected)
+            copied.push_back(l);
+    if(copied.empty())
+        return;
+    m_state.m_label_clipboard = label_clipboard{m_state.m_active_file.value(), std::move(copied)};
+    spdlog::info(
+        "Copied {} labels from {}",
+        m_state.m_label_clipboard.m_labels.size(),
+        generic_utf8(m_state.m_label_clipboard.m_source.filename()));
+}
+
+void action_handler::operator()(const actions::paste_labels &p)
+{
+    const auto &clipboard = m_state.m_label_clipboard;
+    if(!m_state.has_active_file() || clipboard.m_labels.empty())
+        return;
+    const auto &file = m_state.m_active_file.value();
+
+    const auto pasted = labels_to_paste(
+        clipboard.m_labels,
+        m_proj.get_labels(file),
+        p.m_offset_s,
+        m_state.get_audio_buffer().duration_s(),
+        p.m_state);
+
+    spdlog::info(
+        "Pasted {} labels from {}, shifted by {:+.3f} s",
+        pasted.m_added.size(),
+        generic_utf8(clipboard.m_source.filename()),
+        p.m_offset_s);
+    // Only worth interrupting for when some were left out
+    if(pasted.m_outside || pasted.m_present)
+    {
+        auto message = fmt::format(
+            "Pasted {} of {} labels.",
+            pasted.m_added.size(),
+            clipboard.m_labels.size());
+        if(pasted.m_outside)
+            message +=
+                fmt::format("\n{} fell outside this recording once shifted.", pasted.m_outside);
+        if(pasted.m_present)
+            message += fmt::format("\n{} were here already.", pasted.m_present);
+        m_state.report_info(message);
+    }
+    if(pasted.m_added.empty())
+        return;
+
+    undoable(
+        file,
+        [&]
+        {
+            for(const auto &l : pasted.m_added)
+                m_proj.add_label(file, l);
+        });
+    std::set<label_id> ids;
+    for(const auto &l : pasted.m_added)
+        ids.insert(l.m_id);
+    m_state.set_selection(std::move(ids));
+}
+
 void action_handler::operator()(const actions::move_label &m)
 {
     if(!m_state.has_active_file())
@@ -480,8 +548,8 @@ void action_handler::operator()(const actions::move_label &m)
 
     const auto &file = m_state.m_active_file.value();
     const double duration_s = m_state.get_audio_buffer().duration_s();
-    const double start = std::clamp(std::min(m.m_start_s, m.m_stop_s), 0., duration_s);
-    const double stop = std::clamp(std::max(m.m_start_s, m.m_stop_s), 0., duration_s);
+    const double wanted_start = std::min(m.m_start_s, m.m_stop_s);
+    const double wanted_stop = std::max(m.m_start_s, m.m_stop_s);
 
     undoable(
         file,
@@ -491,6 +559,17 @@ void action_handler::operator()(const actions::move_label &m)
                 {m.m_id},
                 [&](label &l)
                 {
+                    // Moved whole (not resized), it keeps its length at the ends of the file
+                    // rather than being squashed
+                    const double length = wanted_stop - wanted_start;
+                    const bool moved = std::abs(length - (l.m_stop_s - l.m_start_s)) < 1e-9;
+                    double start = std::clamp(wanted_start, 0., duration_s);
+                    double stop = std::clamp(wanted_stop, 0., duration_s);
+                    if(moved && length <= duration_s)
+                    {
+                        start = std::clamp(wanted_start, 0., duration_s - length);
+                        stop = start + length;
+                    }
                     l.m_start_s = start;
                     l.m_stop_s = stop;
                     if(m.m_band)
@@ -911,13 +990,24 @@ void action_handler::operator()(const actions::export_annotations &e)
 {
     const annotation_tree tree(m_proj.config(), m_state.m_annotation_trees.at(e.m_tree));
     const auto summary = export_annotations(m_proj, tree);
-    m_state.report_info(
-        fmt::format(
-            "Wrote {} label files ({} labels) to\n{}\n{} were already up to date.",
-            summary.m_files - summary.m_unchanged,
-            summary.m_labels,
-            generic_utf8(tree.root()),
-            summary.m_unchanged));
+    auto message = fmt::format(
+        "Wrote {} label files ({} labels) to\n{}\n{} were already up to date.",
+        summary.m_files - summary.m_unchanged,
+        summary.m_labels,
+        generic_utf8(tree.root()),
+        summary.m_unchanged);
+    if(summary.m_removed)
+        message += fmt::format(
+            "\nRemoved {} written earlier for files no longer done.",
+            summary.m_removed);
+    if(!summary.m_changed.empty())
+    {
+        message += "\n\nWritten earlier for files no longer done, but changed since, so left in "
+                   "place (a reader may take them as reviewed):";
+        for(const auto &path : summary.m_changed)
+            message += "\n  " + path;
+    }
+    m_state.report_info(message);
     for(const auto &error : summary.m_errors)
         m_state.report_error("Could not export " + error);
 }

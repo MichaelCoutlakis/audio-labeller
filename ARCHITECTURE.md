@@ -168,6 +168,13 @@ label), and an optional `score`, the proposer's confidence. A label's `stop_s`
 may equal its `start_s` (a zero-length label, see below). Files gain an optional `channel` (numbered from 1, or `mix`). The version
 was bumped so that an older app can't read suggestions as labels.
 
+Files may also have `annotation-exports`, keyed by an annotation tree's root
+as written in the project: the label file written there (relative to the
+root) and an FNV-1a hash of its contents. The next export removes that file
+once the recording is no longer done, unless its contents no longer match the
+hash. An older app ignores the key (and drops it on saving, so its stale files
+are left behind as before), so the version is unchanged.
+
 ## Labels and suggestions
 
 A label is a region: it marks a sound from where it starts to where it stops,

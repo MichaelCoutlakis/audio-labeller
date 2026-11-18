@@ -14,6 +14,23 @@
   order.
 - The search, filters and order are remembered between runs.
 
+### Labelling
+
+- Copy and paste labels: Ctrl+C copies the selected labels, Ctrl+V pastes them
+  as suggestions at the same times, for another recording of the same scene,
+  and Ctrl+Shift+V pastes them with a shift (eg. the recordings' start offset)
+  as suggestions or labels. The pasted labels stay selected, so the arrow keys
+  move them together.
+- A label moved whole (by dragging or the arrow keys) keeps its length at the
+  ends of the file, rather than being squashed.
+
+### Exchanging label files
+
+- Annotation export removes the label file it wrote for a recording that's no
+  longer done, so it isn't read as reviewed. A file changed since it was
+  written is listed instead and left in place. The label file records what
+  was written under each file's `annotation-exports`.
+
 ### Selecting and playing
 
 - A click on a label in the waveform or spectrogram selects only it, as in the

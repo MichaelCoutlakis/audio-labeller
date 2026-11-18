@@ -127,6 +127,20 @@ struct delete_labels
     std::set<label_id> m_ids;
 };
 
+/// Copy labels of the active file to the app's label clipboard
+struct copy_labels
+{
+    std::set<label_id> m_ids;
+};
+
+/// Paste the label clipboard into the active file, leaving just the pasted labels selected, so
+/// that the arrow keys move them together. See model/copy_labels.h.
+struct paste_labels
+{
+    double m_offset_s{}; ///< Added to their times
+    label_state m_state{label_state::suggested};
+};
+
 /// Move a label's edges. Moves with the same drag sequence number merge into one undo step.
 struct move_label
 {
@@ -320,6 +334,8 @@ using app_action = std::variant<
     accept_labels,
     reject_labels,
     delete_labels,
+    copy_labels,
+    paste_labels,
     move_label,
     snap_labels,
     extend_labels,

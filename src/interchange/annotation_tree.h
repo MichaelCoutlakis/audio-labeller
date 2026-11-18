@@ -123,13 +123,18 @@ struct annotation_export_summary
     size_t m_files{};     ///< Label files written or already up to date
     size_t m_unchanged{}; ///< Of those, already up to date
     size_t m_labels{};
+    size_t m_removed{}; ///< Written earlier for files no longer selected, and now removed
+    /// Written earlier for files no longer selected, but changed since, so left in place
+    std::vector<std::string> m_changed;
     std::vector<std::string> m_errors;
 };
 
 /// Write the tree's label file for every file selected by its settings. Confirmed labels are
 /// written as their class, rejected ones with "x:" in front, and suggestions only if the settings
 /// ask. A file marked done with no labels gets an empty file. Files are written atomically, and
-/// only if their contents change.
+/// only if their contents change. Each file written is recorded in the project, so that once its
+/// recording is no longer selected (marked skipped, or to do after being done) the file is
+/// removed, unless it changed since it was written.
 annotation_export_summary export_annotations(project_model &project, const annotation_tree &tree);
 
 /// The text labels of one file, as export_annotations() writes them, sorted by time

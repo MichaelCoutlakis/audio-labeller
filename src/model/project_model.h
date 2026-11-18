@@ -102,6 +102,16 @@ struct export_record
     bool m_verified{};
 };
 
+/// A label file written into an annotation tree, so that it can be removed when the recording
+/// stops being done
+struct annotation_export_record
+{
+    std::string m_path; ///< UTF-8, relative to the tree's root, with forward slashes
+    std::string m_hash; ///< Of the contents written, to tell whether anyone changed it since
+
+    bool operator==(const annotation_export_record &) const = default;
+};
+
 /// Per-file state other than labels
 struct file_state
 {
@@ -110,10 +120,16 @@ struct file_state
     std::optional<export_record> m_export;
     /// Channel to view and play, overriding the project's. mixed_channels for a mix.
     std::optional<uint32_t> m_channel;
+    /// By the tree's root as written in the project
+    std::map<std::string, annotation_export_record> m_annotation_exports;
 
     bool is_default() const
     {
-        return m_status == file_status::todo && !m_source_id && !m_export && !m_channel;
+        return m_status == file_status::todo &&
+            !m_source_id &&
+            !m_export &&
+            !m_channel &&
+            m_annotation_exports.empty();
     }
 };
 
@@ -185,6 +201,13 @@ public:
     void set_source_id(const std::filesystem::path &file, const source_id_cache &id);
 
     void record_export(const std::filesystem::path &file, export_record record);
+
+    /// Record the label file written for this file into the annotation tree with this root, or
+    /// forget it (nullopt)
+    void record_annotation_export(
+        const std::filesystem::path &file,
+        const std::string &tree_root,
+        std::optional<annotation_export_record> record);
 
     /// How a dataset file is identified on disk, independent of the machine and working directory
     struct portable_path

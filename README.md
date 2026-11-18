@@ -90,6 +90,16 @@ It rewrites those keys of the project file and leaves the rest as they are.
 next start. Right-click a file in the list to show it in the system's file
 manager or copy its path.
 
+Several recorders (or microphones) at one site hear mostly the same sounds.
+Once one recording is labelled, select its labels (Ctrl+A) and copy them
+(Ctrl+C), open the other recording and paste them (Ctrl+V) as suggestions at the
+same times. Ctrl+Shift+V pastes with a shift instead, such as the recordings'
+start offset (negative if this one started later), and can paste labels rather
+than suggestions. Labels that fall outside the recording are left out. The
+pasted labels stay selected, so the arrow keys move them together to line them
+up (whole labels keep their length at the file's ends); A snaps each start.
+Then review them: Enter accepts, X drops a sound this recorder missed.
+
 To write a project by hand:
 
 1. Create your project's label palette according to `schemas/label-palette.schema.json`
@@ -155,7 +165,9 @@ or `raven`) and gets Import and Export buttons in the file list.
 - Export writes a file for every file marked done, empty if it has no
   events, so a reader can tell "no events" from "not reviewed". Rejected labels
   are written with `x:` in front. An empty file read as labels marks its
-  recording done.
+  recording done. Once a recording is no longer done (marked skipped, or to
+  do), the next export removes the file it wrote for it, unless the file was
+  changed since, in which case it's listed and left in place.
 - Label text is matched to palette classes by name, ignoring case. Names not
   in the palette are added for the session, in grey.
 
@@ -310,6 +322,12 @@ The list is also in the app, under Options > Keyboard shortcuts.
 - Shift+Left / Shift+Right: move their stop edges
 - Delete: delete the selected labels
 - Ctrl+A: select all the labels in the file (rejected ones only if shown)
+- Ctrl+C: copy the selected labels (not rejected candidates)
+- Ctrl+V: paste them at the same times as suggestions, eg. into another
+  recording of the same scene. They stay selected, so the arrow keys move them
+  together.
+- Ctrl+Shift+V: paste with a shift (eg. the recordings' start offset), as
+  suggestions or labels
 - Ctrl+Shift+A: add a region of the active class over the whole file and
   select just it (or select the one already there)
 - Escape: deselect all labels / selections and the active palette brush
