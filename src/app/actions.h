@@ -55,6 +55,11 @@ struct select_labels
     /// The frequency under the mouse on the spectrogram, where labels with a band are hit by it
     /// rather than by their lane
     std::optional<double> m_hz;
+    /// On the spectrogram, where boxes nest, a click selects one label at a time, the smallest
+    /// first, and the next on each click
+    bool m_one_at_a_time{false};
+    /// A click on a label's flag, which selects just it
+    std::optional<label_id> m_flag;
 };
 
 struct toggle_label_selection

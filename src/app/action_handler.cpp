@@ -207,11 +207,31 @@ void action_handler::operator()(const actions::select_labels &s)
         return l.m_start_s <= s.m_x && s.m_x <= l.m_stop_s;
     };
 
-    std::vector<const label *> hits;
+    std::vector<const label *> under;
     for(const auto *l : m_state.visible_labels(m_proj))
+        if(s.m_flag ? l->m_id == *s.m_flag : hit(*l))
+            under.push_back(l);
+
+    // Which to toggle: all of them, or one at a time
+    std::vector<label_id> toggle;
+    if(s.m_one_at_a_time && !s.m_flag)
     {
-        if(!hit(*l))
-            continue;
+        order_by_area(under, m_state.get_audio_buffer().m_sample_rate_hz / 2.);
+        const auto [off, on] =
+            cycle_pick(under, [&](label_id id) { return m_state.is_label_selected(id); });
+        if(off)
+            toggle.push_back(*off);
+        if(on)
+            toggle.push_back(*on);
+    }
+    else
+        for(const auto *l : under)
+            toggle.push_back(l->m_id);
+
+    std::vector<const label *> hits;
+    for(const auto id : toggle)
+    {
+        const auto *l = *std::ranges::find(under, id, &label::m_id);
         // Prevent the selected label palette from going out of sync with the selections:
         if(!m_state.is_label_selected(l->m_id) && l->m_defn_id != m_state.m_active_label_defn)
             m_state.m_active_label_defn.reset();

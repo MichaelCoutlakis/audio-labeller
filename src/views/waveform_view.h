@@ -40,7 +40,8 @@ private:
 
     void process_selections(app_state &state, bool spectrogram);
 
-    void render_resize_label_rect(
+    /// @return whether it's held, being moved or resized
+    bool render_resize_label_rect(
         app_state &state,
         const label &l,
         ImColor col,
@@ -48,7 +49,41 @@ private:
         double y_min,
         double y_max,
         bool faint,
-        bool banded);
+        bool banded,
+        bool editable);
+
+    /* Flags along the top of the spectrogram, one per region: where its labels are selected and
+       moved, as their boxes nest and only the selected one can be resized */
+    struct label_flag
+    {
+        label_id m_id;
+        ImVec2 m_min, m_max; ///< In pixels
+    };
+    void layout_flags(const project_model &project, const app_state &state);
+    const label_flag *flag_at(ImVec2 pos) const;
+    /// A press on a flag selects its label, a drag moves it in time, and a click on a selected
+    /// one unselects it
+    void update_flag_drag(const project_model &project, app_state &state);
+    void render_flags(const project_model &project, const app_state &state);
+
+    static float flag_row_px();
+    /// The height of the spectrogram's frequencies, below the flags, in pixels
+    double spectrogram_data_px() const;
+
+    std::vector<label_flag> m_flags;
+    size_t m_flag_rows{};      ///< Rows of flags, which the strip above the frequencies holds
+    double m_spectrogram_px{}; ///< The spectrogram's height last frame
+    float m_flags_bottom_px{}; ///< The bottom of the last row of flags
+    std::optional<label_id> m_hovered_flag;
+    struct flag_press
+    {
+        label_id m_id;
+        double m_grab_s; ///< From the label's start to where it was grabbed
+        bool m_was_selected;
+        bool m_moved{false};
+    };
+    std::optional<flag_press> m_flag_press;
+    bool m_rect_held{false}; ///< The selected box on the spectrogram is being resized
 
     coord_transform m_transform;
 
@@ -94,7 +129,9 @@ private:
         float m_gain_db{}, m_range_db{};              ///< The colours it was made with
     };
     /// The texture for a tile, made or recoloured if needed (up to a few per frame), else 0
-    unsigned tile_texture_for(const spectrogram_tiles::tile_ptr &tile, const app_settings &settings);
+    unsigned tile_texture_for(
+        const spectrogram_tiles::tile_ptr &tile,
+        const app_settings &settings);
     void free_unused_textures();
 
     spectrogram_tiles m_tiles;

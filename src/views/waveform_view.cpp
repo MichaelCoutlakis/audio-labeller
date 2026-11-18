@@ -23,10 +23,26 @@ constexpr static auto as_ms = [](auto t)
 
 namespace
 {
-constexpr float onset_hit_px = 6.f; ///< How near a click must be to an onset to select it
-constexpr double min_box_px = 6.;   ///< The narrowest a region's box is drawn or resized to
-constexpr double min_band_px = 8.;  ///< A drag on the spectrogram shorter than this is time only
-constexpr double edge_px = 3.;      ///< A band this near the top or bottom reaches the edge
+constexpr float onset_hit_px = 6.f;  ///< How near a click must be to an onset to select it
+constexpr double min_box_px = 6.;    ///< The narrowest a region's box is drawn or resized to
+constexpr double min_band_px = 8.;   ///< A drag on the spectrogram shorter than this is time only
+constexpr double edge_px = 3.;       ///< A band this near the top or bottom reaches the edge
+constexpr size_t max_flag_rows = 4U; ///< Flags of more overlapping regions share the last row
+
+/// A label's colour: its class's, faded until reviewed, grey if rejected, brighter if selected
+ImColor label_colour(const label &l, const label_defn *defn, const app_state &state)
+{
+    ImColor col = defn ? ImColor(defn->m_color_rgba) : ImColor(colours::grey);
+    if(l.m_state == label_state::suggested)
+        col.Value.w *= 0.45f;
+    if(l.m_state == label_state::rejected)
+        col = ImColor(colours::clearer(colours::grey, -0.3f));
+    if(state.is_label_selected(l.m_id))
+        col = colours::brighter(col);
+    return col;
+}
+
+ImColor opaque(ImColor c, float alpha) { return ImColor(c.Value.x, c.Value.y, c.Value.z, alpha); }
 
 /// Label text: the class, with the score of suggestions and an "x:" for rejected ones
 std::string display_name(const label &l, const label_defn *defn)
@@ -306,16 +322,31 @@ void waveform_view::render_plot(
         ImPlotAxisFlags_NoGridLines | (spectrogram ? 0 : ImPlotAxisFlags_NoTickLabels));
     if(spectrogram)
         setup_frequency_ticks(state);
-    ImPlot::SetupAxisLimits(ImAxis_Y1, -1, 1, ImPlotCond_Always);
+    // The spectrogram's y axis reaches past the top frequency by the height of the flags, so they
+    // don't cover it. The rows are the whole file's, so the scale stays put while panning.
+    double y_top = 1.;
     if(spectrogram)
     {
+        size_t rows = 0U;
+        for(const auto &[id, row] : flag_rows(state.visible_labels(project), max_flag_rows))
+            rows = std::max(rows, row + 1U);
+        m_flag_rows = rows;
+        const double strip_px = static_cast<double>(rows) * flag_row_px();
+        const double data_px = m_spectrogram_px - strip_px; // Last frame's size
+        if(data_px > strip_px)
+            y_top = 1. + 2. * strip_px / data_px;
+    }
+    ImPlot::SetupAxisLimits(ImAxis_Y1, -1, y_top, ImPlotCond_Always);
+    if(spectrogram)
+    {
+        m_spectrogram_px = ImPlot::GetPlotSize().y;
         spectrogram_settings s;
         s.m_scale = state.m_settings.m_spectrogram_scale;
         const double max_hz = std::max(1., state.get_audio_buffer().m_sample_rate_hz / 2.);
         m_axis.m_min_hz = spectrogram_min_hz(s, max_hz);
         m_axis.m_max_hz = max_hz;
         m_axis.m_scale = s.m_scale;
-        m_axis.m_edge = 2. * edge_px / std::max(1.f, ImPlot::GetPlotSize().y);
+        m_axis.m_edge = 2. * edge_px / spectrogram_data_px();
     }
 
     auto plot_limits = ImPlot::GetPlotLimits();
@@ -331,7 +362,11 @@ void waveform_view::render_plot(
 
     ImPlot::PushPlotClipRect();
     if(spectrogram)
+    {
         render_spectrogram(state);
+        layout_flags(project, state);
+        update_flag_drag(project, state);
+    }
     update_waveform_drag(project, state, spectrogram);
     process_selections(state, spectrogram);
     if(!spectrogram)
@@ -339,6 +374,8 @@ void waveform_view::render_plot(
     render_cursor(state);
     // Labels are edited on either plot, but only faintly filled on the spectrogram so it shows
     render_annotations(project, state, spectrogram);
+    if(spectrogram)
+        render_flags(project, state);
     ImPlot::PopPlotClipRect();
     ImPlot::EndPlot();
 }
@@ -471,29 +508,206 @@ void waveform_view::render_annotations(const project_model &project, app_state &
     if(!state.m_active_file)
         return;
 
-    const auto bands = state.label_bands(project);
+    // On the spectrogram the height is frequency, so a label is drawn at its band, or over the
+    // full height; on the waveform it's in its lane
+    const auto bands = spectrogram ? std::map<label_id, lane>{} : state.label_bands(project);
+    // Only the selected boxes on the spectrogram can be resized, and not from under a flag
+    const bool flag_in_way = (m_hovered_flag || m_flag_press) && !m_rect_held;
+    bool rect_held = false;
+    auto *dl = ImPlot::GetPlotDrawList();
+    const float plot_top = ImPlot::GetPlotPos().y;
+    const float plot_bottom = plot_top + ImPlot::GetPlotSize().y;
     for(const auto *label : state.visible_labels(project))
     {
         const auto *defn = project.m_label_dict.find_ptr(label->m_defn_id);
-        ImColor col = defn ? ImColor(defn->m_color_rgba) : ImColor(colours::grey);
-        if(label->m_state == label_state::suggested)
-            col.Value.w *= 0.45f; // Faded until reviewed
-        if(label->m_state == label_state::rejected)
-            col = ImColor(colours::clearer(colours::grey, -0.3f));
-        if(state.is_label_selected(label->m_id))
-            col = colours::brighter(col);
-
+        const ImColor col = label_colour(*label, defn, state);
         const auto name = display_name(*label, defn);
-        // On the spectrogram, a label with a band is drawn at its frequencies, else in its lane
         const bool banded = spectrogram && !label->m_band.is_full();
         const auto band = bands.contains(label->m_id) ? bands.at(label->m_id) : lane{};
         const double y_min = banded ? m_axis.y_of(label->m_band.m_low_hz) : band.m_y_min;
         const double y_max = banded ? m_axis.y_of(label->m_band.m_high_hz) : band.m_y_max;
-        render_resize_label_rect(state, *label, col, name, y_min, y_max, faint, banded);
+
+        // Faint lines up from the box to the flags, or on the waveform over the full height, so
+        // that a box in a low lane or band is seen against what's above and below it
+        const float top = spectrogram ? m_flags_bottom_px : plot_top;
+        const ImVec2 box_top = ImPlot::PlotToPixels(label->m_start_s, y_max);
+        const ImVec2 box_bottom = ImPlot::PlotToPixels(label->m_stop_s, y_min);
+        const ImU32 marker = opaque(col, 0.35f);
+        for(const float x : {box_top.x, box_bottom.x})
+        {
+            if(label->is_onset() && x != box_top.x)
+                continue;
+            if(box_top.y > top + 1.f)
+                dl->AddLine({x, top}, {x, box_top.y}, marker);
+            if(!spectrogram && box_bottom.y < plot_bottom - 1.f)
+                dl->AddLine({x, box_bottom.y}, {x, plot_bottom}, marker);
+        }
+
+        const bool editable =
+            !spectrogram || (state.is_label_selected(label->m_id) && !flag_in_way);
+        if(render_resize_label_rect(
+               state,
+               *label,
+               col,
+               name,
+               y_min,
+               y_max,
+               faint,
+               banded,
+               editable) &&
+           spectrogram)
+            rect_held = true;
+        if(spectrogram && m_hovered_flag == label->m_id)
+            dl->AddRect(box_top, box_bottom, opaque(colours::brighter(col), 1.f), 0.f, 0, 2.f);
+    }
+    if(spectrogram)
+        m_rect_held = rect_held;
+}
+
+float waveform_view::flag_row_px() { return ImGui::GetTextLineHeight() + 4.f; }
+
+double waveform_view::spectrogram_data_px() const
+{
+    return std::max(1., double(ImPlot::PlotToPixels(0., -1.).y - ImPlot::PlotToPixels(0., 1.).y));
+}
+
+void waveform_view::layout_flags(const project_model &project, const app_state &state)
+{
+    m_flags.clear();
+    const auto labels = state.visible_labels(project);
+    const auto rows = flag_rows(labels, max_flag_rows);
+    // In the strip above the top frequency, which is a row high per row of flags
+    const float top = ImPlot::GetPlotPos().y;
+    m_flags_bottom_px = ImPlot::PlotToPixels(0., 1.).y;
+    const float row_px =
+        m_flag_rows ? (m_flags_bottom_px - top) / static_cast<float>(m_flag_rows) : 0.f;
+    for(const auto *l : labels)
+    {
+        const auto row = rows.find(l->m_id);
+        if(row == rows.end())
+            continue;
+        const float y = top + static_cast<float>(row->second) * row_px;
+        const float x0 = ImPlot::PlotToPixels(l->m_start_s, 1.).x;
+        const float x1 = std::max(ImPlot::PlotToPixels(l->m_stop_s, 1.).x, x0 + float(min_box_px));
+        m_flags.push_back(label_flag{l->m_id, {x0, y}, {x1, y + row_px - 1.f}});
+    }
+
+    m_hovered_flag.reset();
+    if(ImPlot::IsPlotHovered())
+        if(const auto *f = flag_at(ImGui::GetMousePos()))
+            m_hovered_flag = f->m_id;
+}
+
+const waveform_view::label_flag *waveform_view::flag_at(ImVec2 pos) const
+{
+    // The last drawn is on top
+    for(auto it = m_flags.rbegin(); it != m_flags.rend(); ++it)
+        if(pos.x >= it->m_min.x &&
+           pos.x <= it->m_max.x &&
+           pos.y >= it->m_min.y &&
+           pos.y <= it->m_max.y)
+            return &*it;
+    return nullptr;
+}
+
+void waveform_view::update_flag_drag(const project_model &project, app_state &state)
+{
+    const auto find = [&](label_id id) -> const label *
+    {
+        for(const auto *l : state.visible_labels(project))
+            if(l->m_id == id)
+                return l;
+        return nullptr;
+    };
+    const double mouse_s = ImPlot::GetPlotMousePos(ImAxis_X1, ImAxis_Y1).x;
+
+    if(!m_flag_press &&
+       m_hovered_flag &&
+       !m_rect_held &&
+       ImGui::IsMouseClicked(ImGuiMouseButton_Left) &&
+       !ImGui::GetIO().KeyCtrl)
+    {
+        if(const auto *l = find(*m_hovered_flag))
+        {
+            const bool selected = state.is_label_selected(l->m_id);
+            m_flag_press = flag_press{l->m_id, mouse_s - l->m_start_s, selected};
+            if(!selected)
+                state.add_action(
+                    actions::select_labels{mouse_s, 0., 0., std::nullopt, false, l->m_id});
+        }
+        return;
+    }
+    if(!m_flag_press)
+        return;
+
+    const auto *l = find(m_flag_press->m_id);
+    if(l &&
+       ImGui::IsMouseDown(ImGuiMouseButton_Left) &&
+       ImGui::IsMouseDragging(ImGuiMouseButton_Left))
+    {
+        const double start = mouse_s - m_flag_press->m_grab_s;
+        if(start != l->m_start_s)
+        {
+            m_flag_press->m_moved = true;
+            m_drag_arm_id = l->m_id; // Played once let go, as when a box is moved
+            state.add_action(
+                actions::move_label{
+                    l->m_id,
+                    start,
+                    start + (l->m_stop_s - l->m_start_s),
+                    m_drag_seq,
+                    std::nullopt
+                });
+        }
+    }
+    if(ImGui::IsMouseReleased(ImGuiMouseButton_Left))
+    {
+        if(l && !m_flag_press->m_moved && m_flag_press->m_was_selected)
+            state.add_action(actions::select_labels{mouse_s, 0., 0., std::nullopt, false, l->m_id});
+        m_flag_press.reset();
     }
 }
 
-void waveform_view::update_waveform_drag(const project_model &proj, app_state &state, bool spectrogram)
+void waveform_view::render_flags(const project_model &project, const app_state &state)
+{
+    auto *dl = ImPlot::GetPlotDrawList();
+    std::map<label_id, const label *> by_id;
+    for(const auto *l : state.visible_labels(project))
+        by_id[l->m_id] = l;
+    // Flags are in rows, by start, so a name can run on past a short flag to the next in its row
+    std::ranges::sort(
+        m_flags,
+        {},
+        [](const label_flag &f) { return std::pair{f.m_min.y, f.m_min.x}; });
+    const float plot_right = ImPlot::GetPlotPos().x + ImPlot::GetPlotSize().x;
+    for(size_t i = 0U; i != m_flags.size(); ++i)
+    {
+        const auto &f = m_flags[i];
+        const bool next_in_row = i + 1U != m_flags.size() && m_flags[i + 1U].m_min.y == f.m_min.y;
+        const float text_right =
+            std::max(f.m_max.x, next_in_row ? m_flags[i + 1U].m_min.x : plot_right);
+        const auto *l = by_id.at(f.m_id);
+        const auto *defn = project.m_label_dict.find_ptr(l->m_defn_id);
+        ImColor col = label_colour(*l, defn, state);
+        const bool selected = state.is_label_selected(l->m_id);
+        const bool hovered = m_hovered_flag == l->m_id;
+        dl->AddRectFilled(f.m_min, f.m_max, opaque(col, selected || hovered ? 0.95f : 0.75f));
+        if(selected || hovered)
+            dl->AddRect(f.m_min, f.m_max, IM_COL32(255, 255, 255, selected ? 220 : 120));
+        const auto name = display_name(*l, defn);
+        if(!name.empty())
+        {
+            dl->PushClipRect(f.m_min, {text_right, f.m_max.y}, true);
+            dl->AddText({f.m_min.x + 3.f, f.m_min.y}, IM_COL32(255, 255, 255, 230), name.c_str());
+            dl->PopClipRect();
+        }
+    }
+}
+
+void waveform_view::update_waveform_drag(
+    const project_model &proj,
+    app_state &state,
+    bool spectrogram)
 {
     if(!state.has_active_file() || !ImPlot::IsPlotHovered())
         return;
@@ -505,7 +719,7 @@ void waveform_view::update_waveform_drag(const project_model &proj, app_state &s
     const tp t_now = std::chrono::steady_clock::now();
 
     // Start drag initial timer: Prevent drag on double clicks, single clicks to set the cursor etc
-    if(!drag.is_dragging() && ImGui::IsMouseClicked(ImGuiMouseButton_Left))
+    if(!drag.is_dragging() && ImGui::IsMouseClicked(ImGuiMouseButton_Left) && !m_flag_press)
     {
         m_drag_start = t_now;
         drag.begin_drag(start_time);
@@ -521,7 +735,7 @@ void waveform_view::update_waveform_drag(const project_model &proj, app_state &s
         if(spectrogram && m_drag_spectrogram)
         {
             m_drag_y1 = mouse_y;
-            m_drag_plot_height = ImPlot::GetPlotSize().y;
+            m_drag_plot_height = static_cast<float>(spectrogram_data_px());
         }
     }
 
@@ -588,7 +802,9 @@ void waveform_view::process_selections(app_state &state, bool spectrogram)
         return;
 
     // Hit test:
-    if(ImGui::IsMouseClicked(ImGuiMouseButton_Left))
+    if(ImGui::IsMouseClicked(ImGuiMouseButton_Left) &&
+       !m_flag_press &&
+       !(spectrogram && m_rect_held))
     {
         const auto pos = ImPlot::GetPlotMousePos(ImAxis_X1, ImAxis_Y1);
         const double px_s = m_transform.view_duration() / std::max(1.f, ImPlot::GetPlotSize().x);
@@ -597,12 +813,13 @@ void waveform_view::process_selections(app_state &state, bool spectrogram)
                 pos.x,
                 pos.y,
                 onset_hit_px * px_s,
-                spectrogram ? std::optional<double>{m_axis.hz_of(pos.y)} : std::nullopt
+                spectrogram ? std::optional<double>{m_axis.hz_of(pos.y)} : std::nullopt,
+                spectrogram
             });
     }
 }
 
-void waveform_view::render_resize_label_rect(
+bool waveform_view::render_resize_label_rect(
     app_state &state,
     const label &l,
     ImColor col,
@@ -610,28 +827,43 @@ void waveform_view::render_resize_label_rect(
     double y_min,
     double y_max,
     bool faint,
-    bool banded)
+    bool banded,
+    bool editable)
 {
     // ImPlot edits the values in place, so it gets a copy and any change becomes an action. The
-    // vertical extent is fixed by the label's lane, unless it's a band on the spectrogram. A box is at least a few pixels wide, so that a
-    // short one can still be grabbed, and resizing doesn't make it narrower than that.
-    const double min_width = min_box_px * m_transform.view_duration() /
-        std::max(1.f, ImPlot::GetPlotSize().x);
+    // vertical extent is fixed by the label's lane, unless it's a band on the spectrogram. A box is
+    // at least a few pixels wide, so that a short one can still be grabbed, and resizing doesn't
+    // make it narrower than that.
+    const double min_width =
+        min_box_px * m_transform.view_duration() / std::max(1.f, ImPlot::GetPlotSize().x);
     const double length = l.m_stop_s - l.m_start_s;
     const double shown_stop = std::max(l.m_stop_s, l.m_start_s + min_width);
     double start{l.m_start_s}, stop{shown_stop};
     double top{y_max}, bottom{y_min};
+    bool held = false;
     ImColor fill = col;
     if(faint)
         fill.Value.w *= 0.3f;
-    const bool was_resized =
-        ImPlot::DragRect(static_cast<int>(l.m_id), &start, &bottom, &stop, &top, fill);
+    const bool was_resized = ImPlot::DragRect(
+        static_cast<int>(l.m_id),
+        &start,
+        &bottom,
+        &stop,
+        &top,
+        fill,
+        editable ? ImPlotDragToolFlags_None : ImPlotDragToolFlags_NoInputs,
+        nullptr,
+        nullptr,
+        &held);
     if(faint)
     {
         // An outline, as the fill is faint
         const ImVec2 a = ImPlot::PlotToPixels(l.m_start_s, y_max);
         const ImVec2 b = ImPlot::PlotToPixels(shown_stop, y_min);
-        ImPlot::GetPlotDrawList()->AddRect(a, b, ImColor(col.Value.x, col.Value.y, col.Value.z, 0.9f));
+        ImPlot::GetPlotDrawList()->AddRect(
+            a,
+            b,
+            ImColor(col.Value.x, col.Value.y, col.Value.z, 0.9f));
     }
 
     if(l.m_state == label_state::suggested)
@@ -640,7 +872,8 @@ void waveform_view::render_resize_label_rect(
         auto *dl = ImPlot::GetPlotDrawList();
         const ImVec2 a = ImPlot::PlotToPixels(l.m_start_s, y_max);
         const ImVec2 b = ImPlot::PlotToPixels(shown_stop, y_min);
-        const ImU32 outline = colours::brighter(ImColor(col.Value.x, col.Value.y, col.Value.z, 1.f));
+        const ImU32 outline =
+            colours::brighter(ImColor(col.Value.x, col.Value.y, col.Value.z, 1.f));
         for(float x = a.x; x < b.x; x += 8.f)
         {
             dl->AddLine({x, a.y}, {std::min(x + 4.f, b.x), a.y}, outline);
@@ -662,7 +895,9 @@ void waveform_view::render_resize_label_rect(
 
     if(!name.empty())
     {
-        const ImVec2 corner = ImPlot::PlotToPixels(l.m_start_s, y_max);
+        ImVec2 corner = ImPlot::PlotToPixels(l.m_start_s, y_max);
+        if(faint)
+            corner.y = std::max(corner.y, m_flags_bottom_px); // Not under the flags
         ImPlot::GetPlotDrawList()->AddText(
             ImVec2{corner.x + name_x, corner.y + 1.f},
             IM_COL32(255, 255, 255, 200),
@@ -691,4 +926,5 @@ void waveform_view::render_resize_label_rect(
         const auto window = state.playback_window(l);
         state.select_playback_region(window.first, window.second, l.m_band);
     }
+    return held;
 }

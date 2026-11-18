@@ -2,6 +2,9 @@
  * SPDX-License-Identifier: MIT
  * SPDX-FileCopyrightText: 2026 Michael Coutlakis
  *****************************************************************************/
+#include <set>
+#include <vector>
+
 #include <doctest/doctest.h>
 
 #include "app/lanes.h"
@@ -48,4 +51,57 @@ TEST_CASE("stacked labels share the height only where they overlap")
     CHECK(lanes.at(1) == lane{0., 1.});
     CHECK(lanes.at(5) == lane{});
     CHECK(layout_labels({&a}, dict, label_layout::full_height).at(1) == lane{});
+}
+
+TEST_CASE("flags of overlapping regions go in different rows, up to a limit")
+{
+    const label a{1, label_defn_id{0}, 0., 2.};
+    const label b{2, label_defn_id{0}, 1., 3.};
+    const label c{3, label_defn_id{0}, 1.5, 3.};
+    const label d{4, label_defn_id{0}, 5., 6.};
+    const label onset{5, label_defn_id{0}, 1.5, 1.5};
+
+    const auto rows = flag_rows({&a, &b, &c, &d, &onset}, 4U);
+    CHECK(rows.at(1) == 0U);
+    CHECK(rows.at(2) == 1U);
+    CHECK(rows.at(3) == 2U);
+    CHECK(rows.at(4) == 0U);
+    CHECK(!rows.contains(5)); // Onsets keep their own flag
+
+    const auto capped = flag_rows({&a, &b, &c}, 2U);
+    CHECK(capped.at(3) == 1U);
+}
+
+TEST_CASE("a click on the spectrogram picks the smallest label first, then cycles")
+{
+    label region{1, label_defn_id{0}, 0., 4.}; // Full band
+    label band{2, label_defn_id{0}, 1., 2.};
+    band.m_band = frequency_band{1000., 2000.};
+    label tall{3, label_defn_id{0}, 1., 3.};
+    tall.m_band = frequency_band{0., 20000.};
+
+    std::vector<const label *> hits{&region, &tall, &band};
+    order_by_area(hits, 22050.);
+    REQUIRE(hits.size() == 3U);
+    CHECK(hits[0]->m_id == 2);
+    CHECK(hits[1]->m_id == 3);
+    CHECK(hits[2]->m_id == 1);
+
+    std::set<label_id> selected;
+    const auto click = [&]
+    {
+        const auto [off, on] = cycle_pick(hits, [&](label_id id) { return selected.contains(id); });
+        if(off)
+            selected.erase(*off);
+        if(on)
+            selected.insert(*on);
+    };
+    click();
+    CHECK(selected == std::set<label_id>{2});
+    click();
+    CHECK(selected == std::set<label_id>{3});
+    click();
+    CHECK(selected == std::set<label_id>{1});
+    click();
+    CHECK(selected.empty());
 }
