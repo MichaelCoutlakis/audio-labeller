@@ -431,11 +431,17 @@ Times are in seconds. Onsets and offsets are relative to the clip.
 
 - **Padded mode** (default): each label plus 0.5 s before and after.
 - **Fixed mode**: a window of fixed length centred on the label, 10 s by default
-  to match the DCASE tasks. A label longer than the window gets a longer clip.
-- Labels whose clips would overlap are merged into one clip, up to a maximum
-  clip length (30 s by default).
+  to match the DCASE tasks. A label longer than the window gets a clip of its
+  whole span, so its events (and `labels.tsv`) keep the full region. Fixed
+  windows aren't merged, so a shorter label inside a long region gets its own
+  window too, which cuts the region.
+- In padded mode, labels whose clips would overlap are merged into one clip, up
+  to a maximum clip length (30 s by default). A label whose window lies inside
+  a clip already longer than that (a long region's) joins it, as it doesn't
+  make it longer.
 - Every label that overlaps a clip is included in it, cut to the clip's bounds,
-  with `truncated` set if it was cut.
+  with `truncated` set if it was cut. A zero-length label is included if its
+  time is in the clip, even at its edge.
 - **Background clips** (optional, off by default): windows containing no labels,
   taken only from files marked `done`, since only there is "no label" known to
   mean "none of the classes". Their `events` list is empty.

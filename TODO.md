@@ -112,7 +112,7 @@ and easy to turn into regions.
       start no longer has to be an onset.
 - [x] Loudness assisted labeller: drop its `onsets` option, or have it write
       regions from the snapped rise to where the level falls back.
-- [ ] Clip export: check the padded and fixed modes with long regions (a
+- [x] Clip export: check the padded and fixed modes with long regions (a
       region longer than a fixed clip), and that DCASE output keeps the full
       span.
 

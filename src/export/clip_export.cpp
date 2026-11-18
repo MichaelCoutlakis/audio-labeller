@@ -152,10 +152,12 @@ std::vector<clip_plan> plan_clips(
         std::vector<window> merged;
         for(const auto &w : windows)
         {
+            // A window inside the clip so far doesn't lengthen it, so it joins it even if a long
+            // region has made that clip longer than the maximum
             if(!merged.empty() &&
                w.m_start <= merged.back().m_stop &&
-               std::max(merged.back().m_stop, w.m_stop) - merged.back().m_start <=
-                   settings.m_max_clip_s)
+               (w.m_stop <= merged.back().m_stop ||
+                w.m_stop - merged.back().m_start <= settings.m_max_clip_s))
                 merged.back().m_stop = std::max(merged.back().m_stop, w.m_stop);
             else
                 merged.push_back(w);
@@ -170,7 +172,10 @@ std::vector<clip_plan> plan_clips(
         clip_plan plan{w.m_start, w.m_stop, {}};
         for(const auto &l : labels)
         {
-            if(l.m_stop_s <= w.m_start || l.m_start_s >= w.m_stop)
+            // A zero-length label is in a clip if its time is, even at the clip's edge
+            const bool overlaps = l.is_onset() ? w.m_start <= l.m_start_s && l.m_start_s <= w.m_stop
+                                               : l.m_start_s < w.m_stop && w.m_start < l.m_stop_s;
+            if(!overlaps)
                 continue;
             plan.m_events.push_back(
                 clip_event{

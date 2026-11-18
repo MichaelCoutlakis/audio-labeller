@@ -53,10 +53,11 @@ TEST_CASE("padded clips stop merging at the maximum length and flag cut labels")
     export_settings s;
     s.m_max_clip_s = 2.;
     const auto plans = plan_clips(
-        {make_label(1, 1.0, 1.5), make_label(2, 2.2, 2.4), make_label(3, 0.6, 3.0)},
+        {make_label(1, 1.0, 1.5), make_label(2, 2.2, 2.4), make_label(3, 1.6, 2.3)},
         10.,
         s);
-    REQUIRE(plans.size() >= 2);
+    REQUIRE(plans.size() == 2);
+    CHECK(plans[0].m_stop_s == doctest::Approx(2.));
     bool any_truncated = false;
     for(const auto &plan : plans)
         for(const auto &e : plan.m_events)
@@ -88,6 +89,69 @@ TEST_CASE("fixed clips keep their length near the ends of the file")
     CHECK(plans[1].m_stop_s - plans[1].m_start_s == doctest::Approx(4.)); // Not merged
     CHECK(plans[2].m_start_s == 6.);                                      // Longer than the window
     CHECK(plans[2].m_stop_s == 12.);
+}
+
+TEST_CASE("a padded region longer than the maximum clip keeps its span, and holds the labels in it")
+{
+    export_settings s; // Padded, 0.5 s, at most 30 s
+    const auto plans = plan_clips(
+        {make_label(1, 5., 45.), make_label(2, 10., 11., 1), make_label(3, 46., 46.5, 1)},
+        60.,
+        s);
+    REQUIRE(plans.size() == 2);
+    CHECK(plans[0].m_start_s == doctest::Approx(4.5));
+    CHECK(plans[0].m_stop_s == doctest::Approx(45.5));
+    REQUIRE(plans[0].m_events.size() == 2);
+    CHECK(plans[0].m_events[0].m_label_id == 1U);
+    CHECK(plans[0].m_events[0].m_onset_s == doctest::Approx(0.5));
+    CHECK(plans[0].m_events[0].m_offset_s == doctest::Approx(40.5));
+    CHECK(!plans[0].m_events[0].m_truncated);
+    // The short label inside it is in that clip, not a clip of its own
+    CHECK(plans[0].m_events[1].m_label_id == 2U);
+    CHECK(!plans[0].m_events[1].m_truncated);
+    // One just after it would make the clip too long, so it gets its own
+    REQUIRE(plans[1].m_events.size() == 1);
+    CHECK(plans[1].m_events[0].m_label_id == 3U);
+}
+
+TEST_CASE("a region longer than a fixed clip gets a clip of its whole span")
+{
+    export_settings s;
+    s.m_mode = export_settings::clip_mode::fixed;
+    s.m_fixed_length_s = 10.;
+    const auto plans = plan_clips({make_label(1, 20., 45.), make_label(2, 30., 31., 1)}, 60., s);
+    REQUIRE(plans.size() == 2);
+    CHECK(plans[0].m_start_s == 20.);
+    CHECK(plans[0].m_stop_s == 45.);
+    REQUIRE(plans[0].m_events.size() == 2);
+    CHECK(plans[0].m_events[0].m_onset_s == 0.);
+    CHECK(plans[0].m_events[0].m_offset_s == 25.);
+    CHECK(!plans[0].m_events[0].m_truncated);
+    // The short label's own window cuts the long region, which is flagged
+    CHECK(plans[1].m_stop_s - plans[1].m_start_s == doctest::Approx(10.));
+    REQUIRE(plans[1].m_events.size() == 2);
+    CHECK(plans[1].m_events[0].m_label_id == 1U);
+    CHECK(plans[1].m_events[0].m_truncated);
+    CHECK(plans[1].m_events[1].m_label_id == 2U);
+    CHECK(!plans[1].m_events[1].m_truncated);
+}
+
+TEST_CASE("zero-length labels at the ends of the file are in their clips")
+{
+    for(const auto mode : {export_settings::clip_mode::padded, export_settings::clip_mode::fixed})
+    {
+        export_settings s;
+        s.m_mode = mode;
+        s.m_fixed_length_s = 2.;
+        const auto plans = plan_clips({make_label(1, 0., 0.), make_label(2, 10., 10.)}, 10., s);
+        REQUIRE(plans.size() == 2);
+        REQUIRE(plans[0].m_events.size() == 1);
+        CHECK(plans[0].m_events[0].m_onset_s == 0.);
+        REQUIRE(plans[1].m_events.size() == 1);
+        CHECK(
+            plans[1].m_events[0].m_offset_s ==
+            doctest::Approx(plans[1].m_stop_s - plans[1].m_start_s));
+    }
 }
 
 TEST_CASE("background clips avoid labels")
@@ -215,6 +279,39 @@ TEST_CASE("export_dataset writes verified lossless clips and merges re-exports")
     }
     CHECK(read_jsonl(out / "metadata.jsonl").size() == 2);
     CHECK(!fs::exists(out / path_from_utf8(old_b_clip)));
+}
+
+TEST_CASE("DCASE labels keep the full span of a region longer than a fixed clip")
+{
+    temp_dir dir;
+    write_text(
+        dir / "pal.json",
+        R"({"label-palette":[{"class-id":0,"class":"Rain","colour":"#ccb42aab"}]})");
+    write_text(
+        dir / "proj.json",
+        R"({"dataset-roots":["audio"],"export-prefix":"out","label-palette":"pal.json","label-file":"labels.json"})");
+    write_wav16(dir / "audio/a.wav", 1000, 1, std::vector<int16_t>(10000, 1));
+    const auto a = dir / "audio/a.wav";
+
+    project_model m(project_config::parse_from_file((dir / "proj.json").string()));
+    m.add_label(a, make_label(get_next_label_id(), 1.5, 8.25));
+    m.set_status(a, file_status::done);
+    export_settings s;
+    s.m_mode = export_settings::clip_mode::fixed;
+    s.m_fixed_length_s = 4.;
+    const auto summary = export_dataset(m, s);
+    CHECK(summary.m_errors.empty());
+    CHECK(summary.m_clips == 1);
+
+    const auto rows = read_jsonl(dir / "dataset/metadata.jsonl");
+    REQUIRE(rows.size() == 1);
+    CHECK(rows[0]["source_offset_s"] == 1.5);
+    CHECK(rows[0]["duration_s"] == 6.75);
+    REQUIRE(rows[0]["events"].size() == 1);
+    CHECK(rows[0]["events"][0]["truncated"] == false);
+    const auto tsv = read_text(dir / "dataset/labels.tsv");
+    CHECK(tsv.find("\t0.000000\t6.750000\tRain\n") != std::string::npos);
+    CHECK(read_text(dir / "dataset/durations.tsv").find("\t6.750000\n") != std::string::npos);
 }
 
 TEST_CASE("only confirmed labels become clips, and exports can be cancelled")
