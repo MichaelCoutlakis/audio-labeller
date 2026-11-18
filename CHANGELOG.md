@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### Building
+
+- Every dependency is a submodule in `external/` (nlohmann/json, spdlog,
+  dr_libs and doctest join SDL, Dear ImGui and ImPlot), built with the app by
+  default, so a clone builds without a package manager.
+  `-DAUDIOLAB_SYSTEM_DEPS=ON` uses installed packages instead, as vcpkg builds
+  did before; existing vcpkg presets need it to keep doing so.
+
 ### Regions only
 
 Labels mark a sound from where it starts to where it stops; there's no longer

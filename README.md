@@ -31,32 +31,45 @@ At the time, it seemed easier to make my own application rather than forking / e
 
 ## Building
 
-Dependencies:
-
-| Dependency          | How it's found                                       |
-| ------------------- | ---------------------------------------------------- |
-| SDL3                | `external/SDL` submodule, or installed with `-DAUDIOLAB_SDL_SUBMODULE=OFF` |
-| Dear ImGui, ImPlot  | `external/imgui`, `external/implot` submodules       |
-| nlohmann/json       | `find_package(nlohmann_json)`, eg. vcpkg `nlohmann-json` |
-| spdlog (with fmt)   | `find_package(spdlog)`, eg. vcpkg `spdlog`           |
-| dr_libs             | `dr_wav.h`, `dr_flac.h`, `dr_mp3.h` on the include path, eg. vcpkg `drlibs` |
-| doctest             | `find_package(doctest)`, for the tests only          |
-| OpenGL              | The system's                                         |
-
-A C++23 compiler (recent Clang, GCC or MSVC) and CMake 3.22 or later.
+You need a C++23 compiler (recent Clang, GCC or MSVC), CMake 3.22 or later,
+and OpenGL. Every other dependency is a git submodule in `external/`, built
+along with the app, so no package manager is needed:
 
 ```bash
-git submodule update --init --recursive
-vcpkg install nlohmann-json spdlog drlibs doctest
-cmake -B build -G Ninja -DCMAKE_TOOLCHAIN_FILE=<vcpkg>/scripts/buildsystems/vcpkg.cmake
+git clone --recursive <repository URL>
+cd audio-labeller
+cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
 cmake --build build
 build/tests/audio_labeller_tests
 ```
 
+In a clone made without `--recursive`, run `git submodule update --init
+--recursive` first.
+
+| Dependency          | Submodule                          | Installed (`AUDIOLAB_SYSTEM_DEPS=ON`)          |
+| ------------------- | ---------------------------------- | ---------------------------------------------- |
+| SDL3                | `external/SDL`                     | `find_package(SDL3)`, eg. vcpkg `sdl3`          |
+| Dear ImGui, ImPlot  | `external/imgui`, `external/implot` | Always the submodules                          |
+| nlohmann/json       | `external/json`                    | `find_package(nlohmann_json)`, eg. vcpkg `nlohmann-json` |
+| spdlog (with fmt)   | `external/spdlog`, with its own fmt | `find_package(spdlog)`, eg. vcpkg `spdlog`     |
+| dr_libs             | `external/dr_libs`                 | `dr_wav.h` on the include path, eg. vcpkg `drlibs` |
+| doctest (tests)     | `external/doctest`                 | `find_package(doctest)`, eg. vcpkg `doctest`    |
+| OpenGL              | The system's                       | The system's                                   |
+
+To use installed packages instead, from vcpkg or the system's package manager,
+configure with `-DAUDIOLAB_SYSTEM_DEPS=ON`, for example:
+
+```bash
+vcpkg install nlohmann-json spdlog drlibs doctest sdl3
+cmake -B build -G Ninja -DAUDIOLAB_SYSTEM_DEPS=ON -DCMAKE_TOOLCHAIN_FILE=<vcpkg>/scripts/buildsystems/vcpkg.cmake
+```
+
 `CMakePresets.json` has a hidden `base` preset to inherit from in your own
 `CMakeUserPresets.json`, where compilers and toolchain paths go. Options:
-`AUDIOLAB_BUILD_TESTS` (on), `AUDIOLAB_ENABLE_WARNINGS` (on; warnings for the
-app's own code) and `AUDIOLAB_SDL_SUBMODULE` (on).
+`AUDIOLAB_SYSTEM_DEPS` (off: build the dependencies from `external/`),
+`AUDIOLAB_SDL_SUBMODULE` (SDL alone; follows `AUDIOLAB_SYSTEM_DEPS` unless set),
+`AUDIOLAB_BUILD_TESTS` (on) and `AUDIOLAB_ENABLE_WARNINGS` (on; warnings for
+the app's own code).
 
 ## Project definition and files
 

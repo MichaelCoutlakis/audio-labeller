@@ -214,8 +214,9 @@ Done: FLAC and MP3 support, and case-insensitive extension matching.
 
 ## Build and housekeeping
 
-Done: `AUDIOLAB_SDL_SUBMODULE` to use an installed SDL3 instead of the
-submodule, README build steps and dependency list, C++23,
+Done: every dependency as a submodule in `external/` by default, so a clone
+builds without a package manager, or installed ones with `AUDIOLAB_SYSTEM_DEPS`
+(`AUDIOLAB_SDL_SUBMODULE` for SDL alone), README build steps and dependency list, C++23,
 `AUDIOLAB_ENABLE_WARNINGS` (warnings for the app's own code, which builds
 clean with Clang), UTF-8 project paths and a system font with wide coverage.
 

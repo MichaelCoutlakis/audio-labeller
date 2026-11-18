@@ -8,8 +8,8 @@
 
 #include <algorithm>
 
-#include <fmt/format.h>
 #include <imgui.h>
+#include <spdlog/fmt/fmt.h> // spdlog's fmt, bundled or installed
 
 #include "../app/colours.h"
 #include "labels_view.h"

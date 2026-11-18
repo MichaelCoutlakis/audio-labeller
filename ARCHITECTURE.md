@@ -486,7 +486,12 @@ label tracks or Raven selection tables by annotation trees (see above).
 
 ## Dependencies
 
-All are permissively licensed, per `CONTRIBUTING.md`.
+All are permissively licensed, per `CONTRIBUTING.md`. Each is a git submodule
+in `external/`, pinned to a release (dr_libs has none, so a commit), and built
+with the app by default, so a clone builds without a package manager.
+`AUDIOLAB_SYSTEM_DEPS` switches all of them, except Dear ImGui and ImPlot, to
+installed packages found with `find_package`; one switch rather than a fallback
+per dependency, so a build never mixes versions depending on what's installed.
 
 | Dependency         | Licence               | Use                                       | Status  |
 | ------------------ | --------------------- | ----------------------------------------- | ------- |

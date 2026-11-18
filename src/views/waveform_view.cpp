@@ -9,9 +9,9 @@
 #include <cstdint>
 
 #include <SDL3/SDL_opengl.h>
-#include <fmt/format.h>
 #include <imgui.h>
 #include <implot.h>
+#include <spdlog/fmt/fmt.h> // spdlog's fmt, bundled or installed
 
 #include "../app/colours.h"
 #include "../app/lanes.h"

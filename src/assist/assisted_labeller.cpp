@@ -11,7 +11,7 @@
 #include <sstream>
 #include <stdexcept>
 
-#include <fmt/format.h>
+#include <spdlog/fmt/fmt.h> // spdlog's fmt, bundled or installed
 #include <spdlog/spdlog.h>
 
 #include "../dsp/high_pass.h"

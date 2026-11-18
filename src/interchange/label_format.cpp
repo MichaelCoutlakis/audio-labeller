@@ -12,7 +12,7 @@
 #include <set>
 #include <stdexcept>
 
-#include <fmt/format.h>
+#include <spdlog/fmt/fmt.h> // spdlog's fmt, bundled or installed
 
 #include "label_format.h"
 
