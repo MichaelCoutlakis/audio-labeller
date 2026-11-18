@@ -38,7 +38,9 @@ bool any_selected_suggestion(const project_model &project, const app_state &stat
 const std::vector<std::pair<const char *, const char *>> &keyboard_controller::descriptions()
 {
     static const std::vector<std::pair<const char *, const char *>> keys = {
-        {"1-9", "Choose a favourite class, or one of the first nine in the palette if none are pinned (applies to the selection, confirming suggestions)"},
+        {"1-9",
+         "Choose a favourite class, or one of the first nine in the palette if none are pinned "
+         "(applies to the selection, confirming suggestions)"},
         {"Ctrl+F", "Find a palette class by name (Enter chooses the first match)"},
         {"Space", "Play / stop"},
         {"Tab, Shift+Tab", "Select and play the next / previous label (suggestion in review mode)"},
@@ -47,7 +49,8 @@ const std::vector<std::pair<const char *, const char *>> &keyboard_controller::d
         {"X", "Reject the selected labels: not an event"},
         {"H", "Show / hide rejected candidates"},
         {"Home", "Zoom out to the whole file"},
-        {"O", "Add an onset under the mouse, or at the playhead"},
+        {"O", "Add a region from under the mouse (or the playhead) to where the sound there ends"},
+        {"E", "Widen the selected zero-length labels to where the sound at each ends"},
         {"A", "Snap the selected onsets to the sharpest rise nearby (Ctrl+Z undoes)"},
         {"Left, Right", "Move the selected labels (Alt: finer)"},
         {"Ctrl+Left, Ctrl+Right", "Move their start edges"},
@@ -134,8 +137,10 @@ void keyboard_controller::handle(const project_model &project, app_state &state)
     {
         const double t = state.m_hover_time_s.value_or(state.m_playback_state.playhead_s);
         state.add_action(
-            actions::add_label{{t, t}, state.m_active_file.value(), state.m_active_label_defn});
+            actions::mark_sound{t, state.m_active_file.value(), state.m_active_label_defn});
     }
+    if(pressed(ImGuiKey_E) && !state.selected_labels().empty())
+        state.add_action(actions::extend_labels{state.selected_labels()});
     if(pressed(ImGuiKey_A) && !state.selected_labels().empty())
         state.add_action(actions::snap_labels{state.selected_labels()});
 

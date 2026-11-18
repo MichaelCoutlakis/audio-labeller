@@ -480,18 +480,12 @@ void waveform_view::render_annotations(const project_model &project, app_state &
             col = colours::brighter(col);
 
         const auto name = display_name(*label, defn);
-        // A zero-length label of a class keeps a box, so that it can be widened into a region
-        if(label->is_onset() && !defn)
-            render_onset(state, *label, col, name);
-        else
-        {
-            // On the spectrogram, a label with a band is drawn at its frequencies, else in its lane
-            const bool banded = spectrogram && !label->m_band.is_full();
-            const auto band = bands.contains(label->m_id) ? bands.at(label->m_id) : lane{};
-            const double y_min = banded ? m_axis.y_of(label->m_band.m_low_hz) : band.m_y_min;
-            const double y_max = banded ? m_axis.y_of(label->m_band.m_high_hz) : band.m_y_max;
-            render_resize_label_rect(state, *label, col, name, y_min, y_max, faint, banded);
-        }
+        // On the spectrogram, a label with a band is drawn at its frequencies, else in its lane
+        const bool banded = spectrogram && !label->m_band.is_full();
+        const auto band = bands.contains(label->m_id) ? bands.at(label->m_id) : lane{};
+        const double y_min = banded ? m_axis.y_of(label->m_band.m_low_hz) : band.m_y_min;
+        const double y_max = banded ? m_axis.y_of(label->m_band.m_high_hz) : band.m_y_max;
+        render_resize_label_rect(state, *label, col, name, y_min, y_max, faint, banded);
     }
 }
 
@@ -650,11 +644,23 @@ void waveform_view::render_resize_label_rect(
         }
     }
 
+    float name_x = 3.f;
+    if(l.is_onset())
+    {
+        // A zero-length label (a point, from an old file or an import) is a narrow box with a flag,
+        // to be widened into a region by dragging an edge or with E
+        const ImVec2 top = ImPlot::PlotToPixels(l.m_start_s, y_max);
+        const ImU32 flag = ImColor(col.Value.x, col.Value.y, col.Value.z, 0.9f);
+        ImPlot::GetPlotDrawList()
+            ->AddTriangleFilled(top, {top.x + 9.f, top.y + 5.f}, {top.x, top.y + 10.f}, flag);
+        name_x = 11.f;
+    }
+
     if(!name.empty())
     {
         const ImVec2 corner = ImPlot::PlotToPixels(l.m_start_s, y_max);
         ImPlot::GetPlotDrawList()->AddText(
-            ImVec2{corner.x + 3.f, corner.y + 1.f},
+            ImVec2{corner.x + name_x, corner.y + 1.f},
             IM_COL32(255, 255, 255, 200),
             name.c_str());
     }
@@ -675,39 +681,6 @@ void waveform_view::render_resize_label_rect(
         state.add_action(actions::move_label{l.m_id, start, stop, m_drag_seq, band});
     }
 
-    if(l.m_id == m_drag_arm_id && ImGui::IsMouseReleased(ImGuiMouseButton_Left))
-    {
-        m_drag_arm_id.reset();
-        const auto window = state.playback_window(l);
-        state.select_playback_region(window.first, window.second, l.m_band);
-    }
-}
-
-void waveform_view::render_onset(
-    app_state &state,
-    const label &l,
-    ImColor col,
-    const std::string &name)
-{
-    double t = l.m_start_s;
-    ImVec4 line = col.Value;
-    line.w = std::max(line.w, l.m_state == label_state::confirmed ? 0.9f : 0.5f);
-    const float thickness = state.is_label_selected(l.m_id) ? 4.f : 2.f;
-    const bool moved = ImPlot::DragLineX(static_cast<int>(l.m_id), &t, line, thickness);
-
-    // A flag at the top, with the name beside it
-    auto *dl = ImPlot::GetPlotDrawList();
-    const ImVec2 top = ImPlot::PlotToPixels(l.m_start_s, 1.);
-    const ImU32 flag = ImGui::ColorConvertFloat4ToU32(line);
-    dl->AddTriangleFilled(top, {top.x + 9.f, top.y + 5.f}, {top.x, top.y + 10.f}, flag);
-    if(!name.empty())
-        dl->AddText({top.x + 11.f, top.y}, IM_COL32(255, 255, 255, 220), name.c_str());
-
-    if(moved)
-    {
-        m_drag_arm_id = l.m_id;
-        state.add_action(actions::move_label{l.m_id, t, t, m_drag_seq});
-    }
     if(l.m_id == m_drag_arm_id && ImGui::IsMouseReleased(ImGuiMouseButton_Left))
     {
         m_drag_arm_id.reset();

@@ -49,7 +49,6 @@ private:
         double y_max,
         bool faint,
         bool banded);
-    void render_onset(app_state &state, const label &l, ImColor col, const std::string &name);
 
     coord_transform m_transform;
 

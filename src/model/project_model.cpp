@@ -324,7 +324,7 @@ project_model::project_model(const project_config &cfg) :
                 "The palette marks some classes as onsets ({}). Every class marks regions now, "
                 "from where the sound starts to where it stops, so \"kind\" is ignored and can be "
                 "removed from {}. Existing zero-length labels are kept; widen them by dragging an "
-                "edge.",
+                "edge, or with E.",
                 names,
                 generic_utf8(palette_path)));
     }

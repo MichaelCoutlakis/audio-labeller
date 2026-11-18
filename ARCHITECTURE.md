@@ -178,8 +178,15 @@ regions; an old palette's `"kind"` is ignored, with a notice
 (`project_model::notices`).
 
 Zero-length labels (`is_onset`: a point in time, from an older label file or an
-imported point label) are still read, kept and drawn, and are easy to widen
-into regions.
+imported point label) are still read and kept. They're drawn as narrow boxes
+with a flag, widened into regions by dragging an edge, or with E, which sets
+each one's stop to where the sound there ends. That end comes from the energy
+envelope (`estimate_sound_end` in `dsp/loudness.cpp`): the first stretch after
+the sound's peak, held for 50 ms so that short dips don't count, where the level
+of 10 ms frames is back within 6 dB of the noise floor (a low percentile of the
+levels from a few seconds before), or halfway from the floor to the peak for a
+quiet sound; at most 10 s. O uses the same estimate to add a region from under
+the mouse, or the playhead, in one key.
 
 Suggestions come from importing an annotation tree as suggestions. They're drawn
 faded with a dashed outline and their score, and become labels when accepted,
@@ -203,7 +210,8 @@ Annotation trees, the CSV and clip export ignore bands for now.
 `app/lanes.h` gives each visible label a vertical band. By default labels are
 **stacked** like overlapping calendar events: labels that overlap in time form a
 group, split into as many columns as it needs at its most crowded, and labels
-that overlap nothing use the full height. Onsets are lines over the full height.
+that overlap nothing use the full height. Zero-length labels take the full
+height and no column.
 A fixed lane per class and full height for every label remain as options. The
 hit test uses the same bands.
 

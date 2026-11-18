@@ -54,7 +54,7 @@ inline lane lane_of(const label_dict &dict, label_defn_id id, bool class_lanes)
 /// Stacking: labels that overlap in time form a group, which is split into as many columns as it
 /// needs at its most crowded, each label taking the first column free at its start. Labels that
 /// overlap nothing get the full height, so tens of classes don't make every label thin.
-/// Onsets have no length, so they're drawn as lines over the full height and take no column.
+/// Zero-length labels take no column: they're drawn as narrow boxes over the full height.
 inline std::map<label_id, lane> stack_labels(std::vector<const label *> labels)
 {
     std::map<label_id, lane> out;

@@ -95,7 +95,7 @@ and easy to turn into regions.
 - [x] Drop the `"kind"` key from the palette (and `class_kind`): every class is
       a region class. Ignore the key when reading old palettes, with a notice.
       Update the palette schema, README and ARCHITECTURE.
-- [ ] Zero-length labels: keep reading and drawing them, but give a quick way
+- [x] Zero-length labels: keep reading and drawing them, but give a quick way
       to make one a region (drag an edge, or a key that extends it to an end
       estimated from the energy envelope). Decide whether O, which places one,
       stays.

@@ -11,6 +11,7 @@
 
 #include "../dsp/band_playback.h"
 #include "../dsp/high_pass.h"
+#include "../dsp/loudness.h"
 #include "../dsp/onset_snap.h"
 #include "../export/clip_export.h"
 #include "../interchange/annotation_tree.h"
@@ -384,6 +385,48 @@ void action_handler::operator()(const actions::snap_labels &s)
                     l.m_start_s = std::min(start, l.m_stop_s);
                 });
         });
+}
+
+namespace
+{
+/// The end of the sound starting at a time, or a short default where nothing stands out
+double sound_end(const audio_buffer &audio, double start_s)
+{
+    constexpr double fallback_s = 0.5;
+    const auto end = estimate_sound_end(audio, start_s).value_or(start_s + fallback_s);
+    return std::max(std::min(end, audio.duration_s()), start_s);
+}
+}
+
+void action_handler::operator()(const actions::extend_labels &e)
+{
+    if(!m_state.has_active_file())
+        return;
+    const auto &audio = m_state.get_audio_buffer();
+    undoable(
+        m_state.m_active_file.value(),
+        [&]
+        {
+            edit_labels(
+                e.m_ids,
+                [&](label &l)
+                {
+                    if(l.is_onset())
+                        l.m_stop_s = sound_end(audio, l.m_start_s);
+                });
+        });
+}
+
+void action_handler::operator()(const actions::mark_sound &m)
+{
+    if(!m_state.has_active_file())
+        return;
+    const double start = std::clamp(m.m_t_s, 0., m_state.get_audio_buffer().duration_s());
+    (*this)(actions::add_label{
+        {start, sound_end(m_state.get_audio_buffer(), start)},
+        m.m_file,
+        m.m_defn_id
+    });
 }
 
 void action_handler::operator()(const actions::review_step &r)

@@ -31,11 +31,19 @@ struct load_file
 
 struct add_label
 {
-    /// The time span. Equal start and stop make an onset.
+    /// The time span. Equal start and stop make a zero-length label.
     time_span m_t;
     std::filesystem::path m_file;           //!< Active file to which label applied
     std::optional<label_defn_id> m_defn_id; //!< The selected label definition id at the time
     frequency_band m_band{};                //!< If drawn on the spectrogram
+};
+
+/// Add a region from a time to where the sound there ends, estimated from the energy envelope
+struct mark_sound
+{
+    double m_t_s{};
+    std::filesystem::path m_file;
+    std::optional<label_defn_id> m_defn_id; ///< None for an unlabelled selection
 };
 
 /// Toggle selection of the labels under a time in the waveform
@@ -106,6 +114,13 @@ struct move_label
 
 /// Move the onsets (and region starts) to the sharpest rise nearby, as one undo step
 struct snap_labels
+{
+    std::set<label_id> m_ids;
+};
+
+/// Widen the zero-length labels into regions, to where the sound at each ends (estimated from the
+/// energy envelope), as one undo step
+struct extend_labels
 {
     std::set<label_id> m_ids;
 };
@@ -278,6 +293,8 @@ using app_action = std::variant<
     delete_labels,
     move_label,
     snap_labels,
+    extend_labels,
+    mark_sound,
     review_step,
     undo,
     redo,

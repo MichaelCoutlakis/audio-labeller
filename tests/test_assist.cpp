@@ -111,6 +111,33 @@ TEST_CASE("loud regions stand out from the noise floor")
     CHECK(find_loud_regions(silent, loudness_settings{}).empty());
 }
 
+TEST_CASE("a sound's end is where its level falls back to the noise floor")
+{
+    audio_buffer audio;
+    audio.m_sample_rate_hz = 16000;
+    // A 0.3 s sound at 1 s, one with a 30 ms dip in it at 3 s, and a loud one from 6 s to the end
+    for(auto s : bursts(16000, 9., {1., 1.1, 1.2, 3., 3.13}, 0.1))
+        audio.m_samples.push_back(s / 32768.f);
+    std::ranges::fill(audio.m_samples.begin() + 6 * 16000, audio.m_samples.end(), 0.5f);
+
+    // From its start, or from a little before it
+    CHECK(estimate_sound_end(audio, 1.).value() == doctest::Approx(1.3).epsilon(0.02));
+    CHECK(estimate_sound_end(audio, 0.95).value() == doctest::Approx(1.3).epsilon(0.02));
+    // A dip shorter than the hold time doesn't end it
+    CHECK(estimate_sound_end(audio, 3.).value() == doctest::Approx(3.23).epsilon(0.02));
+    sound_end_settings short_hold;
+    short_hold.m_hold_s = 0.02;
+    CHECK(estimate_sound_end(audio, 3., short_hold).value() == doctest::Approx(3.1).epsilon(0.02));
+    // Nothing there but the background
+    CHECK_FALSE(estimate_sound_end(audio, 2.));
+    // A sound that never falls back ends at the maximum length, or the end of the audio
+    sound_end_settings longest;
+    longest.m_max_length_s = 2.;
+    CHECK(estimate_sound_end(audio, 6., longest).value() == doctest::Approx(8.));
+    CHECK(estimate_sound_end(audio, 6.).value() == doctest::Approx(9.));
+    CHECK_FALSE(estimate_sound_end(audio, 9.5));
+}
+
 TEST_CASE("assisted labellers suggest labels for review")
 {
     temp_dir dir;

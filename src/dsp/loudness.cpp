@@ -8,6 +8,40 @@
 #include "loudness.h"
 #include "onset_snap.h"
 
+namespace
+{
+/// RMS level of each frame of the first channel from frame `first` up to `last`, in dBFS (a full
+/// scale sine reads -3 dB)
+std::vector<double> frame_levels(
+    const audio_buffer &audio,
+    size_t frame_len,
+    size_t first,
+    size_t last)
+{
+    std::vector<double> level(last > first ? last - first : 0U);
+    for(size_t f = 0U; f != level.size(); ++f)
+    {
+        double sum = 0.;
+        const size_t begin = (first + f) * frame_len;
+        for(size_t n = begin; n != begin + frame_len; ++n)
+        {
+            const double x = audio.m_samples[n * audio.m_channels];
+            sum += x * x;
+        }
+        level[f] = 10. * std::log10(std::max(sum / double(frame_len), 1e-20));
+    }
+    return level;
+}
+
+/// The given quantile of the levels
+double percentile(std::vector<double> levels, double q)
+{
+    const auto nth = static_cast<size_t>(q * double(levels.size() - 1U));
+    std::ranges::nth_element(levels, levels.begin() + static_cast<ptrdiff_t>(nth));
+    return levels[nth];
+}
+}
+
 loudness_settings loudness_settings::from_json(const nlohmann::json &j)
 {
     loudness_settings s;
@@ -47,23 +81,8 @@ std::vector<loud_region> find_loud_regions(const audio_buffer &audio, const loud
     if(rate <= 0. || frames < frame_len)
         return out;
 
-    // RMS level of each frame, in dBFS (a full scale sine reads -3 dB)
-    std::vector<double> level(frames / frame_len);
-    for(size_t f = 0U; f != level.size(); ++f)
-    {
-        double sum = 0.;
-        for(size_t n = f * frame_len; n != (f + 1U) * frame_len; ++n)
-        {
-            const double x = audio.m_samples[n * audio.m_channels];
-            sum += x * x;
-        }
-        level[f] = 10. * std::log10(std::max(sum / double(frame_len), 1e-20));
-    }
-
-    auto sorted = level;
-    const auto nth = static_cast<size_t>(s.m_floor_percentile * double(sorted.size() - 1U));
-    std::ranges::nth_element(sorted, sorted.begin() + static_cast<ptrdiff_t>(nth));
-    const double floor = sorted[nth];
+    const auto level = frame_levels(audio, frame_len, 0U, frames / frame_len);
+    const double floor = percentile(level, s.m_floor_percentile);
     const double threshold = std::max(floor + s.m_margin_db, s.m_min_level_db);
 
     const double frame_s = double(frame_len) / rate;
@@ -106,4 +125,50 @@ std::vector<loud_region> find_loud_regions(const audio_buffer &audio, const loud
         }
     }
     return out;
+}
+
+std::optional<double> estimate_sound_end(
+    const audio_buffer &audio,
+    double start_s,
+    const sound_end_settings &s)
+{
+    const double rate = audio.m_sample_rate_hz;
+    const auto frame_len = static_cast<size_t>(std::max(1., std::round(s.m_frame_s * rate)));
+    const size_t total = rate > 0. ? audio.num_frames() / frame_len : 0U;
+    const double frame_s = double(frame_len) / std::max(rate, 1.);
+    const auto frame_at = [&](double t)
+    { return std::min(total, static_cast<size_t>(std::max(0., t / frame_s))); };
+
+    const size_t start = frame_at(start_s);
+    const size_t end = frame_at(start_s + s.m_max_length_s);
+    if(start >= end)
+        return std::nullopt;
+    const size_t context = frame_at(start_s - s.m_context_s);
+    const auto level = frame_levels(audio, frame_len, context, end);
+    const size_t first = start - context; // The sound's first frame, in level
+
+    const double floor = percentile(level, s.m_floor_percentile);
+    const size_t peak_end = std::min(level.size(), first + 1U + frame_at(s.m_peak_search_s));
+    const double peak = *std::max_element(
+        level.begin() + static_cast<ptrdiff_t>(first),
+        level.begin() + static_cast<ptrdiff_t>(peak_end));
+    if(peak - floor < s.m_min_rise_db)
+        return std::nullopt;
+    const double threshold = floor + std::min(s.m_margin_db, (peak - floor) / 2.);
+
+    // From the peak on, the first run of frames below the threshold that lasts the hold time
+    const auto peak_at = static_cast<size_t>(
+        std::max_element(
+            level.begin() + static_cast<ptrdiff_t>(first),
+            level.begin() + static_cast<ptrdiff_t>(peak_end)) -
+        level.begin());
+    const auto hold = static_cast<size_t>(std::max(1., std::ceil(s.m_hold_s / frame_s)));
+    size_t quiet = 0U;
+    for(size_t f = peak_at; f != level.size(); ++f)
+    {
+        quiet = level[f] < threshold ? quiet + 1U : 0U;
+        if(quiet == hold)
+            return double(context + f + 1U - hold) * frame_s;
+    }
+    return std::min(start_s + s.m_max_length_s, audio.duration_s());
 }

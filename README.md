@@ -203,6 +203,10 @@ onset to the clip's stop, if the manifest has a stop or duration column, or of
 - Right drag to zoom
 - Middle double click to unzoom
 
+Labels marking a point in time rather than a region (from older label files,
+or imported from tools that write points) are drawn as narrow boxes with a
+flag. Drag an edge to widen one into a region, or select them and press E.
+
 Labels use the full height and share it only where they overlap in time, like
 overlapping calendar events. A lane per class, or every label at full height,
 can be chosen under Options > Display, along with the channel of a
@@ -266,7 +270,9 @@ The list is also in the app, under Options > Keyboard shortcuts.
 - Enter: accept the selected suggestions
 - X: reject the selected labels (not an event)
 - H: show / hide rejected candidates
-- O: add an onset under the mouse, or at the playhead
+- O: add a region from under the mouse (or the playhead) to where the sound
+  there ends, estimated from its level falling back to the background
+- E: widen the selected zero-length labels the same way
 - A: snap the selected onsets to the sharpest rise within a few milliseconds
   (Ctrl+Z undoes it)
 - Left / Right: move the selected labels by the nudge step (10 ms by default,
