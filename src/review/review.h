@@ -18,11 +18,12 @@
 /// The project's "review" section: how labels are played and shown while checking them
 struct review_settings
 {
-    double m_onset_pre_s{0.1};  ///< Played before an onset
-    double m_onset_post_s{0.5}; ///< Played after an onset
-    double m_pre_roll_s{0.};    ///< Played before a region
-    double m_view_pre_s{0.1};   ///< Shown before a suggestion in review mode
-    double m_view_post_s{0.65}; ///< Shown after its start in review mode
+    double m_pre_roll_s{0.2}; ///< Played before a label. Read from "onset_pre_s" if it's missing.
+    /// Played after the start of a zero-length label, which has no stop to play to. Read from
+    /// "onset_post_s" if it's missing.
+    double m_point_post_s{0.5};
+    double m_view_pre_s{0.5}; ///< Shown before a suggestion, and after its stop, in review mode
+    double m_view_post_s{1.}; ///< Shown at least this long after its start in review mode
     double m_snap_window_s{0.005}; ///< How far an onset may move when snapped
     bool m_by_score{true}; ///< Review the lowest scores first, if the suggestions have scores
 
@@ -32,7 +33,8 @@ struct review_settings
     nlohmann::json to_json() const;
 };
 
-/// What to play for a label: an onset with its context either side, a region with any pre-roll
+/// What to play for a label: from the pre-roll before its start to its stop, or for a zero-length
+/// label, to point_post_s after it
 time_span playback_window(const label &l, const review_settings &settings, double duration_s);
 
 /// What to show of a suggestion in review mode, like the training window around an event

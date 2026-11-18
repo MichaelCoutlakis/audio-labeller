@@ -275,18 +275,22 @@ void project_settings_view::render(const project_model &project, app_state &stat
 
     // Review
     ImGui::SeparatorText("Playback and review");
-    input_ms("Before an onset", m_review.m_onset_pre_s, "Played before an onset");
+    input_ms("Pre-roll", m_review.m_pre_roll_s, "Played before a label, which plays to its stop");
     ImGui::SameLine();
-    input_ms("After an onset", m_review.m_onset_post_s, "Played after an onset");
-    input_ms("Pre-roll", m_review.m_pre_roll_s, "Played before a region");
-    ImGui::SameLine();
-    input_ms("Snap window", m_review.m_snap_window_s, "How far snapping may move an onset");
-    input_ms("Shown before", m_review.m_view_pre_s, "Shown before a suggestion in review mode");
+    input_ms(
+        "After a point",
+        m_review.m_point_post_s,
+        "Played after the start of a zero-length label, which has no stop");
+    input_ms(
+        "Shown before",
+        m_review.m_view_pre_s,
+        "Shown before a suggestion, and after its stop, in review mode");
     ImGui::SameLine();
     input_ms(
         "Shown after",
         m_review.m_view_post_s,
-        "Shown after a suggestion's start in review mode");
+        "Shown at least this long after a suggestion's start in review mode");
+    input_ms("Snap window", m_review.m_snap_window_s, "How far snapping may move an onset");
     ImGui::Checkbox("Review lowest scores first", &m_review.m_by_score);
     help("If the suggestions have scores. Otherwise in file order.");
 

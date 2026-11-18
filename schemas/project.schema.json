@@ -63,11 +63,12 @@
             "description": "How labels are played and shown while checking them. Every key is optional.",
             "type": "object",
             "properties": {
-                "onset_pre_s": { "type": "number", "description": "Played before an onset. Default: 0.1" },
-                "onset_post_s": { "type": "number", "description": "Played after an onset. Default: 0.5" },
-                "pre_roll_s": { "type": "number", "description": "Played before a region. Default: 0" },
-                "view_pre_s": { "type": "number", "description": "Shown before a suggestion in review mode. Default: 0.1" },
-                "view_post_s": { "type": "number", "description": "Shown after a suggestion's start in review mode. Default: 0.65" },
+                "pre_roll_s": { "type": "number", "description": "Played before a label, which plays to its stop. Default: 0.2" },
+                "point_post_s": { "type": "number", "description": "Played after the start of a zero-length label, which has no stop. Default: 0.5" },
+                "onset_pre_s": { "type": "number", "description": "Read as pre_roll_s if that's missing", "deprecated": true },
+                "onset_post_s": { "type": "number", "description": "Read as point_post_s if that's missing", "deprecated": true },
+                "view_pre_s": { "type": "number", "description": "Shown before a suggestion, and after its stop, in review mode. Default: 0.5" },
+                "view_post_s": { "type": "number", "description": "Shown at least this long after a suggestion's start in review mode. Default: 1" },
                 "snap_window_s": { "type": "number", "description": "How far snapping may move an onset. Default: 0.005" },
                 "by_score": { "type": "boolean", "description": "Review the lowest scores first, if suggestions have scores. Default: true" }
             }

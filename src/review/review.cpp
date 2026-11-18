@@ -28,9 +28,9 @@ review_settings review_settings::from_json(const nlohmann::json &j)
     review_settings s;
     if(!j.is_object())
         return s;
-    s.m_onset_pre_s = j.value("onset_pre_s", s.m_onset_pre_s);
-    s.m_onset_post_s = j.value("onset_post_s", s.m_onset_post_s);
-    s.m_pre_roll_s = j.value("pre_roll_s", s.m_pre_roll_s);
+    // Older projects set the context of onsets apart from regions' pre-roll
+    s.m_pre_roll_s = j.value("pre_roll_s", j.value("onset_pre_s", s.m_pre_roll_s));
+    s.m_point_post_s = j.value("point_post_s", j.value("onset_post_s", s.m_point_post_s));
     s.m_view_pre_s = j.value("view_pre_s", s.m_view_pre_s);
     s.m_view_post_s = j.value("view_post_s", s.m_view_post_s);
     s.m_snap_window_s = j.value("snap_window_s", s.m_snap_window_s);
@@ -47,9 +47,8 @@ nlohmann::json review_settings::to_json() const
         if(value != fallback)
             j[key] = value;
     };
-    put("onset_pre_s", m_onset_pre_s, d.m_onset_pre_s);
-    put("onset_post_s", m_onset_post_s, d.m_onset_post_s);
     put("pre_roll_s", m_pre_roll_s, d.m_pre_roll_s);
+    put("point_post_s", m_point_post_s, d.m_point_post_s);
     put("view_pre_s", m_view_pre_s, d.m_view_pre_s);
     put("view_post_s", m_view_post_s, d.m_view_post_s);
     put("snap_window_s", m_snap_window_s, d.m_snap_window_s);
@@ -59,17 +58,8 @@ nlohmann::json review_settings::to_json() const
 
 time_span playback_window(const label &l, const review_settings &settings, double duration_s)
 {
-    double start{}, stop{};
-    if(l.is_onset())
-    {
-        start = l.m_start_s - settings.m_onset_pre_s;
-        stop = l.m_start_s + settings.m_onset_post_s;
-    }
-    else
-    {
-        start = l.m_start_s - settings.m_pre_roll_s;
-        stop = l.m_stop_s;
-    }
+    double start = l.m_start_s - settings.m_pre_roll_s;
+    double stop = l.is_onset() ? l.m_start_s + settings.m_point_post_s : l.m_stop_s;
     start = std::clamp(start, 0., duration_s);
     stop = std::clamp(stop, start, duration_s);
     return {start, stop};

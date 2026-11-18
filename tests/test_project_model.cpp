@@ -323,7 +323,7 @@ TEST_CASE("project settings are saved to the project file, keeping its other key
     CHECK(!s.m_channel);
 
     s.m_channel = 1U; // Channel 2
-    s.m_review = json{{"onset_post_s", 0.3}};
+    s.m_review = json{{"point_post_s", 0.3}};
     s.m_export_prefix = "out/csv";
     s.m_high_pass = json{{"enabled", true}, {"cutoff_hz", 80.}};
     CHECK(!m.set_settings(s)); // Applies without reopening
@@ -333,7 +333,7 @@ TEST_CASE("project settings are saved to the project file, keeping its other key
 
     auto saved = json::parse(read_text(p.dir / "proj.json"));
     CHECK(saved["channel"] == 2);
-    CHECK(saved["review"]["onset_post_s"] == 0.3);
+    CHECK(saved["review"]["point_post_s"] == 0.3);
     CHECK(saved["annotations"][0]["root"] == "trees");
     CHECK(saved["high-pass"]["enabled"] == true);
     CHECK(project_config::parse_from_file(p.dir / "proj.json").m_high_pass["cutoff_hz"] == 80.);

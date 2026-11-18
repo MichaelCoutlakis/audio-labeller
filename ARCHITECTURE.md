@@ -219,13 +219,16 @@ hit test uses the same bands.
 
 `review_queue` lists every suggestion in files that aren't skipped, in file
 order, or by score (lowest first) if any has one. Review mode steps through it
-across files: each step opens the file, zooms to `view_pre_s` before to
-`view_post_s` after the suggestion (like the training window), and plays it with
-pre-roll. The position is kept by its order key, so stepping on from a
-suggestion that's just been accepted continues from where it was.
+across files: each step opens the file, zooms to the suggestion with
+`view_pre_s` either side (at least `view_post_s` after its start, so a short one
+isn't magnified past recognition), and plays it. The position is kept by its
+order key, so stepping on from a suggestion that's just been accepted continues
+from where it was.
 
-Onsets are played from `onset_pre_s` before to `onset_post_s` after. Snapping
-moves an onset to the sharpest rise in Teager-Kaiser energy within
+A label plays from `pre_roll_s` (0.2 s) before its start to its stop; a
+zero-length label, with no stop, to `point_post_s` (0.5 s) after its start.
+Older projects' `onset_pre_s` and `onset_post_s` are read as those when they're
+missing. Snapping moves an onset to the sharpest rise in Teager-Kaiser energy within
 `snap_window_s`, as one undo step.
 
 ## Annotation trees

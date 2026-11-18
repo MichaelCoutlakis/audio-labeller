@@ -60,20 +60,42 @@ label suggestion(double t, std::optional<float> score = std::nullopt)
 }
 }
 
-TEST_CASE("playback windows give onsets context and regions pre-roll")
+TEST_CASE("labels play from the pre-roll to their stop, zero-length ones a little after")
 {
     review_settings s;
     s.m_pre_roll_s = 0.2;
-    const auto onset = playback_window(label{1, label_defn_id{0}, 1., 1.}, s, 10.);
-    CHECK(onset.first == doctest::Approx(0.9));
-    CHECK(onset.second == doctest::Approx(1.5));
-    const auto region = playback_window(label{1, label_defn_id{0}, 0.1, 2.}, s, 10.);
-    CHECK(region.first == 0.); // Clamped to the file
-    CHECK(region.second == 2.);
+    s.m_point_post_s = 0.5;
+    const auto region = playback_window(label{1, label_defn_id{0}, 1., 4.}, s, 10.);
+    CHECK(region.first == doctest::Approx(0.8));
+    CHECK(region.second == 4.);
+    CHECK(playback_window(label{1, label_defn_id{0}, 0.1, 2.}, s, 10.).first == 0.); // Clamped
+    CHECK(playback_window(label{1, label_defn_id{0}, 9., 12.}, s, 10.).second == 10.);
+    const auto point = playback_window(label{1, label_defn_id{0}, 1., 1.}, s, 10.);
+    CHECK(point.first == doctest::Approx(0.8));
+    CHECK(point.second == doctest::Approx(1.5));
 
-    const auto view = review_view(label{1, label_defn_id{0}, 1., 1.}, s);
-    CHECK(view.first == doctest::Approx(0.9));
-    CHECK(view.second == doctest::Approx(1.65));
+    s.m_view_pre_s = 0.5;
+    s.m_view_post_s = 1.;
+    const auto short_view = review_view(label{1, label_defn_id{0}, 1., 1.2}, s);
+    CHECK(short_view.first == doctest::Approx(0.5));
+    CHECK(short_view.second == doctest::Approx(2.));
+    const auto long_view = review_view(label{1, label_defn_id{0}, 1., 6.}, s);
+    CHECK(long_view.second == doctest::Approx(6.5));
+}
+
+TEST_CASE("review settings read the old onset keys")
+{
+    const auto old = review_settings::from_json({{"onset_pre_s", 0.05}, {"onset_post_s", 0.3}});
+    CHECK(old.m_pre_roll_s == 0.05);
+    CHECK(old.m_point_post_s == 0.3);
+    // The new keys win, and are what's written
+    const auto both = review_settings::from_json({{"onset_pre_s", 0.05}, {"pre_roll_s", 0.1}});
+    CHECK(both.m_pre_roll_s == 0.1);
+    const auto j = old.to_json();
+    CHECK(j.contains("pre_roll_s"));
+    CHECK(j.contains("point_post_s"));
+    CHECK(!j.contains("onset_pre_s"));
+    CHECK(!j.contains("onset_post_s"));
 }
 
 TEST_CASE("the review queue runs across files, by score if there is one")
@@ -221,10 +243,10 @@ TEST_CASE("review settings write only what differs from the defaults")
     CHECK(review_settings{}.to_json().empty());
     review_settings s;
     s.m_by_score = false;
-    s.m_pre_roll_s = 0.2;
+    s.m_pre_roll_s = 0.;
     const auto j = s.to_json();
     CHECK(j.size() == 2U);
     const auto back = review_settings::from_json(j);
     CHECK(!back.m_by_score);
-    CHECK(back.m_pre_roll_s == 0.2);
+    CHECK(back.m_pre_roll_s == 0.);
 }

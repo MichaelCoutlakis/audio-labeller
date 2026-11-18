@@ -150,9 +150,11 @@ or `raven`) and gets Import and Export buttons in the file list.
 
 Press R for review mode. Tab then steps through the suggestions in every file
 (lowest score first, if they have scores), opening each file, zooming to a
-window around the suggestion and playing it with a short pre-roll. Enter
-accepts, X rejects and 1-9 relabels, each moving on to the next. The `review`
-section of the project sets the windows.
+window around the suggestion and playing it from a short pre-roll to its stop.
+Enter accepts, X rejects and 1-9 relabels, each moving on to the next. The
+`review` section of the project sets the windows: `pre_roll_s` before each
+label, `point_post_s` after a zero-length one, and `view_pre_s` and
+`view_post_s` for what's shown. File > Project settings edits them too.
 
 ## Assisted labelling
 

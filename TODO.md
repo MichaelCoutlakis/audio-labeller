@@ -104,7 +104,7 @@ and easy to turn into regions.
       (`m_match_s`): a region's start can be well before the onset a pipeline
       finds in it. A verdict that creates a label should make a region (the
       clip's span) rather than a zero-length label.
-- [ ] Review settings: `onset_pre_s` / `onset_post_s` apply only to zero-length
+- [x] Review settings: `onset_pre_s` / `onset_post_s` apply only to zero-length
       labels now; regions are played with `pre_roll_s` to their stop. Rename or
       fold them together, keep reading the old keys, and retune the defaults
       for regions.
