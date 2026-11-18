@@ -5,6 +5,7 @@
 #pragma once
 
 #include <cstdint>
+#include <functional>
 
 #include "../app/app_state.h"
 #include "../model/project_model.h"
@@ -22,7 +23,12 @@ private:
     void handle_nudges(const project_model &project, app_state &state);
     void handle_files(const project_model &project, app_state &state);
     void handle_review(const project_model &project, app_state &state);
-    void select_adjacent_label(const project_model &project, app_state &state, bool forward);
+    /// Select and play the next (or previous) label, of those the filter keeps if it's given
+    void select_adjacent_label(
+        const project_model &project,
+        app_state &state,
+        bool forward,
+        const std::function<bool(const label &)> &keep = {});
 
     bool m_nudging{false};
     uint64_t m_nudge_seq{};

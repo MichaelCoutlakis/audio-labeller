@@ -128,6 +128,19 @@ detector for regions or onsets.
       range, or template matching against confirmed labels.
 - [ ] Let a command run once over many recordings (a batch mode), for models
       that are slow to load.
+- [ ] Labels from another recording of the same scene: several recorders (or
+      microphones) at one site hear mostly the same sounds, so once one file
+      is labelled, copy its labels into another as suggestions, with a time
+      offset (the files' start times, if known, else nudged by hand for the
+      whole set). The delay to each recorder differs per sound with where the
+      sound was, so after the shift each suggestion still needs its start
+      aligned: snapping (A) per suggestion, or a cross-correlation of the two
+      files around each label. Only labels the other file can hear should be
+      kept, so this is a review, not a copy: Enter accepts, X drops a sound
+      the second recorder missed. The review doesn't cover sounds only the
+      second recorder heard, so run the assisted labellers on the file as
+      well, and keep the file's status at "in progress" until someone has
+      listened through the rest.
 - [ ] Class statistics panel.
 - [ ] Annotator field, with merge and agreement checks.
 
@@ -142,10 +155,26 @@ assisted labellers, the project names commands that do the looking.
 
 Built in:
 
-- [ ] A text box above the file list that keeps the files whose path contains
+- [x] A text box above the file list that keeps the files whose path contains
       all of its words (case-insensitive), combined with the status filter.
-- [ ] Filter by class: files with at least one label (or suggestion) of the
-      chosen classes, and a column with each file's count of them.
+- [x] Filter by class, a built-in file filter (as the loudness labeller is a
+      built-in assisted labeller), listed in the same combo as the external
+      file filters below:
+      - Choose one or more classes with a search box like the palette's
+        (Ctrl+F style), or from a class's right-click menu in the palette
+        (Ctrl+click now adds a class over the selection).
+      - [ ] A group class takes in its subclasses, once the palette has groups.
+      - Keeps the files with at least one confirmed label of the chosen
+        classes; an option includes suggestions (and `x:` candidates).
+      - Adds a column with each file's count of them, sortable.
+      - Combines with the status filter and the text box, so "done files with
+        `human` labels" is one choice; remembered between runs.
+      - In the open file, N / P with Alt (or similar) jump to the next or
+        previous label of the chosen classes, so they can be heard and
+        relabelled (1-9) without the full review mode below.
+      - Needs no external command, so it works in any project: the first
+        thing to build in this phase, and the class choice the label review
+        queue below reuses.
 
 File filters, external commands:
 
@@ -206,6 +235,14 @@ the labels by eye.
       label whose span holds it, as clip manifest verdicts are.
 - [ ] Progress through the queue survives closing the app, so a long relabel
       pass can be done over several sittings.
+- [ ] Flag a label to come back to: a sound that's hard to place gets its best
+      coarse class now, plus a flag (a key, and a mark drawn on the label) and
+      an optional free-text note ("like a bag of heavy items put down on
+      wood"). Flagged labels are a review queue of their own, and a filter in
+      the file list. Store both in the label file; write them where a format
+      has room (a Raven column, a DCASE extra column) and leave them out where
+      it doesn't (Audacity), saying so in the export notes. The flag is about
+      the labelling, not the sound, so it's never a class.
 
 ## Lower priority
 

@@ -5,6 +5,7 @@ add_library(audio_labeller_core STATIC
     "model/audio_buffer.h"
     "model/colour.h"
     "model/history.h"
+    "model/file_finder.h" "model/file_finder.cpp"
     "model/label.h"
     "model/new_project.h" "model/new_project.cpp"
     "model/ordered_registry.h"

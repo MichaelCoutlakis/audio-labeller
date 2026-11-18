@@ -109,7 +109,7 @@ relative to its dataset root, so a project can be moved or shared. Labels whose 
 found are kept in the label file, and are picked up again once the file is available.
 
 The app settings file also remembers the view and editing options (label
-layout, file filter, nudge steps, playback speed and gain, spectrogram) between runs.
+layout, file list search, filters and order, nudge steps, playback speed and gain, spectrogram) between runs.
 Its `font` is a font file, empty for a system font that covers most languages,
 or `builtin` for ImGui's own pixel font (crisp, but ASCII only); `font_size`
 sets the size. Both take effect at the next start.
@@ -312,7 +312,9 @@ The list is also in the app, under Options > Keyboard shortcuts.
 - Escape: deselect all labels / selections and the active palette brush
 - Ctrl+Z: undo label changes
 - Ctrl+Y or Ctrl+Shift+Z: redo
-- N / P: next / previous file in the file list (as filtered)
+- N / P: next / previous file in the file list (as filtered and sorted)
+- Alt+N / Alt+P: select and play the next / previous label in the file of the
+  classes the file list is filtered by
 - D: mark the file done and open the next one to do. A done file with no
   labels is taken to contain none of the classes.
 - S: mark the file skipped and open the next one to do
@@ -321,3 +323,14 @@ The list is also in the app, under Options > Keyboard shortcuts.
 Each file is to do, done or skipped. The file list shows this, and the number
 of labels in each file (and suggestions, with a `?`), and can be filtered by it
 or to files with suggestions to review.
+
+To find recordings, the box above the list keeps the files whose path (the
+dataset root as written in the project, then the path below it) contains every
+word typed, ignoring case. Beside the status filter, "By class" keeps the files
+with labels of any of the chosen classes: type to add one (Enter adds the first
+match), or right-click a class in the palette and choose "Filter files by it".
+Confirmed labels count, and suggestions and rejected candidates too if ticked.
+A column shows each file's count of them; click its header to sort by it. In the
+open file, Alt+N / Alt+P step through those labels, to hear and relabel them
+(1-9). The search, the filters and the order are remembered between runs, with
+the other file list settings.

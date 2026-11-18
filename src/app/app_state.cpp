@@ -41,6 +41,8 @@ const char *enum_name(E value, std::initializer_list<const char *> names)
 
 constexpr auto layout_names = {"stacked", "class_lanes", "full_height"};
 constexpr auto filter_names = {"all", "todo", "done", "skip", "suggested"};
+constexpr auto finder_names = {"none", "by_class"};
+constexpr auto sort_names = {"path", "class_count"};
 constexpr auto scale_names = {"linear", "log", "mel"};
 }
 
@@ -63,7 +65,21 @@ app_settings app_settings::load()
         s.m_font = j.value("font", s.m_font);
         s.m_font_size = std::clamp(j.value("font_size", s.m_font_size), 8.f, 48.f);
         s.m_layout = enum_value(j, "layout", s.m_layout, layout_names);
-        s.m_file_filter = enum_value(j, "file_filter", s.m_file_filter, filter_names);
+        auto &list = s.m_file_list;
+        list.m_status = enum_value(j, "file_filter", list.m_status, filter_names);
+        if(auto f = j.find("file_list"); f != j.end() && f->is_object())
+        {
+            list.m_search = f->value("search", list.m_search);
+            list.m_finder = enum_value(*f, "finder", list.m_finder, finder_names);
+            list.m_sort = enum_value(*f, "sort", list.m_sort, sort_names);
+            list.m_descending = f->value("descending", list.m_descending);
+            if(auto c = f->find("by_class"); c != f->end() && c->is_object())
+            {
+                list.m_classes.m_classes = c->value("classes", list.m_classes.m_classes);
+                list.m_classes.m_suggestions = c->value("suggestions", list.m_classes.m_suggestions);
+                list.m_classes.m_rejected = c->value("rejected", list.m_classes.m_rejected);
+            }
+        }
         s.m_nudge_s = std::max(1e-4, j.value("nudge_ms", s.m_nudge_s * 1000.) / 1000.);
         s.m_fine_nudge_s =
             std::max(1e-5, j.value("fine_nudge_ms", s.m_fine_nudge_s * 1000.) / 1000.);
@@ -119,7 +135,16 @@ void app_settings::save()
         {"font", m_font},
         {"font_size", m_font_size},
         {"layout", enum_name(m_layout, layout_names)},
-        {"file_filter", enum_name(m_file_filter, filter_names)},
+        {"file_filter", enum_name(m_file_list.m_status, filter_names)},
+        {"file_list",
+         {{"search", m_file_list.m_search},
+          {"finder", enum_name(m_file_list.m_finder, finder_names)},
+          {"sort", enum_name(m_file_list.m_sort, sort_names)},
+          {"descending", m_file_list.m_descending},
+          {"by_class",
+           {{"classes", m_file_list.m_classes.m_classes},
+            {"suggestions", m_file_list.m_classes.m_suggestions},
+            {"rejected", m_file_list.m_classes.m_rejected}}}}},
         {"nudge_ms", m_nudge_s * 1000.},
         {"fine_nudge_ms", m_fine_nudge_s * 1000.},
         {"playback_speed", m_playback_speed},
@@ -268,28 +293,9 @@ time_span app_state::playback_window(const label &l) const
     return ::playback_window(l, m_review, m_active_audio->duration_s());
 }
 
-std::vector<const audio_file_entry *> app_state::filtered_files(const project_model &project) const
+std::vector<file_row> app_state::filtered_files(const project_model &project) const
 {
-    std::vector<const audio_file_entry *> files;
-    for(const auto &file : project.get_files())
-    {
-        const auto status = project.get_status(file.m_path);
-        const auto filter = m_settings.m_file_filter;
-        const auto has_suggestions = [&]
-        {
-            return std::ranges::any_of(
-                project.get_labels(file.m_path),
-                [](const label &l) { return l.m_state == label_state::suggested; });
-        };
-        const bool pass = filter == file_filter::all ||
-            (filter == file_filter::todo && status == file_status::todo) ||
-            (filter == file_filter::done && status == file_status::done) ||
-            (filter == file_filter::skip && status == file_status::skip) ||
-            (filter == file_filter::suggested && has_suggestions());
-        if(pass)
-            files.push_back(&file);
-    }
-    return files;
+    return list_files(project, m_settings.m_file_list);
 }
 
 const audio_min_max_level *app_state::get_audio_min_max_level(size_t samples_per_px) const

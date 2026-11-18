@@ -17,20 +17,12 @@
 #include "../export/clip_export.h"
 #include "../interchange/annotation_tree.h"
 #include "../model/audio_buffer.h"
+#include "../model/file_finder.h"
 #include "../model/history.h"
 #include "../model/project_model.h"
 #include "../review/review.h"
 #include "actions.h"
 #include "lanes.h"
-
-enum class file_filter
-{
-    all,
-    todo,
-    done,
-    skip,
-    suggested ///< Files with suggestions waiting for review
-};
 
 struct app_settings
 {
@@ -48,7 +40,7 @@ struct app_settings
 
     /* Remembered between runs: */
     label_layout m_layout{label_layout::stacked};
-    file_filter m_file_filter{file_filter::all};
+    file_list_settings m_file_list; ///< Filters and order of the file list
     double m_nudge_s{0.01};       ///< Arrow keys move labels by this
     double m_fine_nudge_s{0.001}; ///< And by this with Alt
     float m_playback_speed{1.f};
@@ -207,8 +199,8 @@ public:
     uint64_t next_edit_seq() { return ++m_edit_seq; }
 
     /* File list: */
-    /// The project's files that pass the filter, in list order
-    std::vector<const audio_file_entry *> filtered_files(const project_model &project) const;
+    /// The project's files that pass the filters, in list order
+    std::vector<file_row> filtered_files(const project_model &project) const;
 
     /* Display: */
     /// Labels of the active file that are drawn and can be clicked: its labels, including

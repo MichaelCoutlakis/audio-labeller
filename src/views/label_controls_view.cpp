@@ -90,10 +90,19 @@ void label_control_view::class_button(
     {
         if(ImGui::MenuItem(state.is_favourite(def) ? "Unpin from favourites" : "Pin to favourites"))
             state.toggle_favourite(def);
+        auto &list = state.m_settings.m_file_list;
+        const bool filtering =
+            list.m_finder == file_finder::by_class && list.m_classes.has(def.m_class);
+        if(ImGui::MenuItem(filtering ? "Stop filtering files by it" : "Filter files by it"))
+        {
+            list.m_finder = file_finder::by_class;
+            if(filtering || !list.m_classes.has(def.m_class))
+                list.m_classes.toggle(def.m_class);
+        }
         ImGui::EndPopup();
     }
     ImGui::SetItemTooltip(
-        "Ctrl+click to add it over the selected labels\nRight-click to %s",
+        "Ctrl+click to add it over the selected labels\nRight-click to %s, or to filter files by it",
         state.is_favourite(def) ? "unpin" : "pin");
     ImGui::PopID();
 }

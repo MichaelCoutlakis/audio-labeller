@@ -3,6 +3,8 @@
  * SPDX-FileCopyrightText: 2026 Michael Coutlakis
  *****************************************************************************/
 #include <algorithm>
+#include <iterator>
+#include <optional>
 #include <vector>
 
 #include <imgui.h>
@@ -68,6 +70,8 @@ const std::vector<std::pair<const char *, const char *>> &keyboard_controller::d
         {"Escape", "Clear the selection and palette class"},
         {"Ctrl+Z, Ctrl+Y", "Undo, redo"},
         {"N, P", "Next / previous file in the list"},
+        {"Alt+N, Alt+P",
+         "Select and play the next / previous label of the classes the file list is filtered by"},
         {"D", "Mark the file done and open the next one to do"},
         {"S", "Mark the file skipped and open the next one to do"},
     };
@@ -190,26 +194,58 @@ void keyboard_controller::handle_review(const project_model &project, app_state 
         else
             select_adjacent_label(project, state, forward);
     }
+
+    // Alt+N and Alt+P step through the labels of the classes the file list is filtered by
+    const auto &list = state.m_settings.m_file_list;
+    if(list.m_finder != file_finder::by_class)
+        return;
+    const auto ids = list.m_classes.ids(project.m_label_dict);
+    for(const bool forward : {true, false})
+        if(pressed(forward ? ImGuiKey_N : ImGuiKey_P, ImGuiMod_Alt) && !ids.empty())
+            select_adjacent_label(
+                project,
+                state,
+                forward,
+                [&](const label &l) { return list.m_classes.matches(l, ids); });
 }
 
 void keyboard_controller::select_adjacent_label(
     const project_model &project,
     app_state &state,
-    bool forward)
+    bool forward,
+    const std::function<bool(const label &)> &keep)
 {
-    auto all = active_labels(project, state);
+    const auto visible = active_labels(project, state);
+    std::vector<label> all;
+    std::ranges::copy_if(visible, std::back_inserter(all), [&](const label &l) { return !keep || keep(l); });
     if(all.empty())
         return;
-    std::ranges::sort(all, {}, [](const label &l) { return std::pair{l.m_start_s, l.m_id}; });
+    const auto order = [](const label &l) { return std::pair{l.m_start_s, l.m_id}; };
+    std::ranges::sort(all, {}, order);
 
-    // From the earliest (or latest) selected label, else from the playhead:
+    // From the earliest (or latest) selected label, else from the playhead. A selected label the
+    // filter no longer keeps (say, just relabelled) still marks the place.
     auto current =
         std::ranges::find_if(all, [&](const label &l) { return state.is_label_selected(l.m_id); });
     std::vector<label>::iterator next;
     if(current == all.end())
     {
-        const double t = state.m_playback_state.m_playhead_s;
-        next = std::ranges::find_if(all, [&](const label &l) { return l.m_start_s >= t; });
+        std::optional<std::pair<double, label_id>> from;
+        for(const auto &l : visible)
+            if(state.is_label_selected(l.m_id) && (!from || order(l) < *from))
+                from = order(l);
+        if(from)
+        {
+            // Past the selected one going forward, before it going back
+            next = std::ranges::find_if(all, [&](const label &l) { return order(l) > *from; });
+            if(!forward)
+                next = std::ranges::find_if(all, [&](const label &l) { return order(l) >= *from; });
+        }
+        else
+        {
+            const double t = state.m_playback_state.m_playhead_s;
+            next = std::ranges::find_if(all, [&](const label &l) { return l.m_start_s >= t; });
+        }
         if(!forward)
             next = next == all.begin() ? all.end() - 1 : next - 1;
     }
@@ -294,10 +330,10 @@ void keyboard_controller::handle_files(const project_model &project, app_state &
     if(!files.empty() && (pressed(ImGuiKey_N) || pressed(ImGuiKey_P)))
     {
         const auto n = static_cast<ptrdiff_t>(files.size());
-        const auto i = position(files, [](const audio_file_entry *f) { return f->m_path; });
+        const auto i = position(files, [](const file_row &r) { return r.m_file->m_path; });
         const auto step = pressed(ImGuiKey_N) ? 1 : -1;
         const auto next = i < 0 ? (step > 0 ? 0 : n - 1) : (i + step + n) % n;
-        load(files[static_cast<size_t>(next)]);
+        load(files[static_cast<size_t>(next)].m_file);
     }
 
     if(!state.has_active_file())

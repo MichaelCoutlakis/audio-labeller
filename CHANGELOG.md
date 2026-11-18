@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+### Finding recordings
+
+- A search box above the file list keeps the files whose path contains every
+  word typed (case-insensitive), combined with the status filter.
+- "By class" beside the status filter keeps the files with labels of the
+  chosen classes (optionally counting suggestions and rejected candidates),
+  with a sortable column of each file's count. Classes are chosen by name in
+  the file list, or from a class's right-click menu in the palette. Alt+N /
+  Alt+P step through those labels in the open file. N / P follow the list's
+  order.
+- The search, filters and order are remembered between runs.
+
 ### Building
 
 - Every dependency is a submodule in `external/` (nlohmann/json, spdlog,
