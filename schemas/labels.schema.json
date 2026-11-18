@@ -52,6 +52,16 @@
                         "description": "The proposer's confidence, if it gave one",
                         "type": "number"
                     },
+                    "low_hz": {
+                        "description": "Bottom of the label's frequency band, drawn on the spectrogram. Absent for 0 Hz.",
+                        "type": "number",
+                        "minimum": 0
+                    },
+                    "high_hz": {
+                        "description": "Top of the label's frequency band. Absent for every frequency up to Nyquist.",
+                        "type": "number",
+                        "minimum": 0
+                    },
                     "class-id": {
                         "description": "Class identifier for the label class",
                         "type": "integer"

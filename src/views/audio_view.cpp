@@ -120,6 +120,24 @@ void audio_view::render(const project_model &proj, app_state &state)
     if(ImGui::IsItemHovered())
         ImGui::SetTooltip("Slower playback, which also lowers the pitch. Ctrl+click to type.");
 
+    ImGui::Checkbox("Shift high bands down", &settings.m_band_shift);
+    if(ImGui::IsItemHovered())
+        ImGui::SetTooltip(
+            "Labels drawn on the spectrogram play only their frequency band. This also moves a "
+            "band down to start at the frequency below, keeping its width and timing, so that "
+            "sounds above what you hear well can be heard. Combine with a slower speed to bring "
+            "a wide band lower still.");
+    ImGui::SameLine();
+    ImGui::BeginDisabled(!settings.m_band_shift);
+    ImGui::SliderFloat(
+        "To",
+        &settings.m_band_shift_to_hz,
+        100.f,
+        8000.f,
+        "%.0f Hz",
+        ImGuiSliderFlags_Logarithmic);
+    ImGui::EndDisabled();
+
     bool gain_changed = ImGui::Checkbox("Auto gain", &settings.m_auto_gain);
     if(ImGui::IsItemHovered())
         ImGui::SetTooltip(

@@ -4,6 +4,7 @@
  *****************************************************************************/
 
 #include <algorithm>
+#include <cmath>
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
@@ -741,6 +742,10 @@ void project_model::load_labels()
         }
         if(auto it = record.find("score"); it != record.end() && it->is_number())
             l.m_score = it->get<float>();
+        if(auto it = record.find("low_hz"); it != record.end() && it->is_number())
+            l.m_band.m_low_hz = std::max(0., it->get<double>());
+        if(auto it = record.find("high_hz"); it != record.end() && it->is_number())
+            l.m_band.m_high_hz = std::max(l.m_band.m_low_hz, it->get<double>());
 
         if(used_ids.insert(id).second)
             m_file_labels[*path].add(l);
@@ -834,6 +839,11 @@ std::string project_model::serialize_labels() const
                 r["state"] = to_string(l.m_state);
             if(l.m_score)
                 r["score"] = *l.m_score;
+            // A band only if it was drawn on the spectrogram, as JSON has no infinity
+            if(l.m_band.m_low_hz > 0.)
+                r["low_hz"] = l.m_band.m_low_hz;
+            if(std::isfinite(l.m_band.m_high_hz))
+                r["high_hz"] = l.m_band.m_high_hz;
             label_records.push_back(std::move(r));
         }
     }

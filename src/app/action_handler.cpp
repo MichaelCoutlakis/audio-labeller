@@ -9,6 +9,7 @@
 
 #include <spdlog/spdlog.h>
 
+#include "../dsp/band_playback.h"
 #include "../dsp/high_pass.h"
 #include "../dsp/onset_snap.h"
 #include "../export/clip_export.h"
@@ -107,16 +108,37 @@ void action_handler::edit_labels(const std::set<label_id> &ids, F &&edit)
 
 void action_handler::restore_active_audio()
 {
-    if(!m_state.m_playing_clip)
+    if(!m_state.m_playing_clip && !m_playing_band)
         return;
     m_state.m_playing_clip = false;
+    m_playing_band = false;
     m_audio_engine.set_audio_clip(m_state.get_audio_buffer_ptr());
+}
+
+void action_handler::select_region(time_span t, frequency_band band)
+{
+    const auto &audio = m_state.get_audio_buffer();
+    const auto &settings = m_state.settings;
+    const band_playback_settings bp{settings.m_band_shift, settings.m_band_shift_to_hz};
+    if(!plan_band(band, audio.m_sample_rate_hz, bp).filters())
+    {
+        restore_active_audio();
+        m_audio_engine.select_region(t, m_state.m_loop);
+        return;
+    }
+    auto excerpt = render_band(audio, t, band, bp);
+    m_audio_engine.set_audio_clip(
+        std::make_shared<const audio_buffer>(std::move(excerpt.m_audio)),
+        excerpt.m_start_s);
+    m_state.m_playing_clip = false;
+    m_playing_band = true;
+    m_audio_engine.select_region(t, m_state.m_loop);
 }
 
 void action_handler::play_label(const label &l)
 {
     restore_active_audio();
-    m_audio_engine.select_region(m_state.playback_window(l), m_state.m_loop);
+    select_region(m_state.playback_window(l), l.m_band);
     if(m_state.m_auto_start)
         m_audio_engine.play();
 }
@@ -131,6 +153,7 @@ void action_handler::operator()(const actions::load_file &f)
     spdlog::info("loading file {}", generic_utf8(f.file_path));
     m_state.set_selected_file(f.file_path, m_proj.get_channel(f.file_path));
     m_state.m_playing_clip = false;
+    m_playing_band = false;
 
     m_audio_engine.set_audio_clip(m_state.get_audio_buffer_ptr());
     m_audio_engine.select_region(
@@ -150,6 +173,7 @@ void action_handler::operator()(const actions::add_label &r)
                 r.m_t.first,
                 r.m_t.second
             };
+            l.m_band = r.m_band;
             // If a class was selected in the label palette, apply that, otherwise leave it as an
             // unlabelled selection:
             if(r.m_defn_id)
@@ -168,7 +192,13 @@ void action_handler::operator()(const actions::select_labels &s)
     auto hit = [&](const label &l)
     {
         const auto band = bands.find(l.m_id);
-        if(band == bands.end() || !band->second.contains(s.m_y))
+        // On the spectrogram, a label with a band is drawn at its frequencies
+        if(s.m_hz && !l.m_band.is_full())
+        {
+            if(!l.m_band.contains(*s.m_hz))
+                return false;
+        }
+        else if(band == bands.end() || !band->second.contains(s.m_y))
             return false;
         if(l.is_onset())
             return std::abs(s.m_x - l.m_start_s) <= s.m_tolerance_s;
@@ -335,6 +365,8 @@ void action_handler::operator()(const actions::move_label &m)
                 {
                     l.m_start_s = start;
                     l.m_stop_s = stop;
+                    if(m.m_band)
+                        l.m_band = *m.m_band;
                 });
         },
         history::merge_key{m.m_drag_seq, 0U});
@@ -381,8 +413,7 @@ void action_handler::operator()(const actions::review_step &r)
         return;
     m_state.set_selection({l->m_id});
     m_state.m_view_request = review_view(*l, m_state.m_review);
-    restore_active_audio();
-    m_audio_engine.select_region(m_state.playback_window(*l), m_state.m_loop);
+    select_region(m_state.playback_window(*l), l->m_band);
     m_audio_engine.play(); // Reviewing means listening, whatever auto play says
 }
 
@@ -417,6 +448,7 @@ void action_handler::reload_active_audio()
     const auto &file = *m_state.m_active_file;
     m_state.load_audio(file, m_proj.get_channel(file));
     m_state.m_playing_clip = false;
+    m_playing_band = false;
     const auto state = m_audio_engine.get_state();
     m_audio_engine.set_audio_clip(m_state.get_audio_buffer_ptr());
     m_audio_engine.select_region(
@@ -435,7 +467,8 @@ void action_handler::operator()(const actions::select_playback_device &dev)
 void action_handler::operator()(const actions::select_playback_region &r)
 {
     restore_active_audio();
-    m_audio_engine.select_region(r.t, r.loop);
+    select_region(r.t, r.m_band);
+    m_audio_engine.set_playback_loop(r.loop);
     if(m_state.m_auto_start)
         m_audio_engine.play();
 }
@@ -730,6 +763,7 @@ void action_handler::operator()(const actions::play_clip &p)
     m_audio_engine.select_region(time_span{0., clip->duration_s()}, false);
     m_audio_engine.play();
     m_state.m_playing_clip = true;
+    m_playing_band = false;
 }
 
 void action_handler::operator()(const actions::judge_clip &j)

@@ -12,6 +12,7 @@
 #include <imgui.h>
 
 #include "../app/app_state.h"
+#include "../dsp/spectrogram.h"
 #include "../dsp/spectrogram_tiles.h"
 #include "../model/project_model.h"
 
@@ -34,10 +35,10 @@ private:
     /// One plot of the stack: the waveform, or the spectrogram. Labels can be edited on either.
     void render_plot(const project_model &project, app_state &state, bool spectrogram, bool bottom);
     void setup_frequency_ticks(const app_state &state);
-    void render_annotations(const project_model &project, app_state &state, bool faint);
-    void update_waveform_drag(const project_model &proj, app_state &state);
+    void render_annotations(const project_model &project, app_state &state, bool spectrogram);
+    void update_waveform_drag(const project_model &proj, app_state &state, bool spectrogram);
 
-    void process_selections(app_state &state);
+    void process_selections(app_state &state, bool spectrogram);
 
     void render_resize_label_rect(
         app_state &state,
@@ -46,10 +47,33 @@ private:
         const std::string &name,
         double y_min,
         double y_max,
-        bool faint);
+        bool faint,
+        bool banded);
     void render_onset(app_state &state, const label &l, ImColor col, const std::string &name);
 
     coord_transform m_transform;
+
+    /// The spectrogram's frequency axis, which runs from -1 at the bottom to 1 at the top
+    struct frequency_axis
+    {
+        double m_min_hz{};
+        double m_max_hz{1.};
+        frequency_scale m_scale{frequency_scale::linear};
+        double m_edge{}; ///< Within this of the top or bottom counts as the edge
+
+        double y_of(double hz) const;
+        double hz_of(double y) const;
+        /// The band between two heights, reaching 0 Hz or Nyquist at the edges
+        frequency_band band(double y0, double y1) const;
+    };
+    frequency_axis m_axis; ///< Of the spectrogram, set as it's drawn
+
+    /// A new label's band, drawn by dragging on the spectrogram
+    bool m_drag_spectrogram{false};
+    double m_drag_y0{}, m_drag_y1{};
+    float m_drag_plot_height{1.f};
+    /// The band of the drag so far, full if it isn't tall enough to be meant as one
+    frequency_band drag_band() const;
 
     using tp = std::chrono::steady_clock::time_point;
     using ms = std::chrono::milliseconds;

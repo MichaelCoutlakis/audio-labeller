@@ -63,6 +63,29 @@ std::vector<biquad> butterworth_high_pass(double cutoff_hz, double sample_rate_h
     return sections;
 }
 
+std::vector<biquad> butterworth_low_pass(double cutoff_hz, double sample_rate_hz, int order)
+{
+    // As for the high-pass, with the cookbook's low-pass
+    const double w0 = 2. * std::numbers::pi * cutoff_hz / sample_rate_hz;
+    const double cos_w0 = std::cos(w0);
+    std::vector<biquad> sections;
+    for(int k = 1; k <= order / 2; ++k)
+    {
+        const double q = 1. / (2. * std::cos(std::numbers::pi * (2. * k - 1.) / (2. * order)));
+        const double alpha = std::sin(w0) / (2. * q);
+        const double a0 = 1. + alpha;
+        sections.push_back(
+            biquad{
+                (1. - cos_w0) / 2. / a0,
+                (1. - cos_w0) / a0,
+                (1. - cos_w0) / 2. / a0,
+                -2. * cos_w0 / a0,
+                (1. - alpha) / a0
+            });
+    }
+    return sections;
+}
+
 namespace
 {
 /// One pass through every section, in double precision: with low cutoffs the poles are close to

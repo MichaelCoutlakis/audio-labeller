@@ -25,6 +25,8 @@ namespace
 {
 constexpr float onset_hit_px = 6.f; ///< How near a click must be to an onset to select it
 constexpr double min_box_px = 6.;   ///< The narrowest a region's box is drawn or resized to
+constexpr double min_band_px = 8.;  ///< A drag on the spectrogram shorter than this is time only
+constexpr double edge_px = 3.;      ///< A band this near the top or bottom reaches the edge
 
 /// Label text: the class, with the score of suggestions and an "x:" for rejected ones
 std::string display_name(const label &l, const label_defn *defn)
@@ -36,6 +38,36 @@ std::string display_name(const label &l, const label_defn *defn)
         name = "? " + name + (l.m_score ? fmt::format(" {:.2f}", *l.m_score) : std::string{});
     return name;
 }
+}
+
+double waveform_view::frequency_axis::y_of(double hz) const
+{
+    hz = std::clamp(hz, m_min_hz, m_max_hz);
+    return frequency_position(hz, m_min_hz, m_max_hz, m_scale) * 2. - 1.;
+}
+
+double waveform_view::frequency_axis::hz_of(double y) const
+{
+    return row_frequency((std::clamp(y, -1., 1.) + 1.) / 2., 1U, m_min_hz, m_max_hz, m_scale);
+}
+
+frequency_band waveform_view::frequency_axis::band(double y0, double y1) const
+{
+    const double lo = std::min(y0, y1), hi = std::max(y0, y1);
+    frequency_band b;
+    if(lo > -1. + m_edge)
+        b.m_low_hz = hz_of(lo);
+    if(hi < 1. - m_edge)
+        b.m_high_hz = hz_of(hi);
+    return b;
+}
+
+frequency_band waveform_view::drag_band() const
+{
+    if(!m_drag_spectrogram ||
+       std::abs(m_drag_y1 - m_drag_y0) / 2. * m_drag_plot_height < min_band_px)
+        return {};
+    return m_axis.band(m_drag_y0, m_drag_y1);
 }
 
 void waveform_view::release()
@@ -271,6 +303,16 @@ void waveform_view::render_plot(
     if(spectrogram)
         setup_frequency_ticks(state);
     ImPlot::SetupAxisLimits(ImAxis_Y1, -1, 1, ImPlotCond_Always);
+    if(spectrogram)
+    {
+        spectrogram_settings s;
+        s.m_scale = state.settings.m_spectrogram_scale;
+        const double max_hz = std::max(1., state.get_audio_buffer().m_sample_rate_hz / 2.);
+        m_axis.m_min_hz = spectrogram_min_hz(s, max_hz);
+        m_axis.m_max_hz = max_hz;
+        m_axis.m_scale = s.m_scale;
+        m_axis.m_edge = 2. * edge_px / std::max(1.f, ImPlot::GetPlotSize().y);
+    }
 
     auto plot_limits = ImPlot::GetPlotLimits();
     m_transform.m_view_start_s = plot_limits.X.Min;
@@ -286,8 +328,8 @@ void waveform_view::render_plot(
     ImPlot::PushPlotClipRect();
     if(spectrogram)
         render_spectrogram(state);
-    update_waveform_drag(project, state);
-    process_selections(state);
+    update_waveform_drag(project, state, spectrogram);
+    process_selections(state, spectrogram);
     if(!spectrogram)
         render_waveform(state);
     render_cursor(state);
@@ -419,8 +461,9 @@ void waveform_view::render_spectrogram(app_state &state)
     }
 }
 
-void waveform_view::render_annotations(const project_model &project, app_state &state, bool faint)
+void waveform_view::render_annotations(const project_model &project, app_state &state, bool spectrogram)
 {
+    const bool faint = spectrogram;
     if(!state.m_active_file)
         return;
 
@@ -443,19 +486,25 @@ void waveform_view::render_annotations(const project_model &project, app_state &
             render_onset(state, *label, col, name);
         else
         {
+            // On the spectrogram, a label with a band is drawn at its frequencies, else in its lane
+            const bool banded = spectrogram && !label->m_band.is_full();
             const auto band = bands.contains(label->m_id) ? bands.at(label->m_id) : lane{};
-            render_resize_label_rect(state, *label, col, name, band.m_y_min, band.m_y_max, faint);
+            const double y_min = banded ? m_axis.y_of(label->m_band.m_low_hz) : band.m_y_min;
+            const double y_max = banded ? m_axis.y_of(label->m_band.m_high_hz) : band.m_y_max;
+            render_resize_label_rect(state, *label, col, name, y_min, y_max, faint, banded);
         }
     }
 }
 
-void waveform_view::update_waveform_drag(const project_model &proj, app_state &state)
+void waveform_view::update_waveform_drag(const project_model &proj, app_state &state, bool spectrogram)
 {
     if(!state.has_active_file() || !ImPlot::IsPlotHovered())
         return;
 
     auto &drag = state.m_drag;
-    const double start_time = ImPlot::GetPlotMousePos(ImAxis_X1, ImAxis_Y1).x;
+    const auto mouse = ImPlot::GetPlotMousePos(ImAxis_X1, ImAxis_Y1);
+    const double start_time = mouse.x;
+    const double mouse_y = std::clamp(mouse.y, -1., 1.);
     const tp t_now = std::chrono::steady_clock::now();
 
     // Start drag initial timer: Prevent drag on double clicks, single clicks to set the cursor etc
@@ -463,11 +512,21 @@ void waveform_view::update_waveform_drag(const project_model &proj, app_state &s
     {
         m_drag_start = t_now;
         drag.begin_drag(start_time);
+        // On the spectrogram, the drag's height is the label's frequency band
+        m_drag_spectrogram = spectrogram;
+        m_drag_y0 = m_drag_y1 = mouse_y;
     }
 
     // Update drag
     if(drag.is_dragging() && ImGui::IsMouseDown(ImGuiMouseButton_Left))
+    {
         drag.update_drag(start_time);
+        if(spectrogram && m_drag_spectrogram)
+        {
+            m_drag_y1 = mouse_y;
+            m_drag_plot_height = ImPlot::GetPlotSize().y;
+        }
+    }
 
     const label_defn *active_defn = state.m_active_label_defn
         ? proj.m_label_dict.find_ptr(state.m_active_label_defn.value())
@@ -487,19 +546,24 @@ void waveform_view::update_waveform_drag(const project_model &proj, app_state &s
         const bool commit = as_ms(t_now - m_drag_start) > ms(100) &&
             std::abs(drag_range.second - drag_range.first) > 0.02;
         drag.end_drag();
+        auto band = drag_band();
 
         if(commit)
         {
-            // Classes marked as onsets are defined by their start alone
+            // Classes marked as onsets are defined by their start alone, at every frequency
             if(onset_class)
+            {
                 drag_range.second = drag_range.first;
+                band = {};
+            }
             state.add_action(
                 actions::add_label{
                     drag_range,
                     state.m_active_file.value(),
-                    state.m_active_label_defn
+                    state.m_active_label_defn,
+                    band
                 });
-            state.add_action(actions::select_playback_region{drag_range, state.m_loop});
+            state.add_action(actions::select_playback_region{drag_range, state.m_loop, band});
         }
     }
 
@@ -513,14 +577,22 @@ void waveform_view::update_waveform_drag(const project_model &proj, app_state &s
         if(active_defn)
             drag_colour = active_defn->m_color_rgba;
 
-        const ImVec2 p0 = ImPlot::PlotToPixels(span.first, -1.0);
-        const ImVec2 p1 = ImPlot::PlotToPixels(span.second, 1.0);
+        // The band only on the spectrogram it's drawn on
+        double y0 = -1., y1 = 1.;
+        if(spectrogram && !onset_class)
+            if(const auto band = drag_band(); !band.is_full())
+            {
+                y0 = m_axis.y_of(band.m_low_hz);
+                y1 = m_axis.y_of(band.m_high_hz);
+            }
+        const ImVec2 p0 = ImPlot::PlotToPixels(span.first, y0);
+        const ImVec2 p1 = ImPlot::PlotToPixels(span.second, y1);
 
         dl->AddRectFilled(p0, p1, drag_colour);
     }
 }
 
-void waveform_view::process_selections(app_state &state)
+void waveform_view::process_selections(app_state &state, bool spectrogram)
 {
     if(!state.has_active_file() || !ImPlot::IsPlotHovered())
         return;
@@ -530,7 +602,13 @@ void waveform_view::process_selections(app_state &state)
     {
         const auto pos = ImPlot::GetPlotMousePos(ImAxis_X1, ImAxis_Y1);
         const double px_s = m_transform.view_duration() / std::max(1.f, ImPlot::GetPlotSize().x);
-        state.add_action(actions::select_labels{pos.x, pos.y, onset_hit_px * px_s});
+        state.add_action(
+            actions::select_labels{
+                pos.x,
+                pos.y,
+                onset_hit_px * px_s,
+                spectrogram ? std::optional<double>{m_axis.hz_of(pos.y)} : std::nullopt
+            });
     }
 }
 
@@ -541,10 +619,11 @@ void waveform_view::render_resize_label_rect(
     const std::string &name,
     double y_min,
     double y_max,
-    bool faint)
+    bool faint,
+    bool banded)
 {
     // ImPlot edits the values in place, so it gets a copy and any change becomes an action. The
-    // vertical extent is fixed by the label's lane. A box is at least a few pixels wide, so that a
+    // vertical extent is fixed by the label's lane, unless it's a band on the spectrogram. A box is at least a few pixels wide, so that a
     // short one can still be grabbed, and resizing doesn't make it narrower than that.
     const double min_width = min_box_px * m_transform.view_duration() /
         std::max(1.f, ImPlot::GetPlotSize().x);
@@ -597,15 +676,18 @@ void waveform_view::render_resize_label_rect(
             stop = start + length; // Moved, not resized: keep its length
         else
             stop = std::max(stop, start + min_width);
+        std::optional<frequency_band> band;
+        if(banded && (top != y_max || bottom != y_min))
+            band = m_axis.band(bottom, top);
         m_drag_arm_id = l.m_id;
-        state.add_action(actions::move_label{l.m_id, start, stop, m_drag_seq});
+        state.add_action(actions::move_label{l.m_id, start, stop, m_drag_seq, band});
     }
 
     if(l.m_id == m_drag_arm_id && ImGui::IsMouseReleased(ImGuiMouseButton_Left))
     {
         m_drag_arm_id.reset();
         const auto window = state.playback_window(l);
-        state.select_playback_region(window.first, window.second);
+        state.select_playback_region(window.first, window.second, l.m_band);
     }
 }
 
@@ -638,6 +720,6 @@ void waveform_view::render_onset(
     {
         m_drag_arm_id.reset();
         const auto window = state.playback_window(l);
-        state.select_playback_region(window.first, window.second);
+        state.select_playback_region(window.first, window.second, l.m_band);
     }
 }

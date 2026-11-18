@@ -10,6 +10,7 @@
 #include <string>
 
 #include "ordered_registry.h"
+#include "types.h"
 using label_id = uint64_t;
 
 struct label_defn_id
@@ -67,6 +68,9 @@ struct label
     double m_stop_s{}; ///< Equal to the start for an onset
     label_state m_state{label_state::confirmed};
     std::optional<float> m_score; ///< The proposer's confidence, if it gave one
+    /// Set by drawing on the spectrogram, and played filtered to it. Not written to annotation
+    /// trees or exports yet.
+    frequency_band m_band;
 
     bool is_onset() const { return m_stop_s <= m_start_s; }
     bool is_confirmed() const { return m_state == label_state::confirmed; }

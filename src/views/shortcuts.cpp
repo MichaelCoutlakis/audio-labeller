@@ -206,7 +206,7 @@ void keyboard_controller::select_adjacent_label(
     state.add_action(actions::clear_selection{});
     state.add_action(actions::toggle_label_selection{next->m_id});
     const auto window = state.playback_window(*next);
-    state.select_playback_region(window.first, window.second);
+    state.select_playback_region(window.first, window.second, next->m_band);
 }
 
 void keyboard_controller::handle_nudges(const project_model &project, app_state &state)

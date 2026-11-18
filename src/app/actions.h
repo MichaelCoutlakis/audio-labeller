@@ -35,6 +35,7 @@ struct add_label
     time_span m_t;
     std::filesystem::path m_file;           //!< Active file to which label applied
     std::optional<label_defn_id> m_defn_id; //!< The selected label definition id at the time
+    frequency_band m_band{};                //!< If drawn on the spectrogram
 };
 
 /// Toggle selection of the labels under a time in the waveform
@@ -43,6 +44,9 @@ struct select_labels
     double m_x;
     double m_y;               ///< Only labels whose lane contains this are hit
     double m_tolerance_s{0.}; ///< How near an onset counts as on it
+    /// The frequency under the mouse on the spectrogram, where labels with a band are hit by it
+    /// rather than by their lane
+    std::optional<double> m_hz;
 };
 
 struct toggle_label_selection
@@ -97,6 +101,7 @@ struct move_label
     double m_start_s;
     double m_stop_s;
     uint64_t m_drag_seq;
+    std::optional<frequency_band> m_band; ///< A new band, if moved on the spectrogram
 };
 
 /// Move the onsets (and region starts) to the sharpest rise nearby, as one undo step
@@ -137,10 +142,12 @@ struct select_playback_device
     audio_dev dev;
 };
 
+/// Play a time range, filtered to a frequency band if it has one
 struct select_playback_region
 {
     time_span t;
     bool loop{false};
+    frequency_band m_band{};
 };
 
 struct toggle_playback

@@ -88,3 +88,21 @@ TEST_CASE("audio_engine can play on past the end of its region")
     CHECK(engine.get_region().first == doctest::Approx(0.5));
     CHECK(engine.get_region().second == doctest::Approx(2.0));
 }
+
+TEST_CASE("audio_engine plays an excerpt in the recording's time")
+{
+    auto excerpt = std::make_shared<audio_buffer>();
+    excerpt->m_sample_rate_hz = 1000;
+    excerpt->m_samples.assign(1000, 0.1f); // 10 s to 11 s of a recording
+
+    audio_engine engine; // No device: only the region is checked
+    engine.set_audio_clip(excerpt, 10.);
+    engine.select_region({10.25, 10.75}, false);
+    CHECK(engine.get_region().first == doctest::Approx(10.25));
+    CHECK(engine.get_region().second == doctest::Approx(10.75));
+    CHECK(engine.get_state().playhead_s == doctest::Approx(10.25));
+
+    engine.set_audio_clip(excerpt); // Back to a whole file
+    engine.select_region({0.25, 0.5}, false);
+    CHECK(engine.get_region().first == doctest::Approx(0.25));
+}

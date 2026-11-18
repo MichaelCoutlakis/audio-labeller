@@ -95,8 +95,13 @@ private:
     /// Play a label's playback window, if auto play is on
     void play_label(const label &l);
 
-    /// Give the audio engine the active file again, after playing a manifest clip
+    /// Select a time range of the active file to play, filtered to the band if it has one: only
+    /// that range is filtered, into an excerpt the engine plays instead of the file
+    void select_region(time_span t, frequency_band band);
+
+    /// Give the audio engine the active file again, after playing a manifest clip or a band
     void restore_active_audio();
+    bool m_playing_band{false}; ///< The engine has a filtered excerpt of the active file
 
     /// Read the active file's audio again with its current channel, playing on from where it was
     void reload_active_audio();

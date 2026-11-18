@@ -35,6 +35,9 @@ struct biquad
 /// A Butterworth high-pass of the given (even) order as cascaded biquads
 std::vector<biquad> butterworth_high_pass(double cutoff_hz, double sample_rate_hz, int order);
 
+/// A Butterworth low-pass of the given (even) order as cascaded biquads
+std::vector<biquad> butterworth_low_pass(double cutoff_hz, double sample_rate_hz, int order);
+
 /// Filter forwards and then backwards, which cancels the phase shift: sounds don't move in time,
 /// which matters for labels and onsets. The response is the filter's squared, so -6 dB at the
 /// cutoff and twice the roll-off. Each pass starts from the steady state of its first sample,

@@ -363,3 +363,33 @@ TEST_CASE("project settings are saved to the project file, keeping its other key
         CHECK(read_text(p.dir / "proj.json") == before);
     }
 }
+
+TEST_CASE("frequency bands round trip, and labels without one have none in the file")
+{
+    test_project p(R"(["a"])", {"a/x.wav"});
+    const auto x = p.dir / "a/x.wav";
+    label banded{get_next_label_id(), label_defn_id{0}, 1., 2.};
+    banded.m_band = {8000., 9000.};
+    label from_bottom{get_next_label_id(), label_defn_id{0}, 3., 4.};
+    from_bottom.m_band.m_high_hz = 500.;
+    const label full{get_next_label_id(), label_defn_id{0}, 5., 6.};
+    {
+        project_model m(p.config());
+        m.add_label(x, banded);
+        m.add_label(x, from_bottom);
+        m.add_label(x, full);
+    }
+    const auto j = p.saved();
+    CHECK(j["labels"][0]["low_hz"] == doctest::Approx(8000.));
+    CHECK(j["labels"][0]["high_hz"] == doctest::Approx(9000.));
+    CHECK(!j["labels"][1].contains("low_hz"));
+    CHECK(j["labels"][1]["high_hz"] == doctest::Approx(500.));
+    CHECK(!j["labels"][2].contains("low_hz"));
+    CHECK(!j["labels"][2].contains("high_hz"));
+
+    project_model m(p.config());
+    const auto &ls = m.get_labels(x);
+    CHECK(ls.find_ptr(banded.m_id)->m_band == banded.m_band);
+    CHECK(ls.find_ptr(from_bottom.m_id)->m_band == from_bottom.m_band);
+    CHECK(ls.find_ptr(full.m_id)->m_band.is_full());
+}

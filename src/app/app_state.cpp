@@ -80,6 +80,12 @@ app_settings app_settings::load()
         s.m_initial_view_s = std::max(0.f, j.value("initial_view_s", s.m_initial_view_s));
         s.m_show_rejected = j.value("show_rejected", s.m_show_rejected);
         s.m_auto_advance = j.value("auto_advance", s.m_auto_advance);
+        if(auto band = j.find("band_playback"); band != j.end() && band->is_object())
+        {
+            s.m_band_shift = band->value("shift", s.m_band_shift);
+            s.m_band_shift_to_hz =
+                std::clamp(band->value("shift_to_hz", s.m_band_shift_to_hz), 100.f, 8000.f);
+        }
         // Earlier versions kept the gain as a factor
         if(auto factor = j.find("waveform_gain"); factor != j.end() && factor->is_number())
             s.m_waveform_gain_db = 20.f * std::log10(std::max(1.f, factor->get<float>()));
@@ -125,6 +131,7 @@ void app_settings::save()
         {"initial_view_s", m_initial_view_s},
         {"show_rejected", m_show_rejected},
         {"auto_advance", m_auto_advance},
+        {"band_playback", {{"shift", m_band_shift}, {"shift_to_hz", m_band_shift_to_hz}}},
         {"waveform_gain_db", m_waveform_gain_db},
         {"spectrogram",
          {{"show", m_show_spectrogram},
@@ -290,9 +297,9 @@ const audio_min_max_level *app_state::get_audio_min_max_level(size_t samples_per
     return m_audio_min_max_map.get_level(samples_per_px);
 }
 
-void app_state::select_playback_region(double start_time, double stop_time)
+void app_state::select_playback_region(double start_time, double stop_time, frequency_band band)
 {
-    add_action(actions::select_playback_region({start_time, stop_time}, m_loop));
+    add_action(actions::select_playback_region({start_time, stop_time}, m_loop, band));
 }
 
 audio_min_max_pyramid_map::audio_min_max_pyramid_map(const audio_buffer &buffer)

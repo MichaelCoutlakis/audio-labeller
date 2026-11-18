@@ -31,7 +31,9 @@ public:
 
     void set_device(const audio_dev &device);
 
-    void set_audio_clip(std::shared_ptr<const audio_buffer> clip);
+    /// @param offset_s where the clip starts in the recording, for an excerpt of it. Regions and
+    /// the playhead are in the recording's time.
+    void set_audio_clip(std::shared_ptr<const audio_buffer> clip, double offset_s = 0.);
 
     void select_region(time_span t, bool loop);
     void set_playback_loop(bool loop);
@@ -73,4 +75,5 @@ private:
     std::vector<float> m_scratch;
     auto_gain m_gain;
     float m_speed{1.f};
+    double m_offset_s{};
 };

@@ -86,6 +86,8 @@ active file's labels and the selection before and after the change. Repeated
 `move_label` actions on the same label within one drag merge into one undo step.
 Label sets per file are small (kilobytes), so the memory cost is negligible.
 
+Frequency bands (below) are part of a label, so they're undone with it.
+
 Undo covers label changes only, not per-file status or playback. Entries for a
 file other than the active one restore its labels but not the selection.
 
@@ -178,6 +180,17 @@ faded with a dashed outline and their score, and become labels when accepted,
 relabelled or edited by class; rejecting keeps them as `rejected`, hidden unless
 shown, as a record of what was checked. Only confirmed labels are exported as
 clips, and background clips avoid suggestions too.
+
+### Frequency bands
+
+A label also has a frequency band (`frequency_band`, in `model/types.h`), every
+frequency by default. A drag on the spectrogram sets it, from the box's bottom
+and top; a box within a few pixels of an edge reaches 0 Hz or Nyquist there, and
+a drag only a few pixels tall is time only. On the spectrogram, a label with a
+band is drawn and hit at its frequencies, and its vertical edges are dragged
+like its times; labels without one, and every label on the waveform, keep their
+lane. The label file stores `low_hz` and `high_hz` only when they're set.
+Annotation trees, the CSV and clip export ignore bands for now.
 
 ### Layout
 
@@ -286,6 +299,19 @@ rather than copied.
 
 Playback can be slowed (which lowers the pitch) with the stream's frequency
 ratio.
+
+A label with a band plays filtered to it (`dsp/band_playback.cpp`). Only the
+selected stretch is processed, with up to a second either side to let the
+filters settle, then cut to the selection and faded in and out over 5 ms. The
+excerpt is given to the engine with its start time as an offset, so regions and
+the playhead stay in the recording's time; anything that plays the whole file
+(a click to place the playhead, another file) puts the file back. Filters are
+6th order Butterworth, forwards and backwards like the high-pass. A wide band
+(top over 3 times its bottom) is a high-pass then a low-pass; a narrow one is
+filtered by Weaver's single sideband method (mixed down to 0 Hz, low-passed to
+half its width, mixed back up), as a high-pass and low-pass that close cut into
+its middle. The same mixing shifts a band down, when that's on, without
+mirroring it.
 
 ### Spectrogram
 

@@ -87,10 +87,11 @@ void audio_engine::set_device(const audio_dev &device)
     spdlog::info("audio: set device to {}", device.name);
 }
 
-void audio_engine::set_audio_clip(std::shared_ptr<const audio_buffer> clip)
+void audio_engine::set_audio_clip(std::shared_ptr<const audio_buffer> clip, double offset_s)
 {
     stream_lock lock(m_stream);
     m_clip = clip ? std::move(clip) : std::make_shared<audio_buffer>();
+    m_offset_s = offset_s;
     m_cursor.reset(*m_clip);
     m_gain.configure(m_gain.get_settings(), m_clip->m_sample_rate_hz);
 
@@ -106,7 +107,7 @@ void audio_engine::set_audio_clip(std::shared_ptr<const audio_buffer> clip)
 void audio_engine::select_region(time_span t, bool loop)
 {
     stream_lock lock(m_stream);
-    m_cursor.select_region(*m_clip, t, loop);
+    m_cursor.select_region(*m_clip, {t.first - m_offset_s, t.second - m_offset_s}, loop);
     prime_gain();
     if(m_stream)
         SDL_ClearAudioStream(m_stream); // Jump straight to the new region
@@ -124,7 +125,9 @@ time_span audio_engine::get_region() const
     const double rate = m_clip->m_sample_rate_hz;
     if(rate == 0.)
         return {};
-    return {double(m_cursor.m_region_start) / rate, double(m_cursor.m_region_end) / rate};
+    return {
+        m_offset_s + double(m_cursor.m_region_start) / rate,
+        m_offset_s + double(m_cursor.m_region_end) / rate};
 }
 
 void audio_engine::release_region_end()
@@ -190,7 +193,7 @@ playback_state audio_engine::get_state() const
     }
     return playback_state{
         m_cursor.m_playing,
-        double(heard) / m_clip->m_sample_rate_hz,
+        m_offset_s + double(heard) / m_clip->m_sample_rate_hz,
         m_gain.current_gain_db()};
 }
 

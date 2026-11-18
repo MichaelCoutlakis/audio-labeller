@@ -207,6 +207,20 @@ multi-channel file, the waveform gain (in dB, up to 60), and a spectrogram (line
 scale) shown below the waveform. The two share a time axis, the split between
 them can be dragged, and labels can be selected, drawn and moved on either.
 
+On the spectrogram, a drag also sets the label's frequency band: drag a box
+around a sound and only that band is played, filtered from just that stretch of
+the recording (high-pass and low-pass, or a band-pass for a narrow band; a box
+reaching the top or bottom leaves out that filter). With no class selected the
+box is a draft, so it can be listened to and then given a class, or deleted. A
+band's edges can be dragged on the spectrogram; on the waveform it looks and
+behaves as before. Labels drawn on the waveform cover every frequency.
+
+For sounds too high to hear well, "Shift high bands down" (Options > Playback)
+moves a band down to start at a chosen frequency, keeping its width and timing.
+A slower speed lowers everything, so the two combine for wide or ultrasonic
+bands. Bands are kept in the label file (`low_hz`, `high_hz`), but not yet
+written to annotation trees or exported clips.
+
 A file opens showing all of it, or its first few seconds if "View on opening"
 is set. While playing, the view pages on to keep the playhead in sight, unless
 "Follow the playhead" is off or you've scrolled away from it.
