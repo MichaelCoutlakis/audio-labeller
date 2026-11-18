@@ -99,7 +99,7 @@ and easy to turn into regions.
       to make one a region (drag an edge, or a key that extends it to an end
       estimated from the energy envelope). Decide whether O, which places one,
       stays.
-- [ ] Clip manifest verdicts: find a clip's label as the one whose span holds
+- [x] Clip manifest verdicts: find a clip's label as the one whose span holds
       the clip's onset (nearest start if several), not by its start alone
       (`m_match_s`): a region's start can be well before the onset a pipeline
       finds in it. A verdict that creates a label should make a region (the

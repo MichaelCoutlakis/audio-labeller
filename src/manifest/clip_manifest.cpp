@@ -43,9 +43,12 @@ std::optional<clip_manifest_settings> clip_manifest_settings::from_json(const js
         s.m_source_column = it->value("source", s.m_source_column);
         s.m_onset_column = it->value("onset", s.m_onset_column);
         s.m_label_column = it->value("label", s.m_label_column);
+        s.m_stop_column = it->value("stop", s.m_stop_column);
+        s.m_duration_column = it->value("duration", s.m_duration_column);
     }
     s.m_dataset_root = j.value("dataset-root", s.m_dataset_root);
     s.m_match_s = j.value("match_s", s.m_match_s);
+    s.m_region_s = j.value("region_s", s.m_region_s);
     return s;
 }
 
@@ -117,6 +120,12 @@ std::vector<std::vector<std::string>> read_csv(std::istream &in)
     return records;
 }
 
+time_span clip_manifest::row::span(double default_length_s) const
+{
+    const auto stop = m_stop_s.value_or(m_onset_s + default_length_s);
+    return {m_onset_s, std::max(stop, m_onset_s)};
+}
+
 std::optional<label_defn_id> class_named(const label_dict &dict, const std::string &name)
 {
     for(const auto &defn : dict)
@@ -142,17 +151,33 @@ clip_manifest load_clip_manifest(const project_model &project, const clip_manife
 
     clip_manifest manifest;
     manifest.m_columns = records.front();
-    const auto column = [&](const std::string &name)
+    const auto find_column = [&](const std::string &name) -> std::optional<size_t>
     {
         for(size_t i = 0U; i != manifest.m_columns.size(); ++i)
             if(lower(manifest.m_columns[i]) == lower(name))
                 return i;
+        return std::nullopt;
+    };
+    const auto column = [&](const std::string &name)
+    {
+        if(const auto i = find_column(name))
+            return *i;
         throw std::runtime_error("The clip manifest has no \"" + name + "\" column");
     };
     const auto clip_col = column(settings.m_clip_column);
     const auto source_col = column(settings.m_source_column);
     const auto onset_col = column(settings.m_onset_column);
     const auto label_col = column(settings.m_label_column);
+    const auto stop_col = find_column(settings.m_stop_column);
+    const auto duration_col = find_column(settings.m_duration_column);
+    const auto number = [](const std::string &field) -> std::optional<double>
+    {
+        char *end{};
+        const double value = std::strtod(field.c_str(), &end);
+        if(end == field.c_str() || !std::isfinite(value))
+            return std::nullopt;
+        return value;
+    };
 
     const auto clip_root = settings.m_clip_root.empty() ? path.parent_path()
                                                         : cfg.resolve_root(settings.m_clip_root);
@@ -170,6 +195,13 @@ clip_manifest load_clip_manifest(const project_model &project, const clip_manife
         row.m_clip = (clip_root / path_from_utf8(fields[clip_col])).lexically_normal();
         row.m_onset_s = std::strtod(fields[onset_col].c_str(), nullptr);
         row.m_label = fields[label_col];
+        if(stop_col)
+            row.m_stop_s = number(fields[*stop_col]);
+        if(!row.m_stop_s && duration_col)
+            if(const auto duration = number(fields[*duration_col]))
+                row.m_stop_s = row.m_onset_s + *duration;
+        if(row.m_stop_s && *row.m_stop_s <= row.m_onset_s)
+            row.m_stop_s.reset();
 
         const auto rel = path_from_utf8(fields[source_col]);
         for(const auto &root : cfg.m_wav_paths)
@@ -199,12 +231,13 @@ const label *find_label_at(
     const label *best = nullptr;
     auto score = [&](const label &l)
     {
-        // Same class first, then the nearest
+        // Same class first, then the nearest start
         return std::pair{preferred && l.m_defn_id != *preferred, std::abs(l.m_start_s - onset_s)};
     };
     for(const auto &l : file_labels)
     {
-        if(std::abs(l.m_start_s - onset_s) > window_s)
+        if(onset_s < l.m_start_s - window_s ||
+           onset_s > std::max(l.m_stop_s, l.m_start_s) + window_s)
             continue;
         if(!best || score(l) < score(*best))
             best = &l;
@@ -215,7 +248,7 @@ const label *find_label_at(
 label_id apply_clip_verdict(
     project_model &project,
     const fs::path &source,
-    double onset_s,
+    time_span event,
     double window_s,
     clip_verdict verdict,
     label_defn_id defn_id)
@@ -226,7 +259,8 @@ label_id apply_clip_verdict(
     const auto preferred =
         verdict == clip_verdict::relabel ? std::nullopt : std::optional<label_defn_id>{defn_id};
 
-    if(const auto *existing = find_label_at(project.get_labels(source), onset_s, window_s, preferred))
+    if(const auto *existing =
+           find_label_at(project.get_labels(source), event.first, window_s, preferred))
     {
         auto l = *existing;
         l.m_state = state;
@@ -236,7 +270,8 @@ label_id apply_clip_verdict(
         return l.m_id;
     }
 
-    const label l{get_next_label_id(), defn_id, onset_s, onset_s, state};
+    const label
+        l{get_next_label_id(), defn_id, event.first, std::max(event.second, event.first), state};
     project.add_label(source, l);
     return l.m_id;
 }

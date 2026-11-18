@@ -186,9 +186,12 @@ another tool, with each clip's source recording (relative to a dataset root),
 onset in it and label. The Clip Manifest window lists them, filterable by words
 or `column=value` and sortable by any column. With the list focused, Up/Down
 play each clip, Enter marks it correct, X not an event and 1-9 relabels it, and
-J opens the recording at that time. Verdicts change the label at that onset in
-the source recording, so they land in the annotations and survive the next
-re-cut.
+J opens the recording at that time. Verdicts change the label whose span holds
+that onset in the source recording (of the clip's class if there's one, then
+the one starting nearest it), so they land in the annotations and survive the
+next re-cut. Where there's no label, a verdict makes one: a region from the
+onset to the clip's stop, if the manifest has a stop or duration column, or of
+`region_s` (1 s by default).
 
 ## Controls:
 

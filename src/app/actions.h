@@ -214,7 +214,7 @@ struct play_clip
 struct judge_clip
 {
     std::filesystem::path m_source;
-    double m_onset_s{};
+    time_span m_event; ///< The clip's onset, and the stop of a label made for it
     double m_window_s{};
     clip_verdict m_verdict{};
     label_defn_id m_defn_id;

@@ -172,7 +172,14 @@ void clip_manifest_view::verdict(
         state.report_error("The clip's recording isn't in the project, so there's no label to change.");
         return;
     }
-    state.add_action(actions::judge_clip{*row.m_source, row.m_onset_s, m_settings->m_match_s, v, cls});
+    state.add_action(
+        actions::judge_clip{
+            *row.m_source,
+            row.span(m_settings->m_region_s),
+            m_settings->m_match_s,
+            v,
+            cls
+        });
     if(*m_position + 1U < m_order.size())
         select(state, *m_position + 1U);
 }

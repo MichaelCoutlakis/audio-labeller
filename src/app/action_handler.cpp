@@ -772,7 +772,13 @@ void action_handler::operator()(const actions::judge_clip &j)
         j.m_source,
         [&]
         {
-            apply_clip_verdict(m_proj, j.m_source, j.m_onset_s, j.m_window_s, j.m_verdict, j.m_defn_id);
+            apply_clip_verdict(
+                m_proj,
+                j.m_source,
+                j.m_event,
+                j.m_window_s,
+                j.m_verdict,
+                j.m_defn_id);
         });
 }
 

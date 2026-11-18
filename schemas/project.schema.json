@@ -109,11 +109,14 @@
                         "clip": { "type": "string", "description": "Default: clip_path" },
                         "source": { "type": "string", "description": "The source recording, relative to a dataset root. Default: source_path" },
                         "onset": { "type": "string", "description": "Onset in the source, in seconds. Default: onset_s" },
-                        "label": { "type": "string", "description": "Default: label" }
+                        "label": { "type": "string", "description": "Default: label" },
+                        "stop": { "type": "string", "description": "Optional: the event's stop in the source, in seconds. Default: stop_s" },
+                        "duration": { "type": "string", "description": "Optional, used if there's no stop: the event's length from its onset, in seconds. Default: duration_s" }
                     }
                 },
                 "dataset-root": { "type": "string", "description": "The dataset root source paths are relative to, as written in dataset-roots. Default: try each" },
-                "match_s": { "type": "number", "description": "A label this close to a clip's onset is the clip's label. Default: 0.05" }
+                "match_s": { "type": "number", "description": "A label whose span holds the clip's onset, give or take this, is the clip's label. Default: 0.05" },
+                "region_s": { "type": "number", "description": "The length of a label a verdict creates, when the manifest has no stop or duration for the clip. Default: 1" }
             },
             "required": [ "path" ]
         },

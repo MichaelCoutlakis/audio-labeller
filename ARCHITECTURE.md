@@ -262,10 +262,14 @@ added again. A failure on one recording is reported and the rest carry on.
 ## Clip manifests
 
 A clip manifest is a pipeline's CSV of cut clips, with each clip's source
-recording, onset and label. It's shown as a sortable, filterable table. Verdicts
-(correct, relabelled, not an event) edit the label nearest the onset (within
-`match_s`, preferring the clip's class) in the source recording, or create one,
-so the correction lives in the annotations rather than a separate review file.
+recording, onset and label, and optionally the event's stop or duration. It's
+shown as a sortable, filterable table. Verdicts (correct, relabelled, not an
+event) edit the label in the source recording whose span holds the onset, give
+or take `match_s`: of the clip's class first (except for a relabel), then the
+one whose start is nearest the onset, since a region can start well before the
+onset a pipeline finds in it. With no label there, the verdict creates a region
+from the onset to the clip's stop (or `region_s` after it). So the correction
+lives in the annotations rather than a separate review file.
 Clips are played straight from their files; the active file's audio is put back
 in the engine before anything else plays.
 ## Audio
