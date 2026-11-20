@@ -100,6 +100,8 @@ struct export_record
     std::string m_directory; ///< UTF-8, as resolved at the time
     uint64_t m_clips{};
     bool m_verified{};
+    /// Of the file as exported, which names its clips. Empty in records from before it was kept.
+    std::string m_source_id;
 };
 
 /// A label file written into an annotation tree, so that it can be removed when the recording
@@ -201,6 +203,8 @@ public:
     void set_source_id(const std::filesystem::path &file, const source_id_cache &id);
 
     void record_export(const std::filesystem::path &file, export_record record);
+    /// Forget the file's clip export, once its clips are withdrawn from the dataset
+    void clear_export(const std::filesystem::path &file);
 
     /// Record the label file written for this file into the annotation tree with this root, or
     /// forget it (nullopt)

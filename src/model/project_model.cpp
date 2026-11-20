@@ -554,6 +554,15 @@ void project_model::record_export(const fs::path &file, export_record record)
     ++m_revision;
 }
 
+void project_model::clear_export(const fs::path &file)
+{
+    auto it = m_file_states.find(file);
+    if(it == m_file_states.end() || !it->second.m_export)
+        return;
+    it->second.m_export.reset();
+    ++m_revision;
+}
+
 void project_model::record_annotation_export(
     const fs::path &file,
     const std::string &tree_root,
@@ -832,7 +841,8 @@ void project_model::load_labels()
                 it->value("time", std::string{}),
                 it->value("directory", std::string{}),
                 it->value("clips", uint64_t{}),
-                it->value("verified", false)
+                it->value("verified", false),
+                it->value("source-id", std::string{})
             };
 
         if(auto it = record.find("annotation-exports"); it != record.end())
@@ -920,6 +930,8 @@ std::string project_model::serialize_labels() const
                 {"clips", state.m_export->m_clips},
                 {"verified", state.m_export->m_verified}
             };
+        if(state.m_export && !state.m_export->m_source_id.empty())
+            r["export"]["source-id"] = state.m_export->m_source_id;
         if(!state.m_annotation_exports.empty())
         {
             auto &exports = r["annotation-exports"];

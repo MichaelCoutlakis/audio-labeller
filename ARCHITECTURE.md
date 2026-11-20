@@ -381,7 +381,12 @@ of record:
   reversible. Options to do them at export may be added later to save space.
 - **Self-contained.** Every clip carries its labels and a link to its source.
 - **Additive.** A re-export replaces only the entries for the sources being
-  exported, so entries whose originals were deleted are kept.
+  exported, so entries whose originals were deleted are kept. The exception is
+  a file still in the project that was exported to the same directory but is
+  no longer marked done (skipped, or to do again): its clips and entries are
+  removed, as they'd be taken as reviewed, and its export record cleared. The
+  record keeps the file's source ID as exported, so the right clips go even if
+  the audio changed since.
 - **Verified.** Each clip is read back and compared before its source is marked
   exported. The app shows which originals are safe to delete but never deletes
   them itself.

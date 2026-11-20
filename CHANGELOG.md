@@ -30,6 +30,9 @@
   longer done, so it isn't read as reviewed. A file changed since it was
   written is listed instead and left in place. The label file records what
   was written under each file's `annotation-exports`.
+- Clip export likewise removes the clips and entries of a file exported
+  earlier but no longer marked done, and clears its "exported" mark. Export
+  records now keep the file's source ID.
 
 ### Selecting and playing
 

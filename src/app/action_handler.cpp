@@ -942,6 +942,11 @@ void action_handler::report_export(const export_summary &summary)
         message += fmt::format(
             "\n\n{} files with labels weren't exported because they aren't marked done.",
             summary.m_todo_with_labels);
+    if(summary.m_withdrawn_files)
+        message += fmt::format(
+            "\n\nRemoved {} clips of {} files exported earlier but no longer marked done.",
+            summary.m_withdrawn_clips,
+            summary.m_withdrawn_files);
     m_state.report_info(message);
 
     for(const auto &error : summary.m_errors)

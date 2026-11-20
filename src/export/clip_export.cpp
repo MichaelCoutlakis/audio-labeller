@@ -246,12 +246,23 @@ export_job prepare_export(const project_model &project, const export_settings &s
         }
 
         const auto status = project.get_status(file.m_path);
+        const auto *state = project.find_file_state(file.m_path);
         if(status != file_status::done)
         {
             job.m_todo_with_labels += status == file_status::todo && !f.m_labels.empty();
+            // Exported here before: its clips go, as they'd be read as reviewed
+            if(state &&
+               state->m_export &&
+               state->m_export->m_directory == generic_utf8(job.m_directory))
+            {
+                auto id = state->m_export->m_source_id;
+                if(id.empty() && state->m_source_id)
+                    id = state->m_source_id->m_id; // A record from before the ID was kept
+                job.m_withdrawn.push_back(export_job::withdrawn{file.m_path, id});
+            }
             continue;
         }
-        if(const auto *state = project.find_file_state(file.m_path))
+        if(state)
             f.m_cached_id = state->m_source_id;
         job.m_files.push_back(std::move(f));
     }
@@ -267,6 +278,8 @@ void apply_export(project_model &project, const export_outcome &outcome)
         project.set_source_id(r.m_path, r.m_source_id);
         project.record_export(r.m_path, r.m_record);
     }
+    for(const auto &path : outcome.m_withdrawn)
+        project.clear_export(path);
 }
 
 export_summary export_dataset(project_model &project, const export_settings &settings)
@@ -385,7 +398,7 @@ export_outcome run_export(const export_job &job, export_progress *progress)
                 export_outcome::file_result{
                     file.m_path,
                     id_cache,
-                    export_record{now, generic_utf8(dir), rows.size(), all_verified}
+                    export_record{now, generic_utf8(dir), rows.size(), all_verified, source_id}
                 });
             ++summary.m_files;
             summary.m_clips += rows.size();
@@ -399,23 +412,44 @@ export_outcome run_export(const export_job &job, export_progress *progress)
             ++progress->m_done;
     }
 
-    // Merge: drop the earlier entries of re-exported sources, deleting clips no longer produced
+    // Sources of files no longer done, unless another copy of the same audio was just exported
+    std::set<std::string> withdrawn;
+    for(const auto &w : job.m_withdrawn)
+    {
+        outcome.m_withdrawn.push_back(w.m_path);
+        if(!w.m_source_id.empty() && !new_rows.contains(w.m_source_id))
+            withdrawn.insert(w.m_source_id);
+    }
+
+    // Merge: drop the earlier entries of re-exported sources, deleting clips no longer produced,
+    // and of withdrawn ones
     std::set<std::string> new_names;
     for(const auto &[id, rows] : new_rows)
         for(const auto &row : rows)
             new_names.insert(row.at("file_name").get<std::string>());
 
     std::vector<json> rows;
+    std::set<std::string> withdrawn_found;
     for(const auto &row : old_rows)
     {
-        if(!new_rows.contains(row.at("source_id").get<std::string>()))
+        const auto id = row.at("source_id").get<std::string>();
+        const bool gone = withdrawn.contains(id);
+        if(!gone && !new_rows.contains(id))
             rows.push_back(row);
         else if(const auto name = row.at("file_name").get<std::string>(); !new_names.contains(name))
         {
             std::error_code ec;
             fs::remove(dir / path_from_utf8(name), ec);
+            if(gone)
+            {
+                ++summary.m_withdrawn_clips;
+                withdrawn_found.insert(id);
+            }
         }
     }
+    for(const auto &id : withdrawn)
+        if(sources.erase(id) > 0U || withdrawn_found.contains(id))
+            ++summary.m_withdrawn_files;
     for(auto &[id, source_rows] : new_rows)
         for(auto &row : source_rows)
             rows.push_back(std::move(row));

@@ -108,7 +108,8 @@
                             "time": { "type": "string", "description": "UTC, ISO 8601" },
                             "directory": { "type": "string" },
                             "clips": { "type": "integer" },
-                            "verified": { "type": "boolean", "description": "Every clip was read back and matched" }
+                            "verified": { "type": "boolean", "description": "Every clip was read back and matched" },
+                            "source-id": { "type": "string", "description": "Of the file as exported, which names its clips" }
                         }
                     },
                     "annotation-exports": {

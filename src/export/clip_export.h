@@ -73,6 +73,9 @@ struct export_summary
     size_t m_clips{};
     size_t m_unverified_clips{};
     size_t m_todo_with_labels{}; ///< Not exported because they aren't marked done
+    /// Exported earlier but no longer done, so their clips were removed from the dataset
+    size_t m_withdrawn_files{};
+    size_t m_withdrawn_clips{};
     std::vector<std::string> m_errors;
 };
 
@@ -101,6 +104,14 @@ struct export_job
     std::filesystem::path m_directory; ///< Resolved
     export_settings m_settings;
     std::vector<file> m_files; ///< Those marked done
+    /// Files exported to this directory before but no longer marked done (skipped, or to do
+    /// again), whose clips are to be removed, lest they be taken as reviewed
+    struct withdrawn
+    {
+        std::filesystem::path m_path;
+        std::string m_source_id;
+    };
+    std::vector<withdrawn> m_withdrawn;
     label_dict m_classes;
     size_t m_todo_with_labels{};
 };
@@ -116,17 +127,20 @@ struct export_outcome
 
     export_summary m_summary;
     std::vector<file_result> m_results;
+    std::vector<std::filesystem::path> m_withdrawn; ///< Their export records are to be cleared
     bool m_cancelled{}; ///< Nothing was recorded, though some clips may have been written
 };
 
 export_job prepare_export(const project_model &project, const export_settings &settings);
 
 /// Cut the clips and write the dataset files, merging into any existing export in the directory:
-/// entries for other sources, including those whose originals were deleted, are kept. Uses only
-/// the job, so it may run on any thread.
+/// entries for other sources, including those whose originals were deleted, are kept, except
+/// those of files in the project that were exported there but are no longer done. Uses only the
+/// job, so it may run on any thread.
 export_outcome run_export(const export_job &job, export_progress *progress = nullptr);
 
-/// Record each exported file's source ID and export in the project
+/// Record each exported file's source ID and export in the project, and forget the exports of
+/// those withdrawn
 void apply_export(project_model &project, const export_outcome &outcome);
 
 /// Export clips for every file marked done, on this thread

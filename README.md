@@ -139,8 +139,10 @@ edits the export settings in the project file.
   Use it to keep clips of one recording in the same train/test split.
 
 Exporting again updates the dataset rather than replacing it, so originals can
-be deleted once exported ("exported" in the file list). See `ARCHITECTURE.md`
-for the format and the `export` settings in the project file.
+be deleted once exported ("exported" in the file list). A file that's no
+longer marked done (skipped, or to do again) has its clips removed at the next
+export. See `ARCHITECTURE.md` for the format and the `export` settings in the
+project file.
 
 Only confirmed labels are exported; suggestions waiting for review aren't, and
 background clips avoid them.

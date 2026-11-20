@@ -281,6 +281,70 @@ TEST_CASE("export_dataset writes verified lossless clips and merges re-exports")
     CHECK(!fs::exists(out / path_from_utf8(old_b_clip)));
 }
 
+TEST_CASE("clips of files no longer done are removed at the next export")
+{
+    temp_dir dir;
+    write_text(
+        dir / "pal.json",
+        R"({"label-palette":[{"class-id":0,"class":"Dog","colour":"#ccb42aab"}]})");
+    write_text(
+        dir / "proj.json",
+        R"({"dataset-roots":["audio"],"export-prefix":"out","label-palette":"pal.json","label-file":"labels.json"})");
+    std::vector<int16_t> samples;
+    for(int i = 0; i != 5000; ++i)
+        samples.push_back(static_cast<int16_t>(i));
+    write_wav16(dir / "audio/a.wav", 1000, 1, samples);
+    write_wav16(dir / "audio/b.wav", 1000, 1, std::vector<int16_t>(5000, 1));
+    const auto a = dir / "audio/a.wav";
+    const auto b = dir / "audio/b.wav";
+    const auto out = dir / "dataset";
+    const auto config = [&] { return project_config::parse_from_file((dir / "proj.json").string()); };
+
+    std::string a_id;
+    std::string a_clip;
+    {
+        project_model m(config());
+        m.add_label(a, make_label(get_next_label_id(), 1.0, 2.0));
+        m.add_label(b, make_label(get_next_label_id(), 3.0, 3.5));
+        m.set_status(a, file_status::done);
+        m.set_status(b, file_status::done);
+        const auto summary = export_dataset(m, export_settings{});
+        REQUIRE(summary.m_files == 2);
+        CHECK(summary.m_withdrawn_files == 0);
+        a_id = m.get_source_id(a);
+        CHECK(m.find_file_state(a)->m_export->m_source_id == a_id);
+    } // Saved, so the records outlast the session
+    for(const auto &r : read_jsonl(out / "metadata.jsonl"))
+        if(r["source_id"] == a_id)
+            a_clip = r["file_name"];
+    REQUIRE(fs::exists(out / path_from_utf8(a_clip)));
+
+    project_model m(config());
+    m.set_status(a, file_status::skip);
+    auto summary = export_dataset(m, export_settings{});
+    CHECK(summary.m_errors.empty());
+    CHECK(summary.m_files == 1);
+    CHECK(summary.m_withdrawn_files == 1);
+    CHECK(summary.m_withdrawn_clips == 1);
+    CHECK(!fs::exists(out / path_from_utf8(a_clip)));
+    const auto rows = read_jsonl(out / "metadata.jsonl");
+    REQUIRE(rows.size() == 1);
+    CHECK(rows[0]["source_id"] != a_id);
+    CHECK(read_text(out / "sources.csv").find(a_id) == std::string::npos);
+    CHECK(!json::parse(read_text(out / "dataset.json"))["sources"].contains(a_id));
+    CHECK(!m.find_file_state(a)->m_export); // No longer shown as exported
+
+    // Nothing more to withdraw
+    summary = export_dataset(m, export_settings{});
+    CHECK(summary.m_withdrawn_files == 0);
+
+    // Done again, exported again
+    m.set_status(a, file_status::done);
+    summary = export_dataset(m, export_settings{});
+    CHECK(summary.m_files == 2);
+    CHECK(fs::exists(out / path_from_utf8(a_clip)));
+}
+
 TEST_CASE("DCASE labels keep the full span of a region longer than a fixed clip")
 {
     temp_dir dir;
