@@ -6,7 +6,9 @@
 
 #include <doctest/doctest.h>
 
+#include "io/files.h"
 #include "manifest/clip_manifest.h"
+#include "model/paths.h"
 #include "test_utils.h"
 
 namespace fs = std::filesystem;
@@ -179,4 +181,143 @@ TEST_CASE("a clip's label is the region that holds its onset")
         CHECK(m.get_labels(rec).find_ptr(late.m_id)->m_defn_id == fox);
         CHECK(m.get_labels(rec).size() == 3);
     }
+}
+
+namespace
+{
+/// A project with two dataset roots holding a recording of the same name
+struct two_roots
+{
+    temp_dir dir;
+    project_model m{project_config{}};
+
+    explicit two_roots(const std::string &clip_manifest = {})
+    {
+        write_text(
+            dir / "pal.json",
+            R"({"label-palette":[{"class-id":0,"class":"Dog","colour":"#ccb42aab"},{"class-id":1,"class":"Fox","colour":"#ccb42aab"}]})");
+        write_text(
+            dir / "proj.json",
+            R"({"dataset-roots":["siteA","siteB"],"export-prefix":"out","label-palette":"pal.json","label-file":"l.json")" +
+                clip_manifest + "}");
+        write_text(dir / "siteA/rec.wav", "");
+        write_text(dir / "siteB/rec.wav", "");
+        m = project_model(project_config::parse_from_file((dir / "proj.json").string()));
+    }
+};
+}
+
+TEST_CASE("a review list in our own format")
+{
+    two_roots p;
+    const auto list = p.dir / "runs/run1.csv";
+    write_text(
+        list,
+        "id,path,root,start_s,stop_s,label,channel,score,reason\n"
+        "a,rec.wav,siteB,1.0,1.5,Dog,2,0.3,missed\n"
+        "b,rec.wav,,4.0,,Fox,,0.9,unsure\n"
+        "c,gone.wav,,2.0,3.0,Dog,,0.1,missed\n"
+        "d," + generic_utf8(p.dir / "siteB/rec.wav") + ",,6.0,7.0,,,,\n");
+
+    // No clip-manifest section: the defaults are our own format
+    const auto settings = clip_manifest_settings::for_list(p.m.config().m_clip_manifest, list);
+    auto manifest = load_clip_manifest(p.m, settings);
+    REQUIRE(manifest.m_rows.size() == 4);
+    CHECK(manifest.m_path == list);
+    CHECK(manifest.m_results_path == p.dir / "runs/run1.results.csv");
+    CHECK(manifest.m_unresolved == 1);
+
+    const auto &a = manifest.m_rows[0];
+    CHECK(a.m_source == p.dir / "siteB/rec.wav"); // Its own root, not the first
+    CHECK(a.m_channel == 1U);                      // From 1 in the list, from 0 here
+    CHECK(a.m_stop_s == 1.5);
+    CHECK_FALSE(a.m_clip); // No cut clips needed
+    CHECK(manifest.m_rows[1].m_source == p.dir / "siteA/rec.wav"); // The first root that has it
+    CHECK_FALSE(manifest.m_rows[2].m_source);
+    CHECK(manifest.m_rows[3].m_source == p.dir / "siteB/rec.wav"); // An absolute path
+    CHECK(manifest.m_rows[3].m_label.empty());
+
+    SUBCASE("verdicts go to a results file beside the list, with every column")
+    {
+        manifest.m_rows[0].m_result = {"relabel", "Fox", "a fox, not a dog"};
+        manifest.m_rows[2].m_result = {"not_event", "", ""};
+        write_results(manifest);
+        CHECK(
+            read_text(manifest.m_results_path) ==
+            "id,path,root,start_s,stop_s,label,channel,score,reason,verdict,new_label,note\n"
+            "a,rec.wav,siteB,1.0,1.5,Dog,2,0.3,missed,relabel,Fox,\"a fox, not a dog\"\n"
+            "b,rec.wav,,4.0,,Fox,,0.9,unsure,,,\n"
+            "c,gone.wav,,2.0,3.0,Dog,,0.1,missed,not_event,,\n"
+            "d," + csv_escape(generic_utf8(p.dir / "siteB/rec.wav")) + ",,6.0,7.0,,,,,,,\n");
+        CHECK(read_text(list).find("verdict") == std::string::npos); // The list is left alone
+
+        // Read back with the list, by ID, after the pipeline has written it again in another order
+        write_text(
+            list,
+            "id,path,root,start_s,stop_s,label,channel,score,reason\n"
+            "c,gone.wav,,2.0,3.0,Dog,,0.1,missed\n"
+            "e,rec.wav,,9.0,9.5,Dog,,0.2,new\n"
+            "a,rec.wav,siteB,1.0,1.5,Dog,2,0.3,missed\n");
+        const auto again = load_clip_manifest(p.m, settings);
+        REQUIRE(again.m_rows.size() == 3);
+        CHECK(again.m_rows[0].m_result.m_verdict == "not_event");
+        CHECK(again.m_rows[1].m_result == row_verdict{});
+        CHECK(again.m_rows[2].m_result == row_verdict{"relabel", "Fox", "a fox, not a dog"});
+        CHECK(again.heard() == 2U);
+    }
+
+    SUBCASE("without IDs, rows are matched by path, start and label")
+    {
+        write_text(list, "path,start_s,label\nrec.wav,1.0,Dog\nrec.wav,2.0,Dog\n");
+        auto plain = load_clip_manifest(p.m, settings);
+        plain.m_rows[1].m_result.m_verdict = "correct";
+        write_results(plain);
+        write_text(list, "path,start_s,label,score\nrec.wav,2.0,Dog,1\nrec.wav,1.0,Dog,1\n");
+        const auto again = load_clip_manifest(p.m, settings);
+        CHECK(again.m_rows[0].m_result.m_verdict == "correct");
+        CHECK(again.m_rows[1].m_result.m_verdict.empty());
+    }
+
+    SUBCASE("a list fed back as its own results doesn't get two verdict columns")
+    {
+        write_text(list, "path,start_s,verdict\nrec.wav,1.0,correct\n");
+        auto fed = load_clip_manifest(p.m, settings);
+        fed.m_rows[0].m_result.m_verdict = "not_event";
+        CHECK(results_csv(fed) == "path,start_s,verdict,new_label,note\nrec.wav,1.0,not_event,,\n");
+    }
+}
+
+TEST_CASE("older clip manifests are still read")
+{
+    two_roots p(R"(,"clip-manifest":{"path":"m.csv","dataset-root":"siteB"})");
+    write_text(
+        p.dir / "m.csv",
+        "clip_path,source_path,onset_s,label\n"
+        "c1.wav,rec.wav,1.0,Dog\n");
+    const auto settings = clip_manifest_settings::from_json(p.m.config().m_clip_manifest);
+    REQUIRE(settings);
+    const auto manifest = load_clip_manifest(p.m, *settings);
+    REQUIRE(manifest.m_rows.size() == 1);
+    CHECK(manifest.m_rows[0].m_onset_s == 1.);
+    CHECK(manifest.m_rows[0].m_source == p.dir / "siteB/rec.wav");
+    CHECK(manifest.m_rows[0].m_clip == p.dir / "c1.wav");
+
+    // Another list opened in the same project keeps the section's columns and roots, with the
+    // clips beside that list
+    const auto other = p.dir / "other/list.csv";
+    write_text(other, "clip_path,source_path,onset_s\nx.wav,rec.wav,3\n");
+    const auto s2 = clip_manifest_settings::for_list(p.m.config().m_clip_manifest, other);
+    const auto m2 = load_clip_manifest(p.m, s2);
+    CHECK(m2.m_rows[0].m_clip == p.dir / "other/x.wav");
+    CHECK(m2.m_rows[0].m_source == p.dir / "siteB/rec.wav");
+
+    // A list without the required columns says which
+    write_text(other, "clip_path,label\nx.wav,Dog\n");
+    CHECK_THROWS_WITH(load_clip_manifest(p.m, s2), doctest::Contains("\"path\""));
+}
+
+TEST_CASE("the results file name")
+{
+    CHECK(results_path("a/run.csv") == fs::path{"a/run.results.csv"});
+    CHECK(results_path("a/run") == fs::path{"a/run.results.csv"});
 }

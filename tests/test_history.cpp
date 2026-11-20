@@ -62,3 +62,21 @@ TEST_CASE("history merges consecutive changes with the same key")
     CHECK(e->m_after == with_label(7, 2.));
     CHECK(!h.can_undo());
 }
+
+TEST_CASE("a step that changes only a review list row is kept")
+{
+    history h;
+    history::entry same{"", label_snapshot{}, label_snapshot{}, std::nullopt};
+    same.m_list_change = row_verdict_change{"list.csv", 0U, {}, {}};
+    h.push(same);
+    CHECK(!h.can_undo()); // Nothing changed at all
+
+    auto heard = same;
+    heard.m_list_change->m_after.m_verdict = "correct";
+    h.push(heard);
+    auto e = h.undo();
+    REQUIRE(e);
+    REQUIRE(e->m_list_change);
+    CHECK(e->m_file.empty());
+    CHECK(e->m_list_change->m_before.m_verdict.empty());
+}

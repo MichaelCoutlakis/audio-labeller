@@ -84,6 +84,22 @@ void project_view::render_menu_items(const project_model &project, app_state &st
     if(project.has_project())
     {
         ImGui::Separator();
+        if(ImGui::MenuItem("Open review list...", nullptr, false, !m_dialogs.is_open()))
+        {
+            const auto &open = state.m_review_list;
+            m_dialogs.open_csv(
+                purpose::review_list,
+                open ? open->m_path.parent_path() : project.config().m_filename.parent_path());
+        }
+        const auto &recent = state.m_settings.m_recent_lists;
+        if(ImGui::BeginMenu("Recent review lists", !recent.empty()))
+        {
+            for(const auto &list : recent)
+                if(ImGui::MenuItem(list.m_list.c_str()))
+                    state.add_action(actions::open_review_list{path_from_utf8(list.m_list)});
+            ImGui::EndMenu();
+        }
+        ImGui::Separator();
         if(ImGui::MenuItem("Project settings..."))
             state.m_show_project_settings = true;
         if(ImGui::MenuItem("Show project file in file manager"))
@@ -93,8 +109,12 @@ void project_view::render_menu_items(const project_model &project, app_state &st
 
 void project_view::take_dialog_answers(const project_model &project, app_state &state)
 {
-    const auto purposes =
-        {purpose::open_project, purpose::data_root, purpose::project_file, purpose::palette};
+    const auto purposes = {
+        purpose::open_project,
+        purpose::data_root,
+        purpose::project_file,
+        purpose::palette,
+        purpose::review_list};
     for(const auto p : purposes)
     {
         while(auto a = m_dialogs.take(p))
@@ -104,7 +124,11 @@ void project_view::take_dialog_answers(const project_model &project, app_state &
             {
                 const auto message =
                     "No file dialog could be shown (" + a->m_error + "). Type the path instead.";
-                if(a->m_purpose == purpose::open_project)
+                if(a->m_purpose == purpose::review_list)
+                    state.report_error(
+                        "No file dialog could be shown (" + a->m_error + "). Name the list in the "
+                        "project's \"clip-manifest\" section instead.");
+                else if(a->m_purpose == purpose::open_project)
                 {
                     m_show_open_fallback = true;
                     m_open_error = message;
@@ -123,6 +147,9 @@ void project_view::take_dialog_answers(const project_model &project, app_state &
             case purpose::data_root: m_data_root = path; break;
             case purpose::project_file: m_project_file = path; break;
             case purpose::palette: m_palette = path; break;
+            case purpose::review_list:
+                state.add_action(actions::open_review_list{*a->m_path});
+                break;
             default: break;
             }
         }

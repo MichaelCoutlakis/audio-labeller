@@ -14,6 +14,7 @@ namespace
 {
 // SDL needs the filters until the dialog closes
 constexpr SDL_DialogFileFilter json_filters[] = {{"JSON files", "json"}, {"All files", "*"}};
+constexpr SDL_DialogFileFilter csv_filters[] = {{"CSV files", "csv"}, {"All files", "*"}};
 }
 
 void file_dialogs::callback(void *userdata, const char *const *files, int)
@@ -48,6 +49,19 @@ void file_dialogs::open_json(purpose p, const std::filesystem::path &start)
         m_window,
         json_filters,
         SDL_arraysize(json_filters),
+        m_start.empty() ? nullptr : m_start.c_str(),
+        false);
+}
+
+void file_dialogs::open_csv(purpose p, const std::filesystem::path &start)
+{
+    m_start = generic_utf8(start);
+    SDL_ShowOpenFileDialog(
+        &callback,
+        begin(p),
+        m_window,
+        csv_filters,
+        SDL_arraysize(csv_filters),
         m_start.empty() ? nullptr : m_start.c_str(),
         false);
 }

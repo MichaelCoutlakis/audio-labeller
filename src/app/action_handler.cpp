@@ -665,16 +665,24 @@ void action_handler::operator()(const actions::review_step &r)
     m_audio_engine.play(); // Reviewing means listening, whatever auto play says
 }
 
+void action_handler::restore_step(const history::entry &e, bool undo)
+{
+    if(!e.m_file.empty())
+        restore(e.m_file, undo ? e.m_before : e.m_after);
+    if(const auto &change = e.m_list_change)
+        set_row_verdict(change->m_list, change->m_row, undo ? change->m_before : change->m_after);
+}
+
 void action_handler::operator()(const actions::undo &u)
 {
     if(auto entry = m_state.m_history.undo())
-        restore(entry->m_file, entry->m_before);
+        restore_step(*entry, true);
 }
 
 void action_handler::operator()(const actions::redo &r)
 {
     if(auto entry = m_state.m_history.redo())
-        restore(entry->m_file, entry->m_after);
+        restore_step(*entry, false);
 }
 
 void action_handler::operator()(const actions::set_file_status &s)
@@ -1029,20 +1037,168 @@ void action_handler::operator()(const actions::play_clip &p)
     m_playing_band = false;
 }
 
+void action_handler::operator()(const actions::open_review_list &o)
+{
+    const auto &section = m_proj.config().m_clip_manifest;
+    try
+    {
+        clip_manifest_settings settings;
+        if(o.m_file.empty())
+        {
+            const auto own = clip_manifest_settings::from_json(section);
+            if(!own)
+            {
+                if(!o.m_quiet)
+                    m_state.report_info("The project names no review list.");
+                return;
+            }
+            settings = *own;
+        }
+        else
+            settings = clip_manifest_settings::for_list(section, o.m_file);
+
+        auto list = load_clip_manifest(m_proj, settings);
+        m_state.m_settings.add_recent_list(
+            {generic_utf8(list.m_path), generic_utf8(m_proj.config().m_filename)});
+        m_state.m_review_list = std::move(list);
+        m_state.m_review_list_settings = std::move(settings);
+        m_state.m_review_list_error.clear();
+        m_state.m_review_list_row.reset();
+        m_state.m_focus_review_list = !o.m_quiet;
+        ++m_state.m_review_list_generation;
+    }
+    catch(const std::exception &e)
+    {
+        m_state.m_review_list.reset();
+        m_state.m_review_list_row.reset();
+        m_state.m_review_list_error = e.what();
+        ++m_state.m_review_list_generation;
+        if(!o.m_quiet)
+            m_state.report_error(e.what());
+    }
+}
+
+void action_handler::operator()(const actions::show_list_row &s)
+{
+    if(!m_state.m_review_list || s.m_row >= m_state.m_review_list->m_rows.size())
+        return;
+    const auto &settings = m_state.m_review_list_settings;
+    const auto &row = m_state.m_review_list->m_rows[s.m_row];
+    m_state.m_review_list_row = s.m_row;
+
+    if(!row.m_source)
+    {
+        if(row.m_clip)
+        {
+            if(s.m_play)
+                (*this)(actions::play_clip{*row.m_clip});
+        }
+        else
+            m_state.report_info("This row's recording isn't in the project, and it has no clip.");
+        return;
+    }
+
+    const auto &file = *row.m_source;
+    (*this)(actions::load_file{file});
+    restore_active_audio();
+    // The row's channel, for this row only: the file's own choice stays as it is
+    const auto channel = row.m_channel ? row.m_channel : m_proj.get_channel(file);
+    if(channel != m_state.active_channel())
+    {
+        m_state.load_audio(file, channel);
+        m_audio_engine.set_audio_clip(m_state.get_audio_buffer_ptr());
+    }
+
+    // The event as the list gives it; with no end there, the label's, else region_s
+    const auto *l = find_label_at(
+        m_proj.get_labels(file),
+        row.m_onset_s,
+        settings.m_match_s,
+        class_named(m_proj.m_label_dict, row.m_label));
+    auto span = row.span(settings.m_region_s);
+    if(!row.m_stop_s && l && !l->is_onset())
+        span.second = std::max(span.first, l->m_stop_s);
+    const label event{0U, label_defn_id{}, span.first, span.second};
+
+    if(l)
+        m_state.set_selection({l->m_id});
+    else
+        m_state.clear_selections();
+    m_state.m_view_request = review_view(event, m_state.m_review);
+    select_region(m_state.playback_window(event), l ? l->m_band : frequency_band{});
+    if(s.m_play)
+        m_audio_engine.play(); // Hearing the list means listening, whatever auto play says
+}
+
+void action_handler::set_row_verdict(const std::filesystem::path &list, size_t row, const row_verdict &v)
+{
+    auto &open = m_state.m_review_list;
+    if(!open || open->m_path != list || row >= open->m_rows.size())
+    {
+        m_state.report_info(
+            "The review list " + generic_utf8(list) + " isn't open any more, so its results are "
+            "left as they are.");
+        return;
+    }
+    open->m_rows[row].m_result = v;
+    try
+    {
+        write_results(*open);
+    }
+    catch(const std::exception &e)
+    {
+        m_state.report_error(
+            "Could not write the results " + generic_utf8(open->m_results_path) + ": " + e.what());
+    }
+}
+
 void action_handler::operator()(const actions::judge_clip &j)
 {
-    undoable(
-        j.m_source,
-        [&]
-        {
-            apply_clip_verdict(
-                m_proj,
-                j.m_source,
-                j.m_event,
-                j.m_window_s,
-                j.m_verdict,
-                j.m_defn_id);
-        });
+    if(!m_state.m_review_list || j.m_row >= m_state.m_review_list->m_rows.size())
+        return;
+    const auto &list = *m_state.m_review_list;
+    const auto &settings = m_state.m_review_list_settings;
+    const auto row = list.m_rows[j.m_row]; // A copy, as setting the verdict changes the row
+
+    auto after = row.m_result;
+    after.m_verdict = verdict_name(j.m_verdict);
+    after.m_new_label.clear();
+    if(j.m_verdict == clip_verdict::relabel)
+        if(const auto *defn = m_proj.m_label_dict.find_ptr(j.m_defn_id))
+            after.m_new_label = defn->m_class;
+
+    history::entry step;
+    step.m_list_change = row_verdict_change{list.m_path, j.m_row, row.m_result, after};
+    if(row.m_source)
+    {
+        // So the verdict lands in the annotations and survives the next re-cut
+        step.m_file = *row.m_source;
+        step.m_before = snapshot(step.m_file);
+        apply_clip_verdict(
+            m_proj,
+            *row.m_source,
+            row.span(settings.m_region_s),
+            settings.m_match_s,
+            j.m_verdict,
+            j.m_defn_id);
+        step.m_after = snapshot(step.m_file);
+    }
+    set_row_verdict(list.m_path, j.m_row, after);
+    m_state.m_history.push(std::move(step));
+}
+
+void action_handler::operator()(const actions::set_row_note &n)
+{
+    if(!m_state.m_review_list || n.m_row >= m_state.m_review_list->m_rows.size())
+        return;
+    const auto &list = *m_state.m_review_list;
+    const auto before = list.m_rows[n.m_row].m_result;
+    auto after = before;
+    after.m_note = n.m_note;
+    history::entry step;
+    step.m_list_change = row_verdict_change{list.m_path, n.m_row, before, after};
+    set_row_verdict(list.m_path, n.m_row, after);
+    m_state.m_history.push(std::move(step));
 }
 
 void action_handler::operator()(const actions::jump_to &j)

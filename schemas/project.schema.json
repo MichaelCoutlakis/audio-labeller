@@ -100,27 +100,31 @@
             }
         },
         "clip-manifest": {
-            "description": "A CSV of clips cut by another tool, to check in the app",
+            "description": "A review list (clip manifest): a CSV of events to hear and judge, eg. from a training pipeline. A list in the app's own format (see examples/review-list.csv) needs none of this; the section names a list to open with the project, and renames the columns of another tool's CSV. Verdicts are written beside the list, run.csv giving run.results.csv.",
             "type": "object",
             "properties": {
-                "path": { "type": "string" },
-                "clip-root": { "type": "string", "description": "Clip paths are relative to this. Default: the CSV's folder" },
+                "path": { "type": "string", "description": "The list to open with the project, relative to this file" },
+                "clip-root": { "type": "string", "description": "Clip paths are relative to this. Default: the list's folder" },
                 "columns": {
                     "type": "object",
+                    "description": "Column names, for a CSV not in the app's own format",
                     "properties": {
-                        "clip": { "type": "string", "description": "Default: clip_path" },
-                        "source": { "type": "string", "description": "The source recording, relative to a dataset root. Default: source_path" },
-                        "onset": { "type": "string", "description": "Onset in the source, in seconds. Default: onset_s" },
-                        "label": { "type": "string", "description": "Default: label" },
-                        "stop": { "type": "string", "description": "Optional: the event's stop in the source, in seconds. Default: stop_s" },
-                        "duration": { "type": "string", "description": "Optional, used if there's no stop: the event's length from its onset, in seconds. Default: duration_s" }
+                        "source": { "type": "string", "description": "The recording, relative to a dataset root, or absolute. Default: path (or source_path)" },
+                        "onset": { "type": "string", "description": "The event's start in the recording, in seconds. Default: start_s (or onset_s)" },
+                        "start": { "type": "string", "description": "The same as onset" },
+                        "stop": { "type": "string", "description": "Optional: the event's stop in the recording, in seconds. Default: stop_s" },
+                        "duration": { "type": "string", "description": "Optional, used if there's no stop: the event's length from its start, in seconds. Default: duration_s" },
+                        "label": { "type": "string", "description": "Optional: the class the pipeline gave it. Default: label" },
+                        "root": { "type": "string", "description": "Optional: the row's dataset root, as written in dataset-roots. Default: root" },
+                        "channel": { "type": "string", "description": "Optional: the channel to view and play, from 1. Default: channel" },
+                        "clip": { "type": "string", "description": "Optional: a cut clip, played when the recording isn't in the project. Default: clip_path" },
+                        "id": { "type": "string", "description": "Optional: a key the results are joined on. Default: id" }
                     }
                 },
-                "dataset-root": { "type": "string", "description": "The dataset root source paths are relative to, as written in dataset-roots. Default: try each" },
-                "match_s": { "type": "number", "description": "A label whose span holds the clip's onset, give or take this, is the clip's label. Default: 0.05" },
-                "region_s": { "type": "number", "description": "The length of a label a verdict creates, when the manifest has no stop or duration for the clip. Default: 1" }
-            },
-            "required": [ "path" ]
+                "dataset-root": { "type": "string", "description": "The dataset root paths are relative to, for rows without a root, as written in dataset-roots. Default: try each" },
+                "match_s": { "type": "number", "description": "A label whose span holds the event's start, give or take this, is the event's label. Default: 0.05" },
+                "region_s": { "type": "number", "description": "The length of a label a verdict creates, when the list has no stop or duration for the event. Default: 1" }
+            }
         },
         "export": {
             "description": "Clip export settings. Every key is optional.",

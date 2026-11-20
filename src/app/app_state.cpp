@@ -116,6 +116,18 @@ app_settings app_settings::load()
             s.m_spectrogram_share = std::clamp(spec->value("share", s.m_spectrogram_share), 0.1f, 0.9f);
         }
         s.m_favourite_classes = j.value("favourite_classes", s.m_favourite_classes);
+        if(auto lists = j.find("review_lists"); lists != j.end() && lists->is_array())
+            for(const auto &l : *lists)
+            {
+                if(!l.is_object() || !l.contains("list"))
+                    continue;
+                const auto list = l.value("list", std::string{});
+                s.m_recent_lists.push_back({list, l.value("project", std::string{})});
+                s.m_list_views[list] = review_list_view{
+                    l.value("filter", std::string{}),
+                    l.value("sort", std::string{}),
+                    l.value("descending", false)};
+            }
     }
     catch(const nlohmann::json::exception &e)
     {
@@ -166,10 +178,36 @@ void app_settings::save()
           {"share", m_spectrogram_share}}},
         {"favourite_classes", m_favourite_classes}
     };
+    auto lists = nlohmann::json::array();
+    for(const auto &recent : m_recent_lists)
+    {
+        nlohmann::json l{{"list", recent.m_list}, {"project", recent.m_project}};
+        if(auto it = m_list_views.find(recent.m_list); it != m_list_views.end())
+        {
+            l["filter"] = it->second.m_filter;
+            l["sort"] = it->second.m_sort_column;
+            l["descending"] = it->second.m_descending;
+        }
+        lists.push_back(std::move(l));
+    }
+    j["review_lists"] = std::move(lists);
     if(!m_device_name.empty())
         j["audio_device"] = {{"name", m_device_name}};
     std::ofstream f(m_filename);
     f << j.dump(2);
+}
+
+void app_settings::add_recent_list(const recent_review_list &list)
+{
+    std::erase(m_recent_lists, list);
+    m_recent_lists.insert(m_recent_lists.begin(), list);
+    if(m_recent_lists.size() > 10U)
+        m_recent_lists.resize(10U);
+    std::erase_if(
+        m_list_views,
+        [&](const auto &view)
+        { return std::ranges::find(m_recent_lists, view.first, &recent_review_list::m_list) ==
+              m_recent_lists.end(); });
 }
 
 void app_state::report_error(const std::string &message)
@@ -205,6 +243,7 @@ void app_state::reset_project_state()
 {
     m_active_file.reset();
     m_active_audio = std::make_shared<audio_buffer>();
+    m_active_channel.reset();
     m_audio_min_max_map = {};
     m_drag = {};
     m_unlabelled.clear();
@@ -228,6 +267,10 @@ void app_state::reset_project_state()
     m_assist_result = {};
     m_assist_report.clear();
     m_playing_clip = false;
+    m_review_list.reset();
+    m_review_list_settings = {};
+    m_review_list_error.clear();
+    m_review_list_row.reset();
 }
 
 void app_state::set_selected_file(
@@ -249,6 +292,7 @@ void app_state::load_audio(const std::filesystem::path &path, std::optional<uint
     auto audio = load_mono(path, channel);
     apply_high_pass(audio.m_samples, audio.m_sample_rate_hz, m_high_pass);
     m_active_audio = std::make_shared<const audio_buffer>(std::move(audio));
+    m_active_channel = channel;
     spdlog::info("Loaded {}, SR={} Hz", generic_utf8(path), m_active_audio->m_sample_rate_hz);
     m_audio_min_max_map = audio_min_max_pyramid_map(*m_active_audio);
 }

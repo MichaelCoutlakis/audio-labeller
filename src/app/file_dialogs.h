@@ -26,7 +26,8 @@ public:
         project_file,
         palette,
         settings_root, ///< A dataset root in the project settings
-        settings_palette
+        settings_palette,
+        review_list
     };
 
     struct answer
@@ -40,6 +41,8 @@ public:
 
     /// Choose an existing JSON file
     void open_json(purpose p, const std::filesystem::path &start = {});
+    /// Choose an existing CSV file
+    void open_csv(purpose p, const std::filesystem::path &start = {});
     void save_json(purpose p, const std::filesystem::path &start = {});
     void open_folder(purpose p, const std::filesystem::path &start = {});
 

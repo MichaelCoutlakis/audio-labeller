@@ -54,7 +54,10 @@ struct action_handler
     void operator()(const actions::import_annotations &i);
     void operator()(const actions::export_annotations &e);
     void operator()(const actions::play_clip &p);
+    void operator()(const actions::open_review_list &o);
+    void operator()(const actions::show_list_row &s);
     void operator()(const actions::judge_clip &j);
+    void operator()(const actions::set_row_note &n);
     void operator()(const actions::jump_to &j);
     void operator()(const actions::run_assist &r);
     void operator()(const actions::cancel_assist &c);
@@ -111,6 +114,11 @@ private:
 
     /// Read the active file's audio again with its current channel, playing on from where it was
     void reload_active_audio();
+
+    /// Set a review list row's verdict and write the results, if the list is still open
+    void set_row_verdict(const std::filesystem::path &list, size_t row, const row_verdict &v);
+    /// Undo or redo a step: its labels, and the review list row it changed
+    void restore_step(const history::entry &e, bool undo);
 
     void report_export(const export_summary &summary);
     void poll_assist();

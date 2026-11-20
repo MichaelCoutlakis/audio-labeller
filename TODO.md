@@ -65,12 +65,75 @@ Still to do:
 
 - [ ] Check the review flow against a real pipeline's files and a real
       multichannel recording, with region suggestions of varied length.
-- [ ] Remember the clip manifest's filter and sort between runs.
 - [x] Export leaves a stale file behind when a recording stops being done
       (marked skipped or to do after an earlier export): a reader takes it as
       that recording's reviewed labels. Export now records each file it writes
       (path and a hash of its contents, per tree) and removes it once the
       recording is no longer done, or lists it if someone changed it since.
+
+Review lists (the clip manifest as a listening list):
+
+The use case: a training pipeline writes a list of events worth hearing (the
+ones a model gets wrong or is unsure about, with a reason, its prediction and
+a score per row), and someone listens to each and gives a verdict. The events
+come from many recordings in several datasets, and many are quiet field
+recordings that need gain to be heard. Today the clip window plays each cut
+clip on its own, without the recording view, so the gain, the spectrogram and
+the labels around the event aren't there.
+
+The list has a format of our own, so a pipeline needs nothing of the project
+to write one and nothing of the label file to read the results: a CSV, as
+pandas, R or a spreadsheet writes it. Another tool's CSV is still read through
+the `columns` mapping in the project, as the clip manifest is now. The same
+list is the label queue of "Reviewing existing labels" in Phase 7: one queue,
+stepped by the review mode code, whether it comes from a file, a file filter's
+command or the class filter.
+
+- [x] The review list format: one row per event, with `path` (the recording,
+      relative to a dataset root, or absolute) and `start_s`, and optionally
+      `stop_s` or `duration_s` (else `region_s`), `label`, `root` (the dataset
+      root of that row, since a list draws on several), `channel`, `clip_path`
+      (a cut clip, used only when the recording isn't there) and `id` (a key
+      for joining the results). Any other column (`score`, `prediction`,
+      `reason`) is shown, filterable and sortable, and passed through. Old
+      manifests keep working: `onset_s` is read as `start_s`, `source_path` as
+      `path`. Pick one name for the class (`label`) and use it in the Phase 7
+      file filter output too. A schema and an example in `examples/`.
+- [x] Results beside the list, never over it: `<list>.results.csv` with every
+      input column plus `verdict` (`correct`, `relabel`, `not_event`, empty
+      while unheard), `new_label` and `note`. The pipeline may write a new
+      list while one is being heard, and joins the results on `id` (or the
+      row). Results follow the verdicts as applied, so undo takes a row's
+      verdict back too. Verdicts still land on the labels in the label file as
+      now; a row whose recording isn't there gets a verdict in the results
+      only. The note is the row's own and needs nothing from Phase 7; once
+      labels have notes (flag-and-note, Phase 7), a verdict's note is copied
+      to its label too.
+- [x] Step through the list in the recording view: Up/Down opens the
+      recording at the event, zoomed to a window around it with the event's
+      span selected, and plays it with pre-roll, through the view's chain
+      (gain or automatic gain, speed, high-pass), using the review mode code
+      rather than a second copy of it. The labels around the event are
+      visible and a verdict is seen landing on its label. A row with only a
+      cut clip plays the clip (the engine's gain and speed, and the
+      high-pass, apply to it too), but doesn't open it in the view: labels
+      drawn on it would have no recording to belong to.
+- [ ] Show a clip-only row in the waveform and spectrogram, read-only, if
+      lists without their recordings turn out to be common.
+- [x] Open another list without editing the project (File > Open review list,
+      and the most recent ones remembered), so a pipeline can write one list
+      per run next to its results and the same project reads each. A list in
+      our format needs no `columns` mapping.
+- [x] Carry on where you left off: the next row is the first without a verdict
+      in the results file, so a long list is done over several sittings. The
+      filter and sort are remembered per list in the app settings.
+- [ ] Only if needed: opening a project walks every dataset root to fill the
+      file list, even when a list names a few recordings. The walk reads no
+      audio, so it's fast on local disks; measure it on the real datasets
+      (network shares, very large trees) first. If it's slow, scan in the
+      background with the file list filling in, rather than a `"scan": false`
+      mode, which would change what the file list means for the status
+      filter, export, the "exported" column and the label file.
 
 ## Phase 4: Seeing and hearing
 
@@ -229,13 +292,15 @@ the labels by eye.
       the same way it does for suggestions, with Enter keeping the label as it
       is. Choosing classes reuses "Filter by class" above.
 - [ ] Or the queue comes from a command: a file filter's output may list
-      labels rather than files (a CSV with `path`, `start_s`, `stop_s` and
-      optionally `class` and a `reason`), so a project's own script decides
-      what needs another look: labels of a class, labels an earlier model
-      disagrees with, labels from one session. Each row is matched to the
-      label whose span holds it, as clip manifest verdicts are.
-- [ ] Progress through the queue survives closing the app, so a long relabel
-      pass can be done over several sittings.
+      labels rather than files, as a review list (the format in Phase 3b:
+      `path`, `start_s`, `stop_s` and optionally `label` and a `reason`), so a
+      project's own script decides what needs another look: labels of a
+      class, labels an earlier model disagrees with, labels from one session.
+      It is stepped like any review list, each row matched to the label whose
+      span holds it.
+- [ ] Progress through the queue survives closing the app, as a review list's
+      does (Phase 3b), so a long relabel pass can be done over several
+      sittings.
 - [ ] Flag a label to come back to: a sound that's hard to place gets its best
       coarse class now, plus a flag (a key, and a mark drawn on the label) and
       an optional free-text note ("like a bag of heavy items put down on

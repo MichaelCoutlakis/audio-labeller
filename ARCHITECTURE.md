@@ -28,7 +28,7 @@ reads and writes the same per-recording label files.
 | Core           | `src/model`, `src/io` (audio files, source IDs), export | std, nlohmann/json, dr_libs, spdlog |
 |                | `src/interchange`: label file formats, annotation trees |                                    |
 |                | `src/review`: review queue, playback windows            |                                    |
-|                | `src/manifest`: clip manifests and verdicts             |                                    |
+|                | `src/manifest`: review lists, verdicts and results      |                                    |
 |                | `src/dsp`: onset snapping, FFT and spectrogram          |                                    |
 | App            | `src/app`: state, actions, handler, undo history        | Core                               |
 | Audio playback | `src/audio`                                             | Core, SDL3 audio                   |
@@ -61,8 +61,8 @@ each lives behind one seam:
   state into text and back (`x:` for rejected), separately from the format.
 - **Outputs**: clip export (`export/`), annotation trees and the CSV export
   each take the project's labels and write their own layout.
-- **Clip manifests**: column names are configurable, so a pipeline's CSV is read
-  as it is.
+- **Review lists**: a format of the app's own, with column names configurable,
+  so another pipeline's CSV is read as it is; results go to a file of their own.
 
 ## Data flow and actions
 
@@ -287,19 +287,38 @@ the UI thread by `apply_assist`, through the same `add_text_labels` as imports:
 class names are matched to the palette and suggestions already present aren't
 added again. A failure on one recording is reported and the rest carry on.
 
-## Clip manifests
+## Review lists (clip manifests)
 
-A clip manifest is a pipeline's CSV of cut clips, with each clip's source
-recording, onset and label, and optionally the event's stop or duration. It's
-shown as a sortable, filterable table. Verdicts (correct, relabelled, not an
-event) edit the label in the source recording whose span holds the onset, give
-or take `match_s`: of the clip's class first (except for a relabel), then the
-one whose start is nearest the onset, since a region can start well before the
-onset a pipeline finds in it. With no label there, the verdict creates a region
-from the onset to the clip's stop (or `region_s` after it). So the correction
-lives in the annotations rather than a separate review file.
-Clips are played straight from their files; the active file's audio is put back
-in the engine before anything else plays.
+A review list is a CSV of events to hear, with each one's recording, start and
+optionally its stop, class, dataset root, channel, a cut clip and an ID. The
+format is the app's own (README); the project's `clip-manifest` section renames
+the columns of another tool's CSV and may name a list to open with the project.
+The open list lives in `app_state`, so that the action handler can write its
+results and undo its verdicts; the Review List window is a view of it.
+
+Stepping to a row (`show_list_row`) opens its recording, zoomed to the event as
+review mode zooms to a suggestion, and plays it from the active file, so the
+gain, speed and high-pass are the recording view's. A row's channel applies to
+that row only, without changing the file's own choice. A row whose recording
+isn't in the project plays its clip, if it has one; clips aren't opened in the
+view, where labels drawn on them would have no recording to belong to.
+
+Verdicts (correct, relabelled, not an event) edit the label in the recording
+whose span holds the event's start, give or take `match_s`: of the row's class
+first (except for a relabel), then the one whose start is nearest, since a
+region can start well before the onset a pipeline finds in it. With no label
+there, the verdict creates a region over the event (or `region_s` after its
+start). So the correction lives in the annotations rather than a separate
+review file.
+
+Each verdict and note is also written to the results file beside the list
+(`run.results.csv`), atomically, with every column of the list and `verdict`,
+`new_label` and `note`. The list itself is never written, since a pipeline may
+replace it. An undo step carries the row's verdict before and after
+(`row_verdict_change` in `history`), as well as the recording's labels, so undo
+takes both back. Results are read back by key (the ID column, else path, start
+and label), so a list written again with rows added or moved keeps its
+verdicts.
 ## Audio
 
 ### Reading files

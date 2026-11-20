@@ -209,19 +209,51 @@ template. The built-in finds sounds some decibels above the background
 rise), with its settings adjustable in the
 window. Running again doesn't add the same suggestion twice.
 
-## Checking cut clips
+## Review lists: hearing a pipeline's events
 
-A `clip-manifest` section in the project points at a CSV of clips cut by
-another tool, with each clip's source recording (relative to a dataset root),
-onset in it and label. The Clip Manifest window lists them, filterable by words
-or `column=value` and sortable by any column. With the list focused, Up/Down
-play each clip, Enter marks it correct, X not an event and 1-9 relabels it, and
-J opens the recording at that time. Verdicts change the label whose span holds
-that onset in the source recording (of the clip's class if there's one, then
-the one starting nearest it), so they land in the annotations and survive the
-next re-cut. Where there's no label, a verdict makes one: a region from the
-onset to the clip's stop, if the manifest has a stop or duration column, or of
-`region_s` (1 s by default).
+A review list is a CSV of events to hear and judge, eg. the ones a model gets
+wrong or is unsure about, written by a training pipeline. Open one with
+File > Open review list (the recent ones are remembered, and the last one
+reopens with its project), or name one in the project's `clip-manifest`
+section. One row per event:
+
+| Column | | |
+|---|---|---|
+| `path` | required | The recording, relative to a dataset root, or absolute |
+| `start_s` | required | Where the event starts in it, in seconds |
+| `stop_s` or `duration_s` | optional | Its end, else the label there, else `region_s` (1 s) |
+| `label` | optional | The class the pipeline gave it |
+| `root` | optional | The row's dataset root, as written in the project, for lists drawing on several |
+| `channel` | optional | The channel to view and play, from 1 |
+| `clip_path` | optional | A cut clip, played when the recording isn't in the project |
+| `id` | optional | A key to join the results on |
+
+Any other column (a score, the model's prediction, a reason) is shown, and
+filterable and sortable like the rest. `examples/review-list.csv` is a small
+one. A CSV with other column names is read by naming them in the project's
+`clip-manifest` section (see the schema); older manifests with `source_path` and
+`onset_s` are read as they are.
+
+The Review List window lists the rows, filterable by words or `column=value`
+(`verdict=` keeps the rows not heard yet) and sortable by any column. With the
+list focused, Up/Down open each event in its recording, zoomed to it with its
+label selected, and play it through the same gain, speed and high-pass as the
+recording view; Space plays it again. Enter marks it correct, X not an event and
+1-9 relabels it; N writes a note on the row; Ctrl+Z undoes a verdict. J opens
+the recording at the event, as before. A verdict changes the label whose span
+holds the event's start in the recording (of the row's class if there's one,
+then the one starting nearest it), so it lands in the annotations and survives
+the next re-cut. Where there's no label, a verdict makes one: a region over the
+event.
+
+Verdicts are also written beside the list, never over it: `run.csv` gives
+`run.results.csv`, with every column of the list plus `verdict` (`correct`,
+`relabel` or `not_event`, empty while unheard), `new_label` and `note`. So the
+pipeline reads the results without parsing the label file, and can write a new
+list while one is being heard. They're read back when the list is opened again,
+matched by `id` (or by path, start and label), and the list opens at the first
+row not heard yet, with its filter and sort, so a long list can be done over
+several sittings.
 
 ## Controls:
 

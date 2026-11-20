@@ -8,6 +8,7 @@
 #include <filesystem>
 #include <optional>
 #include <set>
+#include <string>
 #include <variant>
 
 #include <nlohmann/json.hpp>
@@ -260,20 +261,41 @@ struct export_annotations
     size_t m_tree{};
 };
 
-/// Play a clip file from a clip manifest, rather than the active file
+/// Play a clip file from a review list, rather than the active file
 struct play_clip
 {
     std::filesystem::path m_clip;
 };
 
-/// Record a verdict on a clip, on the label at its onset in its source recording
+/// Open a review list (a clip manifest) and its results. An empty path opens the project's own.
+struct open_review_list
+{
+    std::filesystem::path m_file;
+    bool m_quiet{false}; ///< Say nothing if there's no list to open
+};
+
+/// Show a row of the open review list in its recording, zoomed to the event, and play it there,
+/// or play its clip if the recording isn't in the project
+struct show_list_row
+{
+    size_t m_row{}; ///< In the list's own order
+    bool m_play{true};
+};
+
+/// Record a verdict on a row of the open review list, in its results and on the label at its
+/// start in the recording, as one undo step
 struct judge_clip
 {
-    std::filesystem::path m_source;
-    time_span m_event; ///< The clip's onset, and the stop of a label made for it
-    double m_window_s{};
+    size_t m_row{};
     clip_verdict m_verdict{};
-    label_defn_id m_defn_id;
+    label_defn_id m_defn_id; ///< The class it is, for correct and relabel
+};
+
+/// Give a row of the open review list a note, written with its verdict
+struct set_row_note
+{
+    size_t m_row{};
+    std::string m_note;
 };
 
 /// Open a file and show a time in it, with context either side
@@ -359,7 +381,10 @@ using app_action = std::variant<
     import_annotations,
     export_annotations,
     play_clip,
+    open_review_list,
+    show_list_row,
     judge_clip,
+    set_row_note,
     jump_to,
     run_assist,
     cancel_assist,

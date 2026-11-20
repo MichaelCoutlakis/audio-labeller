@@ -1,0 +1,4 @@
+id,path,start_s,stop_s,label,score,reason
+1,Dog goes woof.wav,0.0,0.31,Dog,0.42,low confidence
+2,Dog goes woof.wav,1.52,1.99,Pig,0.18,model says Dog
+3,The Fox.wav,1.29,1.48,Fox,0.55,low confidence

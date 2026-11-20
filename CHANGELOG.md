@@ -2,6 +2,23 @@
 
 ## Unreleased
 
+### Review lists
+
+- The clip manifest is now a review list in a format of the app's own: a CSV
+  with `path` and `start_s`, and optionally `stop_s` or `duration_s`, `label`,
+  a per-row dataset `root`, `channel`, `clip_path` and `id`. Other columns are
+  shown and sortable. Cut clips are no longer needed, and older manifests
+  (`source_path`, `onset_s`) are still read.
+- Stepping through a list opens each event in its recording, zoomed to it with
+  its label selected, and plays it through the recording view's gain, speed and
+  high-pass. A row's clip is played only when its recording isn't in the
+  project.
+- Verdicts and a note per row (N) are written to `<list>.results.csv` beside
+  the list, with every column of the list plus `verdict`, `new_label` and
+  `note`, and undone with Ctrl+Z along with the label they changed.
+- File > Open review list, and recent lists. The last list reopens with its
+  project, at the first row not heard yet, with its filter and sort.
+
 ### Finding recordings
 
 - A search box above the file list keeps the files whose path contains every

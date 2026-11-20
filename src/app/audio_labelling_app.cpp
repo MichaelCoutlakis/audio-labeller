@@ -63,6 +63,17 @@ void audio_labeller_app::load_project_sections()
     {
         m_app_state.report_error(std::string{"Error in the project file: "} + e.what());
     }
+
+    // The review list last open in this project, else the project's own
+    if(!m_project.has_project())
+        return;
+    const auto project = generic_utf8(m_project.config().m_filename);
+    const auto &recent = m_app_state.m_settings.m_recent_lists;
+    const auto it = std::ranges::find(recent, project, &recent_review_list::m_project);
+    m_app_state.add_action(
+        actions::open_review_list{
+            it != recent.end() ? path_from_utf8(it->m_list) : std::filesystem::path{},
+            true});
 }
 
 void audio_labeller_app::switch_project(const std::filesystem::path &file)

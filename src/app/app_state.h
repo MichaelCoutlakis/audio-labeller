@@ -6,6 +6,7 @@
 #include <filesystem>
 #include <future>
 #include <limits>
+#include <map>
 #include <memory>
 #include <optional>
 #include <set>
@@ -16,6 +17,7 @@
 #include "../dsp/spectrogram.h"
 #include "../export/clip_export.h"
 #include "../interchange/annotation_tree.h"
+#include "../manifest/clip_manifest.h"
 #include "../model/audio_buffer.h"
 #include "../model/file_finder.h"
 #include "../model/history.h"
@@ -23,6 +25,23 @@
 #include "../review/review.h"
 #include "actions.h"
 #include "lanes.h"
+
+/// How a review list was shown, remembered per list
+struct review_list_view
+{
+    std::string m_filter;
+    std::string m_sort_column; ///< By name, empty for the list's own order
+    bool m_descending{false};
+};
+
+/// A review list opened recently, and the project it was opened in
+struct recent_review_list
+{
+    std::string m_list;    ///< UTF-8
+    std::string m_project; ///< UTF-8
+
+    bool operator==(const recent_review_list &) const = default;
+};
 
 struct app_settings
 {
@@ -62,6 +81,11 @@ struct app_settings
     /// Palette classes pinned to the top of the palette, by name, in the order they were pinned.
     /// Names the project doesn't have are kept, in case another project has them.
     std::vector<std::string> m_favourite_classes;
+    std::vector<recent_review_list> m_recent_lists; ///< Most recent first
+    std::map<std::string, review_list_view> m_list_views; ///< By list path, for the recent ones
+
+    /// Put a list first in the recent ones, keeping at most ten
+    void add_recent_list(const recent_review_list &list);
 
     /// Set if the settings file exists but is unreadable, in which case it's left as is on save
     std::string m_load_error;
@@ -158,6 +182,8 @@ public:
 
     /// Load a file's audio for viewing and playing, as one channel or a mix, with the high-pass
     void load_audio(const std::filesystem::path &path, std::optional<uint32_t> channel);
+    /// The channel the active file's audio was loaded with, nullopt for a mix
+    std::optional<uint32_t> active_channel() const { return m_active_channel; }
 
     /// Applied to audio as it's read. From the project, and switched off or changed for this
     /// session in Options.
@@ -257,7 +283,14 @@ public:
     bool is_assisting() const { return m_assist_result.valid(); }
     std::string m_assist_report; ///< What the last run did, shown in its window
 
-    /* Clip manifest: */
+    /* Review list (clip manifest): */
+    std::optional<clip_manifest> m_review_list; ///< The open list, if any
+    clip_manifest_settings m_review_list_settings;
+    std::string m_review_list_error; ///< Why the last list couldn't be opened
+    std::optional<size_t> m_review_list_row; ///< The row last shown, in the list's own order
+    bool m_focus_review_list{false};        ///< Bring the list's window to the front
+    uint64_t m_review_list_generation{};    ///< Counts the lists opened, so views can tell
+
     bool m_keys_captured{false}; ///< A view with focus handles the keys, eg. the clip list
     bool m_focus_class_filter{false}; ///< Ctrl+F: put the keyboard in the palette's filter box
     bool m_playing_clip{false};  ///< The audio engine has a manifest clip, not the active file
@@ -305,6 +338,7 @@ private:
     uint64_t m_edit_seq{};
 
     std::shared_ptr<const audio_buffer> m_active_audio{std::make_shared<audio_buffer>()};
+    std::optional<uint32_t> m_active_channel;
 
     audio_min_max_pyramid_map m_audio_min_max_map;
 };

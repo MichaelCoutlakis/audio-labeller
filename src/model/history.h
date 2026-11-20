@@ -10,6 +10,7 @@
 #include <filesystem>
 #include <optional>
 #include <set>
+#include <string>
 #include <utility>
 
 #include "label.h"
@@ -23,6 +24,25 @@ struct label_snapshot
     std::set<label_id> m_selection;
 
     bool operator==(const label_snapshot &) const = default;
+};
+
+/// What a review list (see manifest/clip_manifest.h) says about one of its rows once heard
+struct row_verdict
+{
+    std::string m_verdict;   ///< correct, relabel or not_event; empty while unheard
+    std::string m_new_label; ///< The class it was relabelled to
+    std::string m_note;
+
+    bool operator==(const row_verdict &) const = default;
+};
+
+/// A change to one row's verdict in a review list, undone with the labels it changed
+struct row_verdict_change
+{
+    std::filesystem::path m_list;
+    size_t m_row{};
+    row_verdict m_before;
+    row_verdict m_after;
 };
 
 /// Undo/redo by snapshots of a file's labels before and after each change. Snapshots can't get out
@@ -39,11 +59,15 @@ public:
         label_snapshot m_before;
         label_snapshot m_after;
         std::optional<merge_key> m_merge_key;
+        /// A review list row the step also changed. m_file is empty if it changed no labels.
+        std::optional<row_verdict_change> m_list_change;
     };
 
     void push(entry e)
     {
-        if(e.m_before == e.m_after)
+        const bool list_changed =
+            e.m_list_change && e.m_list_change->m_before != e.m_list_change->m_after;
+        if(e.m_before == e.m_after && !list_changed)
             return;
         m_redo.clear();
 
