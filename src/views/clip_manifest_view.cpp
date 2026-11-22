@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <cctype>
 #include <cstdlib>
+#include <set>
 #include <sstream>
 #include <utility>
 
@@ -66,11 +67,16 @@ std::string clip_manifest_view::current_label(
     const app_state &state,
     const clip_manifest::row &row) const
 {
+    const auto region = state.m_review_list_settings.m_region_s;
+    if(!row.m_source && row.m_clip)
+        return !row.m_clip_duration_s        ? "(on its clip, which can't be read)"
+            : row.partly_outside_clip(region) ? "(on its clip, partly outside it)"
+                                              : "(on its clip)";
     if(!row.m_source)
-        return row.m_clip ? "(recording not found: clip only)" : "(recording not found)";
+        return "(recording not found)";
     const auto *l = find_label_at(
         project.get_labels(*row.m_source),
-        row.m_onset_s,
+        row.m_start_s,
         state.m_review_list_settings.m_match_s,
         class_named(project.m_label_dict, row.m_label));
     if(!l)
@@ -99,8 +105,14 @@ std::string clip_manifest_view::cell(
     switch(column - list.m_columns.size())
     {
     case 0:
-        return r.m_result.m_new_label.empty() ? r.m_result.m_verdict
-                                              : r.m_result.m_verdict + ": " + r.m_result.m_new_label;
+    {
+        const auto &v = r.m_result;
+        auto text = v.m_new_label.empty() || v.m_verdict == "added" ? v.m_verdict
+                                                                     : v.m_verdict + ": " + v.m_new_label;
+        if((v.m_new_start_s || v.m_new_stop_s) && v.m_verdict != "added")
+            text += text.empty() ? "moved" : ", moved";
+        return text;
+    }
     case 1: return r.m_result.m_note;
     default: return current_label(project, state, r);
     }
@@ -113,6 +125,7 @@ void clip_manifest_view::take_list(const project_model &project, app_state &stat
     m_position.reset();
     m_note_row.reset();
     m_filter.clear();
+    m_hidden.clear();
     m_sort_column = -1;
     m_sort_descending = false;
     m_dirty = true;
@@ -124,6 +137,7 @@ void clip_manifest_view::take_list(const project_model &project, app_state &stat
     {
         m_filter = it->second.m_filter;
         m_sort_descending = it->second.m_descending;
+        m_hidden = {it->second.m_hidden.begin(), it->second.m_hidden.end()};
         for(size_t c = 0U; c != column_count(state); ++c)
             if(!it->second.m_sort_column.empty() && column_name(state, c) == it->second.m_sort_column)
                 m_sort_column = static_cast<int>(c);
@@ -149,7 +163,8 @@ void clip_manifest_view::remember_view(app_state &state) const
     state.m_settings.m_list_views[generic_utf8(state.m_review_list->m_path)] = review_list_view{
         m_filter,
         m_sort_column >= 0 ? column_name(state, static_cast<size_t>(m_sort_column)) : std::string{},
-        m_sort_descending};
+        m_sort_descending,
+        {m_hidden.begin(), m_hidden.end()}};
 }
 
 void clip_manifest_view::apply_filter_and_sort(const project_model &project, const app_state &state)
@@ -179,8 +194,12 @@ void clip_manifest_view::apply_filter_and_sort(const project_model &project, con
         selected_row = m_order[*m_position];
 
     m_order.clear();
+    m_present = 0U;
     for(size_t r = 0U; r != state.m_review_list->m_rows.size(); ++r)
     {
+        if(!state.m_review_list->m_rows[r].present())
+            continue; // An added row taken back
+        ++m_present;
         const bool pass = std::ranges::all_of(
             terms,
             [&](const auto &term)
@@ -228,15 +247,11 @@ void clip_manifest_view::select(app_state &state, size_t position, bool play)
     state.add_action(actions::show_list_row{m_order[*m_position], play});
 }
 
-void clip_manifest_view::verdict(
-    const project_model &project,
-    app_state &state,
-    clip_verdict v,
-    label_defn_id cls)
+void clip_manifest_view::verdict(app_state &state, clip_verdict v, const std::string &new_label)
 {
     if(!m_position)
         return;
-    state.add_action(actions::judge_clip{m_order[*m_position], v, cls});
+    state.add_action(actions::judge_clip{m_order[*m_position], v, new_label});
     if(state.m_settings.m_auto_advance && *m_position + 1U < m_order.size())
         select(state, *m_position + 1U);
 }
@@ -267,34 +282,20 @@ void clip_manifest_view::handle_keys(const project_model &project, app_state &st
     if(pressed(ImGuiKey_N))
         m_focus_note = true;
 
-    // The list's class, else the class of the label at the event, for a verdict of correct
-    auto named = class_named(project.m_label_dict, row.m_label);
-    if(!named && row.m_source)
-        if(const auto *l = find_label_at(
-               project.get_labels(*row.m_source),
-               row.m_onset_s,
-               state.m_review_list_settings.m_match_s))
-            named = l->m_defn_id;
     if(pressed(ImGuiKey_Enter) || pressed(ImGuiKey_KeypadEnter))
-    {
-        if(named)
-            verdict(project, state, clip_verdict::correct, *named);
-        else
-            state.report_error(
-                row.m_label.empty() ? std::string{"The row has no class: relabel it with 1-9."}
-                                    : "\"" + row.m_label + "\" isn't in the palette: relabel it with 1-9.");
-    }
+        verdict(state, clip_verdict::correct);
     if(pressed(ImGuiKey_X))
-        verdict(project, state, clip_verdict::not_event, named.value_or(label_defn_id{}));
+        verdict(state, clip_verdict::not_event);
 
     const auto numbered = state.numbered_classes(project);
     for(size_t i = 0U; i != std::min<size_t>(numbered.size(), 9U); ++i)
         if(pressed(static_cast<ImGuiKey>(ImGuiKey_1 + i)) ||
            pressed(static_cast<ImGuiKey>(ImGuiKey_Keypad1 + i)))
-            verdict(project, state, clip_verdict::relabel, numbered[i]);
+            if(const auto *defn = project.m_label_dict.find_ptr(numbered[i]))
+                verdict(state, clip_verdict::relabel, defn->m_class);
 
     if(pressed(ImGuiKey_J) && row.m_source)
-        state.add_action(actions::jump_to{*row.m_source, row.m_onset_s});
+        state.add_action(actions::jump_to{*row.m_source, row.m_start_s});
 }
 
 void clip_manifest_view::render_note(app_state &state)
@@ -361,6 +362,14 @@ void clip_manifest_view::render(const project_model &project, app_state &state)
     if(ImGui::Button("Reload"))
         state.add_action(actions::open_review_list{list.m_path});
     ImGui::SameLine();
+    if(ImGui::Button("Import edits..."))
+        state.add_action(actions::plan_review_import{list.m_results_path});
+    ImGui::SetItemTooltip("Apply these results to the project's labels, after a summary");
+    ImGui::SameLine();
+    ImGui::Checkbox("Changes file", &state.m_settings.m_review_changes_file);
+    ImGui::SetItemTooltip(
+        "Also write the changed rows alone beside the list, as <list>.changes.csv");
+    ImGui::SameLine();
     ImGui::SetNextItemWidth(-FLT_MIN);
     char buffer[256]{};
     m_filter.copy(buffer, sizeof(buffer) - 1U);
@@ -375,14 +384,30 @@ void clip_manifest_view::render(const project_model &project, app_state &state)
         remember_view(state);
     }
 
-    if(m_dirty)
+    // Rows added, or taken back, since the list was last filtered
+    const auto present = static_cast<size_t>(std::ranges::count_if(
+        list.m_rows,
+        [](const clip_manifest::row &r) { return r.present(); }));
+    if(m_dirty || present != m_present)
         apply_filter_and_sort(project, state);
+    // A row chosen in the waveform is selected here too
+    if(state.m_review_list_row != m_shown_row)
+    {
+        m_shown_row = state.m_review_list_row;
+        if(m_shown_row)
+            if(auto it = std::ranges::find(m_order, *m_shown_row); it != m_order.end())
+            {
+                m_position = static_cast<size_t>(it - m_order.begin());
+                m_scroll_to_selection = true;
+            }
+    }
     ImGui::TextUnformatted(generic_utf8(list.m_path).c_str());
     ImGui::Text(
         "%zu of %zu rows shown, %zu heard. Up/Down show and play, Space again, Enter correct, X not "
-        "an event, 1-9 relabel, N note, J jump.",
+        "an event, 1-9 relabel, N note, J jump. In the waveform: drag a row's edges to move it, "
+        "draw to add one.",
         m_order.size(),
-        list.m_rows.size(),
+        m_present,
         list.heard());
     if(list.m_unresolved)
         ImGui::TextColored(
@@ -399,36 +424,58 @@ void clip_manifest_view::render(const project_model &project, app_state &state)
 
     render_note(state);
 
-    const auto columns = static_cast<int>(column_count(state));
+    // The app's columns (verdict, note, what the recording says) first, then the list's own
+    const auto count = column_count(state);
+    const auto own = list.m_columns.size();
+    const auto logical = [&](size_t shown) { return shown < extra_count ? own + shown : shown - extra_count; };
+    const auto columns = static_cast<int>(count);
     const auto flags = ImGuiTableFlags_Sortable |
         ImGuiTableFlags_SortTristate |
         ImGuiTableFlags_ScrollY |
         ImGuiTableFlags_ScrollX |
         ImGuiTableFlags_RowBg |
         ImGuiTableFlags_Resizable |
+        ImGuiTableFlags_Hideable | // Right-click the header to choose the columns
         ImGuiTableFlags_BordersInnerV |
-        ImGuiTableFlags_NoSavedSettings; // The sort is remembered per list instead
+        ImGuiTableFlags_NoSavedSettings; // The sort and columns are remembered per list instead
     // A table per list, so that one's widths and sort don't carry over to another's columns
     ImGui::PushID(static_cast<int>(m_generation));
     if(ImGui::BeginTable("##Rows", columns, flags))
     {
-        ImGui::TableSetupScrollFreeze(0, 1);
-        for(int c = 0; c != columns; ++c)
+        // The verdict columns and the list's first stay in view when scrolling sideways
+        ImGui::TableSetupScrollFreeze(static_cast<int>(std::min(count, extra_count + 1U)), 1);
+        for(size_t shown = 0U; shown != count; ++shown)
         {
+            const auto c = logical(shown);
             ImGuiTableColumnFlags column_flags = ImGuiTableColumnFlags_None;
-            if(c == m_sort_column)
+            if(static_cast<int>(c) == m_sort_column)
                 column_flags |= ImGuiTableColumnFlags_DefaultSort |
                     (m_sort_descending ? ImGuiTableColumnFlags_PreferSortDescending
                                        : ImGuiTableColumnFlags_PreferSortAscending);
-            ImGui::TableSetupColumn(column_name(state, static_cast<size_t>(c)).c_str(), column_flags);
+            if(shown == 0U)
+                column_flags |= ImGuiTableColumnFlags_NoHide; // It holds the row to click
+            else if(m_hidden.contains(column_name(state, c)))
+                column_flags |= ImGuiTableColumnFlags_DefaultHide;
+            ImGui::TableSetupColumn(column_name(state, c).c_str(), column_flags);
         }
         ImGui::TableHeadersRow();
+
+        // Remember the columns chosen, by name
+        std::set<std::string> hidden;
+        for(size_t shown = 0U; shown != count; ++shown)
+            if(!(ImGui::TableGetColumnFlags(static_cast<int>(shown)) & ImGuiTableColumnFlags_IsEnabled))
+                hidden.insert(column_name(state, logical(shown)));
+        if(hidden != m_hidden)
+        {
+            m_hidden = std::move(hidden);
+            remember_view(state);
+        }
 
         if(auto *specs = ImGui::TableGetSortSpecs(); specs && specs->SpecsDirty)
         {
             if(specs->SpecsCount > 0)
             {
-                m_sort_column = specs->Specs[0].ColumnIndex;
+                m_sort_column = static_cast<int>(logical(static_cast<size_t>(specs->Specs[0].ColumnIndex)));
                 m_sort_descending = specs->Specs[0].SortDirection == ImGuiSortDirection_Descending;
             }
             else
@@ -437,6 +484,10 @@ void clip_manifest_view::render(const project_model &project, app_state &state)
             apply_filter_and_sort(project, state);
             remember_view(state);
         }
+
+        // Paths are shown by file name, with the whole path on hover
+        const auto is_path = [&](size_t c)
+        { return c == list.m_index.m_source || c == list.m_index.m_clip; };
 
         ImGuiListClipper clipper;
         clipper.Begin(static_cast<int>(m_order.size()));
@@ -451,13 +502,21 @@ void clip_manifest_view::render(const project_model &project, app_state &state)
                 const auto &row = list.m_rows[r];
                 ImGui::TableNextRow();
                 ImGui::PushID(i);
-                for(int c = 0; c != columns; ++c)
+                for(size_t shown = 0U; shown != count; ++shown)
                 {
-                    ImGui::TableSetColumnIndex(c);
-                    const auto text = cell(project, state, r, static_cast<size_t>(c));
-                    if(c != 0)
+                    if(!ImGui::TableSetColumnIndex(static_cast<int>(shown)) && shown != 0U)
+                        continue; // Hidden, or scrolled out of view
+                    const auto c = logical(shown);
+                    const auto text = cell(project, state, r, c);
+                    if(shown != 0U)
                     {
-                        ImGui::TextUnformatted(text.c_str());
+                        if(is_path(c) && !text.empty())
+                        {
+                            ImGui::TextUnformatted(generic_utf8(path_from_utf8(text).filename()).c_str());
+                            ImGui::SetItemTooltip("%s", text.c_str());
+                        }
+                        else
+                            ImGui::TextUnformatted(text.c_str());
                         continue;
                     }
                     const bool selected = m_position == position;
@@ -469,7 +528,7 @@ void clip_manifest_view::render(const project_model &project, app_state &state)
                     {
                         select(state, position);
                         if(ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left) && row.m_source)
-                            state.add_action(actions::jump_to{*row.m_source, row.m_onset_s});
+                            state.add_action(actions::jump_to{*row.m_source, row.m_start_s});
                     }
                     if(selected && m_scroll_to_selection)
                     {

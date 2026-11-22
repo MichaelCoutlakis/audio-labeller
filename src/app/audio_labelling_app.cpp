@@ -6,6 +6,7 @@
 #include <exception>
 #include <utility>
 
+#include <SDL3/SDL_video.h>
 #include <imgui_internal.h> // docking
 #include <spdlog/spdlog.h>
 
@@ -46,8 +47,19 @@ project_model audio_labeller_app::open_project(app_state &state)
     }
 }
 
+void audio_labeller_app::update_title()
+{
+    if(!window())
+        return;
+    auto title = base_title();
+    if(m_project.has_project())
+        title += " (" + generic_utf8(m_project.config().m_filename.stem()) + ")";
+    SDL_SetWindowTitle(window(), title.c_str());
+}
+
 void audio_labeller_app::load_project_sections()
 {
+    update_title();
     for(const auto &notice : m_project.notices())
         m_app_state.report_info(notice);
     try
@@ -163,6 +175,7 @@ void audio_labeller_app::on_frame()
     render_main_dockspace();
 
     m_app_state.m_playback_state = m_audio_engine.get_state();
+    m_app_state.refresh_row_labels(m_project); // Only does anything when they changed
 
     m_keyboard.handle(m_project, m_app_state);
 

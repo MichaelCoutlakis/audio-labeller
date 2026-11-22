@@ -27,6 +27,13 @@ std::string trim(const std::string &s)
     return s.substr(first, last - first + 1U);
 }
 
+bool is_inside(const fs::path &target, const fs::path &dir)
+{
+    const auto rel = target.lexically_relative(dir);
+    return !rel.empty() && *rel.begin() != "..";
+}
+}
+
 /// Distinct colours, as hex RGBA: hues a golden angle apart, so neighbours always differ
 std::string class_colour(size_t index)
 {
@@ -47,13 +54,6 @@ std::string class_colour(size_t index)
     const auto byte = [&](double ch)
     { return static_cast<unsigned>(std::lround((ch + v - c) * 255.)); };
     return fmt::format("#{:02x}{:02x}{:02x}b0", byte(r), byte(g), byte(b));
-}
-
-bool is_inside(const fs::path &target, const fs::path &dir)
-{
-    const auto rel = target.lexically_relative(dir);
-    return !rel.empty() && *rel.begin() != "..";
-}
 }
 
 std::vector<std::string> split_class_names(const std::string &text)

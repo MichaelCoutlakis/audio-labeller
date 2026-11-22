@@ -11,6 +11,7 @@
 #include <optional>
 
 #include "../model/audio_buffer.h"
+#include "../model/types.h"
 
 struct audio_format
 {
@@ -69,3 +70,12 @@ private:
 audio_buffer load_mono(
     const std::filesystem::path &path,
     std::optional<uint32_t> channel = std::nullopt);
+
+/// Read a stretch of a file as mono, as load_mono does the whole file, eg. to play it before the
+/// rest is read
+/// @param start_s Set to where the stretch read starts, on a whole frame
+audio_buffer load_mono_range(
+    const std::filesystem::path &path,
+    std::optional<uint32_t> channel,
+    time_span t,
+    double &start_s);

@@ -1,4 +1,8 @@
-id,path,start_s,stop_s,label,score,reason
-1,Dog goes woof.wav,0.0,0.31,Dog,0.42,low confidence
-2,Dog goes woof.wav,1.52,1.99,Pig,0.18,model says Dog
-3,The Fox.wav,1.29,1.48,Fox,0.55,low confidence
+id,path,root,start_s,stop_s,label,clip_path,clip_offset_s,score,reason
+1,farm.wav,audio,10.0,10.26,Dog,,,0.21,quiet
+2,farm.wav,audio,15.2,15.6,Cat,,,0.35,model unsure
+3,farm.wav,audio,17.06,17.26,Dog,,,0.48,onset late
+4,meadow.wav,audio,6.0,6.2,Fox,,,0.52,low confidence
+5,meadow.wav,audio,9.0,9.7,Dog,,,0.30,model says Dog
+6,field.wav,,120.4,120.66,Dog,clips/field-120.wav,120.0,0.44,missed
+7,field.wav,,0.2,0.9,Cat,clips/field-0.wav,-0.5,0.27,near the start

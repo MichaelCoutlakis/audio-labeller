@@ -21,6 +21,9 @@ struct new_project_spec
 };
 
 /// Class names from comma separated text, trimmed, without empty ones. Throws on a duplicate.
+/// A distinct colour for the class at an index in a palette, as "#rrggbbaa"
+std::string class_colour(size_t index);
+
 std::vector<std::string> split_class_names(const std::string &text);
 
 /// The project file a spec writes, with its extension

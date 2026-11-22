@@ -1,0 +1,9 @@
+id,path,root,start_s,stop_s,label,clip_path,clip_offset_s,score,reason,verdict,new_label,new_start_s,new_stop_s,note
+1,farm.wav,audio,10.0,10.26,Dog,,,0.21,quiet,correct,,,,far off
+2,farm.wav,audio,15.2,15.6,Cat,,,0.35,model unsure,relabel,Fox,,,
+3,farm.wav,audio,17.06,17.26,Dog,,,0.48,onset late,correct,,17,,
+4,meadow.wav,audio,6.0,6.2,Fox,,,0.52,low confidence,correct,,,,
+5,meadow.wav,audio,9.0,9.7,Dog,,,0.30,model says Dog,relabel,Cat,,,
+6,field.wav,,120.4,120.66,Dog,clips/field-120.wav,120.0,0.44,missed,,,,,
+7,field.wav,,0.2,0.9,Cat,clips/field-0.wav,-0.5,0.27,near the start,correct,,,,
+,meadow.wav,audio,7.2,7.6,Fox,,,,,added,Fox,7.2,7.6,a tap on glass

@@ -99,6 +99,13 @@ void project_view::render_menu_items(const project_model &project, app_state &st
                     state.add_action(actions::open_review_list{path_from_utf8(list.m_list)});
             ImGui::EndMenu();
         }
+        if(ImGui::MenuItem("Import review edits...", nullptr, false, !m_dialogs.is_open()))
+        {
+            const auto &open = state.m_review_list;
+            m_dialogs.open_csv(
+                purpose::review_results,
+                open ? open->m_path.parent_path() : project.config().m_filename.parent_path());
+        }
         ImGui::Separator();
         if(ImGui::MenuItem("Project settings..."))
             state.m_show_project_settings = true;
@@ -114,7 +121,8 @@ void project_view::take_dialog_answers(const project_model &project, app_state &
         purpose::data_root,
         purpose::project_file,
         purpose::palette,
-        purpose::review_list};
+        purpose::review_list,
+        purpose::review_results};
     for(const auto p : purposes)
     {
         while(auto a = m_dialogs.take(p))
@@ -124,7 +132,7 @@ void project_view::take_dialog_answers(const project_model &project, app_state &
             {
                 const auto message =
                     "No file dialog could be shown (" + a->m_error + "). Type the path instead.";
-                if(a->m_purpose == purpose::review_list)
+                if(a->m_purpose == purpose::review_list || a->m_purpose == purpose::review_results)
                     state.report_error(
                         "No file dialog could be shown (" + a->m_error + "). Name the list in the "
                         "project's \"clip-manifest\" section instead.");
@@ -150,6 +158,9 @@ void project_view::take_dialog_answers(const project_model &project, app_state &
             case purpose::review_list:
                 state.add_action(actions::open_review_list{*a->m_path});
                 break;
+            case purpose::review_results:
+                state.add_action(actions::plan_review_import{*a->m_path});
+                break;
             default: break;
             }
         }
@@ -173,6 +184,69 @@ void project_view::render(const project_model &project, app_state &state)
     take_dialog_answers(project, state);
     render_open_project(state);
     render_new_project(state);
+    render_review_import(state);
+}
+
+void project_view::render_review_import(app_state &state)
+{
+    constexpr const char *popup = "Import review edits";
+    if(!state.m_review_import)
+        return;
+    if(!ImGui::IsPopupOpen(popup))
+        ImGui::OpenPopup(popup);
+    ImGui::SetNextWindowSize(ImVec2{ImGui::GetFontSize() * 36.f, 0.f}, ImGuiCond_Appearing);
+    if(!ImGui::BeginPopupModal(popup))
+        return;
+    auto &request = *state.m_review_import;
+    ImGui::TextWrapped("%s", generic_utf8(request.m_results).c_str());
+    ImGui::Separator();
+    bool apply = false;
+    if(!request.m_error.empty())
+        error_text(request.m_error);
+    else if(request.m_plan)
+    {
+        const auto &plan = *request.m_plan;
+        ImGui::TextWrapped(
+            "Applying these results to the project's labels would change %zu labels, add %zu and "
+            "mark %zu not an event, in %zu recordings. %zu rows are already as the review says.",
+            plan.m_changed,
+            plan.m_added,
+            plan.m_rejected,
+            plan.m_files.size(),
+            plan.m_unchanged);
+        if(plan.unapplied())
+        {
+            ImGui::Text("%zu rows can't be applied:", plan.unapplied());
+            for(const auto &[why, count] : plan.m_unapplied)
+                ImGui::BulletText("%zu: %s", count, why.c_str());
+        }
+        if(!plan.m_unknown_classes.empty())
+        {
+            std::string names;
+            for(const auto &name : plan.m_unknown_classes)
+                names += (names.empty() ? "" : ", ") + name;
+            ImGui::TextWrapped("Classes the palette doesn't have: %s", names.c_str());
+            ImGui::Checkbox("Add them to the palette, and apply their rows too", &request.m_add_classes);
+        }
+        ImGui::Checkbox("Take the done mark off the recordings it changes", &request.m_clear_done);
+        hint("So they're checked again. Ctrl+Z takes the labels back in one step, not the marks.");
+        ImGui::BeginDisabled(plan.m_files.empty() && !(request.m_add_classes && !plan.m_unknown_classes.empty()));
+        apply = ImGui::Button("Import");
+        ImGui::EndDisabled();
+        ImGui::SameLine();
+    }
+    const bool cancel = ImGui::Button("Cancel");
+    if(apply)
+        state.add_action(actions::apply_review_import{
+            request.m_results,
+            request.m_add_classes,
+            request.m_clear_done});
+    if(apply || cancel)
+    {
+        state.m_review_import.reset();
+        ImGui::CloseCurrentPopup();
+    }
+    ImGui::EndPopup();
 }
 
 void project_view::render_open_project(app_state &state)

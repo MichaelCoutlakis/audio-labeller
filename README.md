@@ -73,6 +73,19 @@ the app's own code).
 
 ## Project definition and files
 
+To try the app first, make the example's audio and open its project:
+
+```
+python3 examples/make_example_audio.py
+```
+
+then File > Open project and choose `examples/animal-farm-project.json`. The
+script writes two short recordings of synthetic calls (a dog, a cat, birds,
+and a yip and a tap on glass for the fox, over light background noise) to
+`examples/audio/`, and two clips for the example review list to `examples/clips/`. The calls are at fixed
+times, which the example labels and review list use; one bark is quiet, to try
+the playback gain on. It needs only Python's standard library.
+
 The quickest start is **File > New project from folder**: choose the folder of
 recordings, where to save the project (they can be in different places, so the
 data stays read only), and the classes to label, as a list of names or an
@@ -212,48 +225,87 @@ window. Running again doesn't add the same suggestion twice.
 ## Review lists: hearing a pipeline's events
 
 A review list is a CSV of events to hear and judge, eg. the ones a model gets
-wrong or is unsure about, written by a training pipeline. Open one with
-File > Open review list (the recent ones are remembered, and the last one
-reopens with its project), or name one in the project's `clip-manifest`
-section. One row per event:
+wrong or is unsure about, written by a training pipeline and drawing on several
+datasets. Reviewing a list never changes the project's labels: its output is a
+results file beside it, which the pipeline reads, and which can be imported
+into the project's labels as a separate step. Open a list with File > Open
+review list (the recent ones are remembered, and the last one reopens with its
+project), or name one in the project's `clip-manifest` section. One row per
+event:
 
 | Column | | |
 |---|---|---|
 | `path` | required | The recording, relative to a dataset root, or absolute |
 | `start_s` | required | Where the event starts in it, in seconds |
-| `stop_s` or `duration_s` | optional | Its end, else the label there, else `region_s` (1 s) |
+| `stop_s` or `duration_s` | optional | Its end; without one, it's drawn and played `region_s` (1 s) long |
 | `label` | optional | The class the pipeline gave it |
 | `root` | optional | The row's dataset root, as written in the project, for lists drawing on several |
-| `channel` | optional | The channel to view and play, from 1 |
-| `clip_path` | optional | A cut clip, played when the recording isn't in the project |
+| `channel` | optional | The channel of the recording to view and play, from 1 |
+| `clip_path` | optional | A cut clip, shown when the recording isn't in the project |
+| `clip_offset_s` | with `clip_path` | Where the clip starts in its recording; negative if the clip starts with padding before the recording's start |
 | `id` | optional | A key to join the results on |
 
-Any other column (a score, the model's prediction, a reason) is shown, and
-filterable and sortable like the rest. `examples/review-list.csv` is a small
-one. A CSV with other column names is read by naming them in the project's
-`clip-manifest` section (see the schema); older manifests with `source_path` and
-`onset_s` are read as they are.
+All times are in the recording's time, clip or not. Any other column (a score,
+the model's prediction, a reason) is shown, and filterable and sortable like
+the rest. `examples/review-list.csv` is a small list, which the example project
+opens, and `examples/example-results.csv` shows what its results look like once
+reviewed. A CSV with other column names
+is read by naming them in the project's `clip-manifest` section (see the
+schema).
 
 The Review List window lists the rows, filterable by words or `column=value`
-(`verdict=` keeps the rows not heard yet) and sortable by any column. With the
-list focused, Up/Down open each event in its recording, zoomed to it with its
-label selected, and play it through the same gain, speed and high-pass as the
-recording view; Space plays it again. Enter marks it correct, X not an event and
-1-9 relabels it; N writes a note on the row; Ctrl+Z undoes a verdict. J opens
-the recording at the event, as before. A verdict changes the label whose span
-holds the event's start in the recording (of the row's class if there's one,
-then the one starting nearest it), so it lands in the annotations and survives
-the next re-cut. Where there's no label, a verdict makes one: a region over the
-event.
+(`verdict=` keeps the rows not heard yet) and sortable by any column. The
+verdict, note and what the recording now says come first, and stay in view with
+the list's first column when scrolling sideways; paths show the file name, with
+the whole path on hover; right-click the header to hide or show columns. The
+filter, sort and hidden columns are remembered per list. With the
+list focused, Up/Down show each row and play it; Space plays it again. Enter
+marks it correct, X not an event and 1-9 relabels it; N writes a note on the
+row; Ctrl+Z undoes. J opens the recording at the event.
 
-Verdicts are also written beside the list, never over it: `run.csv` gives
-`run.results.csv`, with every column of the list plus `verdict` (`correct`,
-`relabel` or `not_event`, empty while unheard), `new_label` and `note`. So the
-pipeline reads the results without parsing the label file, and can write a new
-list while one is being heard. They're read back when the list is opened again,
-matched by `id` (or by path, start and label), and the list opens at the first
-row not heard yet, with its filter and sort, so a long list can be done over
-several sittings.
+A row is shown in its recording, zoomed to it, and drawn as a label of its own
+("list: Dog"), with a line at its start, since whether the onset sits on the
+sound's start is part of what's judged. It's drawn apart from the project's
+labels, and grey if the palette doesn't have its class. In the waveform, the
+same keys give verdicts on a selected row, dragging its edges corrects its
+times, and drawing a region adds a row for a sound the list didn't have
+("list+ Dog"; Delete takes it back). A row whose recording isn't in the
+project shows its clip instead, at its place in the recording: the time axis
+reads the recording's time, and padding before the recording's start is shaded.
+The row's event starts playing before the rest of its recording is read.
+
+Results are written beside the list, never over it: `run.csv` gives
+`run.results.csv`, with every column of the list and then:
+
+| Column | |
+|---|---|
+| `verdict` | `correct`, `relabel`, `not_event`, or `added` for a row the reviewer added; empty while unheard |
+| `new_label` | The class it was relabelled to, or an added row's class |
+| `new_start_s`, `new_stop_s` | Where it was moved to, if it was, whatever the verdict |
+| `note` | The reviewer's note |
+
+Added rows have no `id`. `run.results.json` records which list the results
+belong to (its path and a hash of its contents), when, and the app's version.
+"Changes file" also writes `run.changes.csv`, with only the rows the review
+changed. Results are read back when the list is opened again, matched by `id`
+(or by path, start and label), with the added rows, and the list opens at the
+first row not heard yet, with its filter and sort.
+
+File > Import review edits (or "Import edits..." in the list's window) applies
+a results file to the project's labels, after a summary of what it would
+change. A row acts only on a label of its own class whose span holds its
+start: correct confirms it, relabel changes its class, not_event rejects it,
+new times move it, and added makes a label. Where its class has no label
+there, correct and relabel make one over the row's span. Rows whose recording
+isn't in the project, or whose class the palette lacks, are listed, with the
+choice to add those classes to the palette. It's one undo step, importing the
+same results again changes nothing, and an option takes the done mark off the
+recordings it changes, so they're checked again.
+
+A project made for reviewing lists over large datasets can set
+`"scan-roots": false`: the dataset roots aren't walked, and the file list holds
+only the recordings the label file and the open list name. Status and export
+don't apply there.
 
 ## Controls:
 

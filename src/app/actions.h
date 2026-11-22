@@ -288,7 +288,22 @@ struct judge_clip
 {
     size_t m_row{};
     clip_verdict m_verdict{};
-    label_defn_id m_defn_id; ///< The class it is, for correct and relabel
+    std::string m_new_label; ///< For relabel
+};
+
+/// Work out what importing a review's results into the project's labels would do, for the
+/// Import review edits dialog to show
+struct plan_review_import
+{
+    std::filesystem::path m_results;
+};
+
+/// Apply a review's results to the project's labels, as one undo step
+struct apply_review_import
+{
+    std::filesystem::path m_results;
+    bool m_add_classes{false}; ///< Add the classes the palette lacks first
+    bool m_clear_done{true};   ///< Take the done mark off the recordings it changes
 };
 
 /// Give a row of the open review list a note, written with its verdict
@@ -384,6 +399,8 @@ using app_action = std::variant<
     open_review_list,
     show_list_row,
     judge_clip,
+    plan_review_import,
+    apply_review_import,
     set_row_note,
     jump_to,
     run_assist,

@@ -6,18 +6,39 @@
 
 - The clip manifest is now a review list in a format of the app's own: a CSV
   with `path` and `start_s`, and optionally `stop_s` or `duration_s`, `label`,
-  a per-row dataset `root`, `channel`, `clip_path` and `id`. Other columns are
-  shown and sortable. Cut clips are no longer needed, and older manifests
-  (`source_path`, `onset_s`) are still read.
-- Stepping through a list opens each event in its recording, zoomed to it with
-  its label selected, and plays it through the recording view's gain, speed and
-  high-pass. A row's clip is played only when its recording isn't in the
-  project.
-- Verdicts and a note per row (N) are written to `<list>.results.csv` beside
-  the list, with every column of the list plus `verdict`, `new_label` and
-  `note`, and undone with Ctrl+Z along with the label they changed.
+  a per-row dataset `root`, `channel`, `clip_path` with `clip_offset_s` (where
+  the clip starts in its recording, negative for a padded clip) and `id`.
+  Other columns are shown and sortable. The older column names (`source_path`,
+  `onset_s`) are no longer read.
+- Reviewing never changes the project's labels. Verdicts, moved times, added
+  rows and a note per row go to `<list>.results.csv` beside the list (with
+  `verdict`, `new_label`, `new_start_s`, `new_stop_s` and `note`), with
+  `<list>.results.json` naming the list it belongs to, and optionally
+  `<list>.changes.csv` with the changed rows alone. Ctrl+Z undoes them.
+- Each row is drawn as a label of its own in its recording, with a line at its
+  start, grey if the palette lacks its class: verdicts work on it in the
+  waveform too, dragging its edges moves it, and drawing a region adds a row.
+- A row whose recording isn't in the project shows its clip, at its place in
+  the recording's time, with padding before the recording's start shaded.
+- A row's event starts playing before the rest of its recording is read.
+- File > Import review edits applies a results file to the project's labels,
+  after a summary, as one undo step: only labels of a row's own class change,
+  classes the palette lacks can be added to it, and an option takes the done
+  mark off the recordings it changes. Importing twice changes nothing.
+- The review table puts the verdict, note and what the recording says first,
+  keeps them in view when scrolling sideways, shows paths by file name (the
+  whole path on hover), and hides columns from the header's right-click menu,
+  remembered per list.
 - File > Open review list, and recent lists. The last list reopens with its
   project, at the first row not heard yet, with its filter and sort.
+- `"scan-roots": false` in a project lists only the recordings the label file
+  and the open review list name, without walking the dataset roots.
+
+### Speed
+
+- The file list is worked out only when the labels, files or filters change,
+  not twice every frame, so projects with tens of thousands of files stay
+  responsive.
 
 ### Finding recordings
 

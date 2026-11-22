@@ -27,7 +27,8 @@ public:
         palette,
         settings_root, ///< A dataset root in the project settings
         settings_palette,
-        review_list
+        review_list,
+        review_results ///< A review's results, to import into the labels
     };
 
     struct answer

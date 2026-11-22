@@ -90,10 +90,7 @@ std::vector<file_row> list_files(const project_model &project, const file_list_s
 
         if(!settings.m_search.empty())
         {
-            const auto portable = project.to_portable(file.m_path);
-            const auto path = portable.m_root.empty() ? file.m_display_name
-                                                      : portable.m_root + "/" + portable.m_relative;
-            if(!contains_words(path, settings.m_search))
+            if(!contains_words(file.m_search_text, settings.m_search))
                 continue;
         }
 

@@ -77,63 +77,138 @@ The use case: a training pipeline writes a list of events worth hearing (the
 ones a model gets wrong or is unsure about, with a reason, its prediction and
 a score per row), and someone listens to each and gives a verdict. The events
 come from many recordings in several datasets, and many are quiet field
-recordings that need gain to be heard. Today the clip window plays each cut
-clip on its own, without the recording view, so the gain, the spectrogram and
-the labels around the event aren't there.
+recordings that need gain to be heard. Most of those datasets keep their labels
+outside the labeller (their own metadata or CSV files), and only some
+recordings have labels in the project's label file. So a review produces an
+output of its own, the results file, applied the same way for every dataset;
+applying it to the project's labels is a separate, explicit step.
 
-The list has a format of our own, so a pipeline needs nothing of the project
-to write one and nothing of the label file to read the results: a CSV, as
-pandas, R or a spreadsheet writes it. Another tool's CSV is still read through
-the `columns` mapping in the project, as the clip manifest is now. The same
-list is the label queue of "Reviewing existing labels" in Phase 7: one queue,
-stepped by the review mode code, whether it comes from a file, a file filter's
-command or the class filter.
+The list has a format of our own: a CSV, as pandas, R or a spreadsheet writes
+it, needing nothing of the project to write and nothing of the label file to
+read the results. Another tool's CSV is read through the `columns` mapping in
+the project. The same list is the label queue of "Reviewing existing labels" in
+Phase 7. A review always happens in a project, even one made just for it, for
+its palette, high-pass and channel settings and its dataset roots.
 
-- [x] The review list format: one row per event, with `path` (the recording,
-      relative to a dataset root, or absolute) and `start_s`, and optionally
-      `stop_s` or `duration_s` (else `region_s`), `label`, `root` (the dataset
-      root of that row, since a list draws on several), `channel`, `clip_path`
-      (a cut clip, used only when the recording isn't there) and `id` (a key
-      for joining the results). Any other column (`score`, `prediction`,
-      `reason`) is shown, filterable and sortable, and passed through. Old
-      manifests keep working: `onset_s` is read as `start_s`, `source_path` as
-      `path`. Pick one name for the class (`label`) and use it in the Phase 7
-      file filter output too. A schema and an example in `examples/`.
-- [x] Results beside the list, never over it: `<list>.results.csv` with every
-      input column plus `verdict` (`correct`, `relabel`, `not_event`, empty
-      while unheard), `new_label` and `note`. The pipeline may write a new
-      list while one is being heard, and joins the results on `id` (or the
-      row). Results follow the verdicts as applied, so undo takes a row's
-      verdict back too. Verdicts still land on the labels in the label file as
-      now; a row whose recording isn't there gets a verdict in the results
-      only. The note is the row's own and needs nothing from Phase 7; once
-      labels have notes (flag-and-note, Phase 7), a verdict's note is copied
-      to its label too.
-- [x] Step through the list in the recording view: Up/Down opens the
-      recording at the event, zoomed to a window around it with the event's
-      span selected, and plays it with pre-roll, through the view's chain
-      (gain or automatic gain, speed, high-pass), using the review mode code
-      rather than a second copy of it. The labels around the event are
-      visible and a verdict is seen landing on its label. A row with only a
-      cut clip plays the clip (the engine's gain and speed, and the
-      high-pass, apply to it too), but doesn't open it in the view: labels
-      drawn on it would have no recording to belong to.
-- [ ] Show a clip-only row in the waveform and spectrogram, read-only, if
-      lists without their recordings turn out to be common.
-- [x] Open another list without editing the project (File > Open review list,
-      and the most recent ones remembered), so a pipeline can write one list
-      per run next to its results and the same project reads each. A list in
-      our format needs no `columns` mapping.
-- [x] Carry on where you left off: the next row is the first without a verdict
-      in the results file, so a long list is done over several sittings. The
-      filter and sort are remembered per list in the app settings.
-- [ ] Only if needed: opening a project walks every dataset root to fill the
-      file list, even when a list names a few recordings. The walk reads no
-      audio, so it's fast on local disks; measure it on the real datasets
-      (network shares, very large trees) first. If it's slow, scan in the
-      background with the file list filling in, rather than a `"scan": false`
-      mode, which would change what the file list means for the status
-      filter, export, the "exported" column and the label file.
+Done: the format (`path`, `start_s`, optional `stop_s` or `duration_s`,
+`label`, `root`, `channel`, `clip_path`, `id`, other columns passed through),
+`<list>.results.csv` beside the list with `verdict`, `new_label` and `note` and
+undo, stepping through the rows in the recording view with its gain, speed and
+high-pass, File > Open review list with recent lists, and carrying on at the
+first row not heard, with the filter and sort remembered per list.
+
+The plan, in order:
+
+- [x] File list speed, for every project: with tens of thousands of files the
+      app is slow to use, because the filtered file list is rebuilt from every
+      file twice a frame (the file list view, and the keyboard handler before
+      it knows whether N or P was pressed), with map lookups by path per file,
+      `to_portable` per file and root when searching, and the done count
+      looping over every file again. Keep the filtered list and its counts
+      until the labels, statuses, file list or filter settings change (the
+      project's revision counts changes), build it for N/P only when they're
+      pressed, and keep each file's searchable path from the walk.
+- [x] Reviewing never touches the label file: verdicts go only to the results
+      file, and undo restores only the row. No labels are created for rows
+      without one. The "Now in the recording" column stays, to compare a row
+      with the label the project has there.
+- [x] Results as a diff of the list, with every row: every input column, then
+      `verdict` (`correct`, `relabel`, `not_event`, or `added` for a row the
+      reviewer added; empty while unheard), `new_label`, `new_start_s` and
+      `new_stop_s` (set whenever the times were changed, whatever the
+      verdict, so a sound can be both relabelled and moved) and `note`. Added
+      rows have an empty `id` and their own `path`, `root`, times and label,
+      and are read back as rows when the list is opened again. The full file
+      is always written, since it's also where the progress is kept; an
+      option writes `<list>.changes.csv` beside it with only the changed rows.
+      A sidecar `<list>.results.json` records the list's path, a hash of its
+      contents, the time and the app version, so a pipeline can tell results
+      that belong to an older version of a regenerated list (a comment line
+      in the CSV would trip up most CSV readers). Rows are matched on `id`,
+      else on path, start and label.
+- [x] Clips carry their place: a row with a `clip_path` must have a
+      `clip_offset_s`, where the clip starts in its recording (our clip
+      export's `source_offset_s` can be mapped to it with the project's
+      `columns`). A list with clips but no offset column, or a clip row
+      without a number there, isn't opened, and the error names the column or
+      row. All times stay in the recording's time; the event in the clip is
+      `start_s - clip_offset_s` to `stop_s - clip_offset_s`. A negative offset
+      is a clip that starts with padding before its recording's start (eg.
+      clips of one length cut around an event near the start): the clip is
+      drawn from that negative time, with the padding shaded.
+- [x] Draw a label for each row: today stepping to a row shows only what the
+      label file already has there, so a row from a dataset whose labels live
+      elsewhere shows nothing, and where the pipeline put the event can't be
+      seen. Instead, each row is drawn as a label from `start_s` to its stop,
+      with its class name and a line at the start, since whether the onset
+      sits on the sound's start is part of what's judged. It's styled apart
+      from the label file's labels, so what the list claims and what the
+      project has can be told apart where both are drawn. A row's class
+      needn't be in the palette: it's drawn grey with its name, and
+      relabelled with 1-9 to a palette class. Enter, X and 1-9 give the
+      verdict; dragging its edges corrects its times (`new_start_s`,
+      `new_stop_s`); drawing a region while a row is shown adds a row
+      (`added`) for a sound the list didn't have. None of it goes into the
+      label file. (How: the rows are held as labels in `app_state`, so the
+      existing drawing, selecting, dragging and nudging work on them.)
+- [x] Rows with only a clip: a row whose recording isn't in the project shows
+      its clip in the waveform and spectrogram instead, with the row's label
+      drawn where the event falls in it, and plays it there with the gain,
+      speed and high-pass. The time axis shows the recording's time (a clip
+      cut from 120 s starts at 120 s), so the label's times read the same as
+      in the list and the results, and a clip looks like its recording apart
+      from how much of it there is; the clip is placed at `clip_offset_s`, as
+      band playback places an excerpt in its recording. Dragging and adding
+      rows work as on a recording. What a clip can't take is the project's
+      own labels: the label file keys labels by recording, and the clip's
+      recording isn't in the project, so drawing on a clip adds a row, never
+      a label. An event only partly inside its clip is marked on its row. A
+      row's `channel` applies to the recording, not the clip, which plays as
+      it is.
+- [x] Import review edits (File > Import review edits...): read a
+      `<list>.results.csv` and apply its verdicts to the labels of recordings
+      in the project, as one undo step. A row changes only a label of its own
+      class whose span holds its start (not another class's, which may be an
+      unrelated label from another dataset); rows with no class change
+      nothing. `correct` leaves the label, `relabel` changes its class,
+      `not_event` rejects it (`x:`), new times move it, `added` makes a
+      label (unless the same one is there). Classes not in the palette are
+      listed, with the choice to add them. First a summary: labels changed,
+      added and rejected, and rows that can't be applied (recording not in
+      the project, no label of the class there). Importing the same results
+      again changes nothing. It never marks a recording done; an option,
+      on by default, takes the done mark off recordings it changed, so
+      they're checked again.
+- [x] Review a list without walking the datasets: `"scan-roots": false` in a
+      project, as a project made for reviewing lists would have. The
+      recordings a list names are found by path under the roots, and the file
+      list holds just those and the label file's. Status and export are
+      hidden there; the results file is the output.
+- [ ] For ordinary projects, walk the dataset roots in the background with the
+      file list filling in, and keep an index of the last walk, so a project
+      on a slow drive opens at once.
+- [x] Start playing sooner in another recording: stepping to a row in a
+      recording not open yet reads the whole file, high-passes it and builds
+      the waveform pyramid before playing (about 1.7 s for a 10 minute,
+      4-channel, 24-bit file in a debug build). Read and play the event's
+      stretch first, then load the rest (see "Load audio off the UI thread" in
+      Phase 4). Playback doesn't wait for drawing: the waveform draws on the
+      next frame and the spectrogram tiles on worker threads.
+- [x] Documents for all of the above: README (review lists: the format with
+      `clip_offset_s`, the results and changes files and sidecar, a label
+      drawn for each row, grey classes, clips shown in the recording's time,
+      import review edits),
+      ARCHITECTURE (review lists produce results and never edit the label
+      file; import as the one way into it; rows as labels in `app_state`;
+      clips placed at their offset in the recording's time; file list
+      caching), the schema
+      (`clip_offset_s`, the walk setting for dataset roots),
+      `examples/review-list.csv` (a row with a clip and offset, and an
+      example results file), CHANGELOG, and tests for each.
+- [ ] Later: play on. Rows play one after another with a short gap; Space
+      stops, and Shift+Enter marks every row played since the last verdict
+      correct, so a run of right ones costs one key. Filtering on
+      `label=<class> verdict=` gives the queue for one class.
 
 ## Phase 4: Seeing and hearing
 
@@ -326,5 +401,15 @@ clean with Clang), UTF-8 project paths and a system font with wide coverage.
 
 - [ ] Add a `vcpkg.json` manifest and CI. Note that a `vcpkg.json` switches
       existing vcpkg toolchain builds into manifest mode.
-- [ ] Provide example audio: `*.wav` is git-ignored, so the example project
-      can't run from a fresh clone.
+- [ ] Remove the backward compatibility kept so far (see CONTRIBUTING.md):
+      the review settings' older keys (`onset_pre_s`, `onset_post_s`), the
+      palette's ignored `"kind"` key, and any other reader of an older
+      format. Check each against the files actually in use first, eg. label
+      files of an older version.
+- [x] Provide example audio: `*.wav` is git-ignored, so the example project
+      couldn't run from a fresh clone. `examples/make_example_audio.py` makes
+      it: synthetic animal calls at the times the example labels and review
+      list use, with two clips (one padded before its recording's start).
+- [ ] Label scores are kept as 32-bit floats, so a saved label file writes
+      0.41 as 0.4099999964237213. Keep them as doubles, or round when
+      writing.

@@ -16,6 +16,10 @@
                 "type": "string"
             }
         },
+        "scan-roots": {
+            "description": "Whether the dataset roots are walked to fill the file list. false lists only the recordings the label file and the open review list name, for reviewing lists that draw on large datasets; status and export don't apply then. Default: true",
+            "type": "boolean"
+        },
         "label-file": {
             "description": "The applied labels",
             "type": "string"
@@ -100,7 +104,7 @@
             }
         },
         "clip-manifest": {
-            "description": "A review list (clip manifest): a CSV of events to hear and judge, eg. from a training pipeline. A list in the app's own format (see examples/review-list.csv) needs none of this; the section names a list to open with the project, and renames the columns of another tool's CSV. Verdicts are written beside the list, run.csv giving run.results.csv.",
+            "description": "Review lists: CSVs of events to hear and judge, eg. from a training pipeline. A list in the app's own format (see examples/review-list.csv) needs none of this; the section names a list to open with the project, and renames the columns of another tool's CSV. Reviewing never changes the labels: results are written beside the list, run.csv giving run.results.csv and run.results.json.",
             "type": "object",
             "properties": {
                 "path": { "type": "string", "description": "The list to open with the project, relative to this file" },
@@ -109,21 +113,21 @@
                     "type": "object",
                     "description": "Column names, for a CSV not in the app's own format",
                     "properties": {
-                        "source": { "type": "string", "description": "The recording, relative to a dataset root, or absolute. Default: path (or source_path)" },
-                        "onset": { "type": "string", "description": "The event's start in the recording, in seconds. Default: start_s (or onset_s)" },
-                        "start": { "type": "string", "description": "The same as onset" },
+                        "source": { "type": "string", "description": "The recording, relative to a dataset root, or absolute. Default: path" },
+                        "start": { "type": "string", "description": "The event's start in the recording, in seconds. Default: start_s" },
                         "stop": { "type": "string", "description": "Optional: the event's stop in the recording, in seconds. Default: stop_s" },
                         "duration": { "type": "string", "description": "Optional, used if there's no stop: the event's length from its start, in seconds. Default: duration_s" },
                         "label": { "type": "string", "description": "Optional: the class the pipeline gave it. Default: label" },
                         "root": { "type": "string", "description": "Optional: the row's dataset root, as written in dataset-roots. Default: root" },
-                        "channel": { "type": "string", "description": "Optional: the channel to view and play, from 1. Default: channel" },
-                        "clip": { "type": "string", "description": "Optional: a cut clip, played when the recording isn't in the project. Default: clip_path" },
+                        "channel": { "type": "string", "description": "Optional: the channel of the recording to view and play, from 1. Default: channel" },
+                        "clip": { "type": "string", "description": "Optional: a cut clip, shown when the recording isn't in the project. Default: clip_path" },
+                        "clip_offset": { "type": "string", "description": "Required with a clip: where the clip starts in its recording, in seconds; negative if it starts with padding. Default: clip_offset_s" },
                         "id": { "type": "string", "description": "Optional: a key the results are joined on. Default: id" }
                     }
                 },
                 "dataset-root": { "type": "string", "description": "The dataset root paths are relative to, for rows without a root, as written in dataset-roots. Default: try each" },
-                "match_s": { "type": "number", "description": "A label whose span holds the event's start, give or take this, is the event's label. Default: 0.05" },
-                "region_s": { "type": "number", "description": "The length of a label a verdict creates, when the list has no stop or duration for the event. Default: 1" }
+                "match_s": { "type": "number", "description": "Importing review edits: a label whose span holds a row's start, give or take this, is the row's label. Default: 0.05" },
+                "region_s": { "type": "number", "description": "The length a row without a stop or duration is drawn and played with. Default: 1" }
             }
         },
         "export": {

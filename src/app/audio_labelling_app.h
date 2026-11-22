@@ -64,6 +64,9 @@ private:
     /// assisted labellers). A mistake in one is reported rather than stopping labelling.
     void load_project_sections();
 
+    /// The window's title, with the open project's name
+    void update_title();
+
     /// Close the project, saving its labels, and open another. If either fails, the current
     /// project stays open and the error is reported.
     void switch_project(const std::filesystem::path &file);

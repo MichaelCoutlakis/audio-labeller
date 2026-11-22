@@ -27,24 +27,6 @@ namespace
 constexpr const char *rejected_prefix = "x:";
 constexpr double same_time_s = 0.001; ///< Labels this close are taken to be the same
 
-/// 16 hex digits of a 64-bit FNV-1a hash
-std::string content_hash(const std::string &contents)
-{
-    uint64_t hash = 14695981039346656037ULL;
-    for(const char c : contents)
-    {
-        hash ^= static_cast<uint8_t>(c);
-        hash *= 1099511628211ULL;
-    }
-    return fmt::format("{:016x}", hash);
-}
-
-std::string read_whole_file(const fs::path &path)
-{
-    std::ifstream in(path, std::ios::binary);
-    return {std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>()};
-}
-
 bool iequals(const std::string &a, const std::string &b)
 {
     return std::ranges::equal(

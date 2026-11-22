@@ -209,12 +209,16 @@ uint64_t audio_source::read_raw_frames(uint64_t start_frame, uint64_t num_frames
     return bytes / m_format.bytes_per_frame();
 }
 
-audio_buffer load_mono(const fs::path &path, std::optional<uint32_t> channel)
+namespace
 {
-    audio_source source(path);
+/// Frames [first, first + count) of a source as mono
+audio_buffer read_mono(
+    audio_source &source,
+    std::optional<uint32_t> channel,
+    uint64_t first,
+    uint64_t count)
+{
     const auto &fmt = source.format();
-    if(fmt.m_frames == 0)
-        throw std::runtime_error("No audio in file " + generic_utf8(path));
     if(channel && *channel >= fmt.m_channels)
         channel.reset();
 
@@ -222,7 +226,7 @@ audio_buffer load_mono(const fs::path &path, std::optional<uint32_t> channel)
     buffer.m_sample_rate_hz = fmt.m_sample_rate_hz;
     buffer.m_channels = 1U;
     buffer.m_source_channels = fmt.m_channels;
-    buffer.m_samples.resize(fmt.m_frames);
+    buffer.m_samples.resize(count);
 
     // A mix lets sounds on any channel be seen and heard
     constexpr uint64_t chunk_frames = 1U << 16;
@@ -230,10 +234,10 @@ audio_buffer load_mono(const fs::path &path, std::optional<uint32_t> channel)
     const float gain = 1.f / static_cast<float>(fmt.m_channels);
 
     uint64_t total = 0U;
-    for(uint64_t start = 0U; start < fmt.m_frames; start += chunk_frames)
+    for(uint64_t start = 0U; start < count; start += chunk_frames)
     {
         const auto read =
-            source.read_frames(start, std::min(chunk_frames, fmt.m_frames - start), chunk.data());
+            source.read_frames(first + start, std::min(chunk_frames, count - start), chunk.data());
         for(uint64_t frame = 0U; frame != read; ++frame)
         {
             const float *in = chunk.data() + frame * fmt.m_channels;
@@ -253,4 +257,35 @@ audio_buffer load_mono(const fs::path &path, std::optional<uint32_t> channel)
     }
     buffer.m_samples.resize(total); // Some decoders' frame counts are estimates
     return buffer;
+}
+}
+
+audio_buffer load_mono(const fs::path &path, std::optional<uint32_t> channel)
+{
+    audio_source source(path);
+    const auto &fmt = source.format();
+    if(fmt.m_frames == 0)
+        throw std::runtime_error("No audio in file " + generic_utf8(path));
+    return read_mono(source, channel, 0U, fmt.m_frames);
+}
+
+audio_buffer load_mono_range(
+    const fs::path &path,
+    std::optional<uint32_t> channel,
+    time_span t,
+    double &start_s)
+{
+    audio_source source(path);
+    const auto &fmt = source.format();
+    if(fmt.m_frames == 0)
+        throw std::runtime_error("No audio in file " + generic_utf8(path));
+    const auto frame = [&](double s)
+    {
+        return static_cast<uint64_t>(
+            std::clamp(s * fmt.m_sample_rate_hz, 0., static_cast<double>(fmt.m_frames)));
+    };
+    const auto first = frame(t.first);
+    const auto last = std::max(first, frame(t.second));
+    start_s = static_cast<double>(first) / fmt.m_sample_rate_hz;
+    return read_mono(source, channel, first, last - first);
 }

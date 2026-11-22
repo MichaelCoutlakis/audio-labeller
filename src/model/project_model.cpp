@@ -4,6 +4,7 @@
  *****************************************************************************/
 
 #include <algorithm>
+#include <atomic>
 #include <cmath>
 #include <chrono>
 #include <cstddef>
@@ -28,6 +29,7 @@
 #include "colour.h"
 #include "label.h"
 #include "paths.h"
+#include "new_project.h"
 #include "project_model.h"
 
 namespace fs = std::filesystem;
@@ -87,7 +89,8 @@ const json &array_at(const json &j, const char *key)
     if(it == j.end() || it->is_null())
         return empty;
     if(!it->is_array())
-        throw std::runtime_error(std::string{"Expected an array for "} + key);
+        throw std::runtime_error(
+            std::string{"In the label file, \""} + key + "\" should be a list, [...].");
     return *it;
 }
 }
@@ -166,14 +169,48 @@ project_config project_config::parse_from_file(const fs::path &filename)
     // Absolute so that resolved paths don't depend on the working directory:
     cfg.m_filename = fs::absolute(filename).lexically_normal();
 
+    const auto name = generic_utf8(cfg.m_filename);
     std::ifstream f(filename);
     if(!f)
-        throw std::runtime_error("Could not open " + generic_utf8(filename));
-    auto j = json::parse(f);
-    j.at("dataset-roots").get_to(cfg.m_wav_paths);
-    j.at("label-palette").get_to(cfg.m_palette);
-    j.at("export-prefix").get_to(cfg.m_export_prefix);
-    j.at("label-file").get_to(cfg.m_labels);
+        throw std::runtime_error(
+            "Could not open the project file " + name + ": it doesn't exist or can't be read.");
+    json j;
+    try
+    {
+        j = json::parse(f);
+    }
+    catch(const json::parse_error &e)
+    {
+        throw std::runtime_error(
+            fmt::format("The project file {} isn't valid JSON: {}", name, e.what()));
+    }
+    if(!j.is_object())
+        throw std::runtime_error("The project file " + name + " should be a JSON object, {...}.");
+    // A missing or mistyped key says which and what it's for, rather than the JSON library's words
+    const auto required = [&](const char *key, const char *what, auto &out)
+    {
+        const auto it = j.find(key);
+        if(it == j.end())
+            throw std::runtime_error(
+                fmt::format("The project file {} has no \"{}\": {}.", name, key, what));
+        try
+        {
+            it->get_to(out);
+        }
+        catch(const json::exception &)
+        {
+            throw std::runtime_error(fmt::format(
+                "In the project file {}, \"{}\" should be {}, not {}.",
+                name,
+                key,
+                what,
+                it->dump()));
+        }
+    };
+    required("dataset-roots", "a list of the folders of audio to label", cfg.m_wav_paths);
+    required("label-palette", "the path of the palette file listing the classes", cfg.m_palette);
+    required("export-prefix", "the path prefix exported files are written to", cfg.m_export_prefix);
+    required("label-file", "the path of the file the labels are kept in", cfg.m_labels);
     if(auto it = j.find("export"); it != j.end())
         cfg.m_export = *it;
     if(auto it = j.find("annotations"); it != j.end())
@@ -186,12 +223,15 @@ project_config project_config::parse_from_file(const fs::path &filename)
         cfg.m_assisted_labellers = *it;
     if(auto it = j.find("high-pass"); it != j.end())
         cfg.m_high_pass = *it;
+    cfg.m_scan_roots = j.value("scan-roots", cfg.m_scan_roots);
     if(auto it = j.find("channel"); it != j.end() && !it->is_null())
     {
         // Channels are numbered from 1 in the project file, as in most audio software
         const auto channel = it->get<uint32_t>();
         if(channel == 0U)
-            throw std::runtime_error("Channels are numbered from 1");
+            throw std::runtime_error(
+                "In the project file " + name + ", \"channel\" is 0, but channels are numbered "
+                "from 1. Leave it out to view and play a mix of all channels.");
         cfg.m_channel = channel - 1U;
     }
     return cfg;
@@ -341,6 +381,8 @@ project_model &project_model::operator=(project_model &&other)
     m_label_dict = std::exchange(other.m_label_dict, {});
     m_cfg = std::exchange(other.m_cfg, {});
     m_files = std::exchange(other.m_files, {});
+    m_named_files = std::exchange(other.m_named_files, {});
+    m_files_version = other.m_files_version;
     m_file_labels = std::exchange(other.m_file_labels, {});
     m_file_states = std::exchange(other.m_file_states, {});
     m_unresolved_labels = std::exchange(other.m_unresolved_labels, {});
@@ -368,8 +410,16 @@ void project_model::rescan_files()
     if(!has_project())
         return;
 
+    if(!m_cfg.m_scan_roots)
+    {
+        list_named_files();
+        return;
+    }
     spdlog::info("Scanning dataset...");
     m_files.clear();
+    // Unique across projects, so a view's copy from another project is never taken for this one
+    static std::atomic<uint64_t> versions{};
+    m_files_version = ++versions;
 
     for(const auto &wav_path : m_cfg.m_wav_paths)
     {
@@ -391,8 +441,10 @@ void project_model::rescan_files()
             if(entry.is_regular_file() && is_supported_audio(entry.path()))
             {
                 auto path = entry.path().lexically_normal();
-                auto name = to_portable(path).m_relative;
-                m_files.push_back(audio_file_entry{std::move(path), std::move(name)});
+                const auto portable = to_portable(path);
+                auto search = portable.m_root + "/" + portable.m_relative;
+                m_files.push_back(
+                    audio_file_entry{std::move(path), portable.m_relative, std::move(search)});
             }
         }
         // Directory order depends on the filesystem, so the list is sorted to be the same on
@@ -404,6 +456,32 @@ void project_model::rescan_files()
             [](const audio_file_entry &a, const audio_file_entry &b)
             { return a.m_path < b.m_path; });
     }
+}
+
+void project_model::list_named_files()
+{
+    static std::atomic<uint64_t> versions{1U << 30U};
+    m_files_version = ++versions;
+    m_files.clear();
+    for(const auto &path : m_named_files)
+    {
+        std::error_code ec;
+        if(!fs::is_regular_file(path, ec))
+            continue;
+        const auto portable = to_portable(path);
+        m_files.push_back(
+            audio_file_entry{path, portable.m_relative, portable.m_root + "/" + portable.m_relative});
+    }
+    // A set's order is the path order the scan sorts by too
+}
+
+void project_model::add_files(const std::vector<fs::path> &files)
+{
+    const auto before = m_named_files.size();
+    for(const auto &file : files)
+        m_named_files.insert(file.lexically_normal());
+    if(m_named_files.size() != before)
+        list_named_files();
 }
 
 project_model::portable_path project_model::to_portable(const fs::path &file) const
@@ -515,6 +593,32 @@ label_defn_id project_model::add_session_class(const std::string &name)
     m_label_dict.add(label_defn{label_defn_id{next}, name, unknown_class_colour});
     spdlog::warn("Class {} is not in the palette, adding it as {} for this session", name, next);
     return label_defn_id{next};
+}
+
+void project_model::add_palette_classes(const std::vector<std::string> &names)
+{
+    if(names.empty())
+        return;
+    const auto path = m_cfg.resolve_proj(m_cfg.m_palette);
+    nlohmann::ordered_json j;
+    {
+        std::ifstream in(path);
+        if(!in)
+            throw std::runtime_error("Could not read the palette " + generic_utf8(path));
+        j = nlohmann::ordered_json::parse(in);
+    }
+    auto &list = j.at("label-palette");
+    for(const auto &name : names)
+    {
+        uint32_t next{};
+        for(const auto &defn : m_label_dict)
+            next = std::max(next, defn.m_id.m_id + 1U);
+        const auto colour = class_colour(m_label_dict.size());
+        list.push_back({{"class-id", next}, {"class", name}, {"colour", colour}});
+        m_label_dict.add(label_defn{label_defn_id{next}, name, from_hex(colour)});
+    }
+    write_file_atomically(path, j.dump(4) + "\n");
+    ++m_revision;
 }
 
 const file_state *project_model::find_file_state(const fs::path &file) const
@@ -686,9 +790,22 @@ void project_model::load_labels()
         return;
     }
 
-    auto j = json::parse(text);
+    json j;
+    try
+    {
+        j = json::parse(text);
+    }
+    catch(const json::parse_error &e)
+    {
+        throw std::runtime_error(fmt::format(
+            "The label file {} isn't valid JSON, so the project wasn't opened and the file is "
+            "left as it is: {}",
+            generic_utf8(label_file),
+            e.what()));
+    }
     if(!j.is_object())
-        throw std::runtime_error("Label file is not a JSON object: " + generic_utf8(label_file));
+        throw std::runtime_error(
+            "The label file " + generic_utf8(label_file) + " should be a JSON object, {...}.");
 
     if(const int version = j.value("version", 1); version > label_file_version)
         throw std::runtime_error(
@@ -713,6 +830,23 @@ void project_model::load_labels()
         if(!stale_roots.erase(generic_utf8(wav_path)))
             unused_roots.insert(generic_utf8(wav_path));
     const bool dataset_moved = stale_roots.size() == 1 && unused_roots.size() == 1;
+
+    // Without a scan, the label file names the recordings to list
+    if(!m_cfg.m_scan_roots)
+    {
+        std::vector<fs::path> named;
+        for(const auto *records : {&label_records, &file_records})
+            for(const auto &record : *records)
+            {
+                const auto root = record.value("dataset-root", std::string{});
+                for(const auto &wav_path : m_cfg.m_wav_paths)
+                    if(generic_utf8(wav_path) == root)
+                        named.push_back(
+                            m_cfg.resolve_root(wav_path) /
+                            path_from_utf8(record.at("filename").get<std::string>()));
+            }
+        add_files(named);
+    }
 
     std::set<fs::path> known_files;
     for(const auto &file : m_files)

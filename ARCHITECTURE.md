@@ -62,7 +62,8 @@ each lives behind one seam:
 - **Outputs**: clip export (`export/`), annotation trees and the CSV export
   each take the project's labels and write their own layout.
 - **Review lists**: a format of the app's own, with column names configurable,
-  so another pipeline's CSV is read as it is; results go to a file of their own.
+  so another pipeline's CSV is read as it is; results go to a file of their own,
+  imported into the labels only when asked.
 
 ## Data flow and actions
 
@@ -290,35 +291,65 @@ added again. A failure on one recording is reported and the rest carry on.
 ## Review lists (clip manifests)
 
 A review list is a CSV of events to hear, with each one's recording, start and
-optionally its stop, class, dataset root, channel, a cut clip and an ID. The
-format is the app's own (README); the project's `clip-manifest` section renames
-the columns of another tool's CSV and may name a list to open with the project.
-The open list lives in `app_state`, so that the action handler can write its
-results and undo its verdicts; the Review List window is a view of it.
+optionally its stop, class, dataset root, channel, a cut clip with its offset
+in the recording, and an ID. The format is the app's own (README); the
+project's `clip-manifest` section renames the columns of another tool's CSV and
+may name a list to open with the project. The open list lives in `app_state`,
+so that the action handler can write its results and undo its verdicts; the
+Review List window is a view of it.
+
+A review produces an output of its own and never edits the label file. A list
+draws on several datasets, most of which keep their labels outside the app, so
+its verdicts go to one place, applied the same way for every dataset: the
+results file. Importing review edits (`manifest/review_import`) is the one way
+from a review into the label file, chosen by the user after a summary.
+
+Rows are shown as labels: `app_state::refresh_row_labels` makes a label for
+each row in the active file, with an ID of `row_label_base` plus the row's
+index, kept apart from the project's labels and refilled when the list, its
+rows, the active file or the palette change. So drawing, selecting, dragging and
+the verdict keys work on them as on labels; the handler routes a row label's
+edits (`move_label`, `accept_labels`, `reject_labels`, `assign_class`,
+`delete_labels`) to the row's verdict, and while a row is shown, a region drawn
+in its file adds a row (`add_label`).
 
 Stepping to a row (`show_list_row`) opens its recording, zoomed to the event as
 review mode zooms to a suggestion, and plays it from the active file, so the
-gain, speed and high-pass are the recording view's. A row's channel applies to
-that row only, without changing the file's own choice. A row whose recording
-isn't in the project plays its clip, if it has one; clips aren't opened in the
-view, where labels drawn on them would have no recording to belong to.
+gain, speed and high-pass are the recording view's. In a recording not open
+yet, the event's stretch is read and played first (`load_mono_range`), then the
+whole file is read for the view while it plays. A row's channel applies to that
+row only. A row whose recording isn't in the project shows its clip
+(`app_state::set_selected_clip`): the clip's audio is given an offset, its place
+in the recording, which the waveform, spectrogram tiles, playback window and
+audio engine add, so every time in the view is the recording's and a moved row
+is written back in it with no conversion. A negative offset (a clip padded
+before its recording's start) shades the padding. Labels of the project can't
+be made on a clip.
 
-Verdicts (correct, relabelled, not an event) edit the label in the recording
-whose span holds the event's start, give or take `match_s`: of the row's class
-first (except for a relabel), then the one whose start is nearest, since a
-region can start well before the onset a pipeline finds in it. With no label
-there, the verdict creates a region over the event (or `region_s` after its
-start). So the correction lives in the annotations rather than a separate
-review file.
+Each verdict, move, note or added row is written to the results file beside the
+list (`run.results.csv`), atomically, with every column of the list and
+`verdict`, `new_label`, `new_start_s`, `new_stop_s` and `note`, and a sidecar
+(`run.results.json`) naming the list and a hash of its contents. The list
+itself is never written, since a pipeline may replace it. An undo step carries
+the row's verdict before and after (`row_verdict_change` in `history`); an added
+row taken back keeps its place with no verdict and isn't written. Results are
+read back by key (the ID column, else path, start and label), so a list written
+again with rows added or moved keeps its verdicts, and added rows are read back
+as rows.
 
-Each verdict and note is also written to the results file beside the list
-(`run.results.csv`), atomically, with every column of the list and `verdict`,
-`new_label` and `note`. The list itself is never written, since a pipeline may
-replace it. An undo step carries the row's verdict before and after
-(`row_verdict_change` in `history`), as well as the recording's labels, so undo
-takes both back. Results are read back by key (the ID column, else path, start
-and label), so a list written again with rows added or moved keeps its
-verdicts.
+Import matches a row to a label of its own class whose span holds the row's
+start, give or take `match_s`, never another class's, which may be an unrelated
+label from another dataset. Applying is one undo step over every recording it
+changes (`history::entry::m_more`). It recognises its own earlier work (a label
+already relabelled, or made over the same span), so importing twice changes
+nothing.
+
+A project with `"scan-roots": false` doesn't walk its dataset roots: the file
+list holds the recordings the label file names, and those a review list names
+that exist under the roots (`project_model::add_files`). The file list itself
+is kept in `app_state` until the project's revision, its files or the filters
+change, rather than being worked out from every file each frame.
+
 ## Audio
 
 ### Reading files

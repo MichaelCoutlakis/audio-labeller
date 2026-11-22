@@ -3,12 +3,34 @@
  * SPDX-FileCopyrightText: 2026 Michael Coutlakis
  *****************************************************************************/
 #include <chrono>
+#include <cstdint>
+#include <cstdio>
+#include <iterator>
 #include <ctime>
 #include <fstream>
 #include <stdexcept>
 
 #include "../model/paths.h"
 #include "files.h"
+
+std::string content_hash(const std::string &contents)
+{
+    uint64_t hash = 14695981039346656037ULL;
+    for(const char c : contents)
+    {
+        hash ^= static_cast<uint8_t>(c);
+        hash *= 1099511628211ULL;
+    }
+    char text[17]{};
+    std::snprintf(text, sizeof(text), "%016llx", static_cast<unsigned long long>(hash));
+    return text;
+}
+
+std::string read_whole_file(const std::filesystem::path &path)
+{
+    std::ifstream in(path, std::ios::binary);
+    return {std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>()};
+}
 
 void write_file_atomically(const std::filesystem::path &target, const std::string &contents)
 {

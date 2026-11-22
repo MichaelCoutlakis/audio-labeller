@@ -48,9 +48,12 @@ ImColor label_colour(const label &l, const label_defn *defn, const app_state &st
 
 ImColor opaque(ImColor c, float alpha) { return ImColor(c.Value.x, c.Value.y, c.Value.z, alpha); }
 
-/// Label text: the class, with the score of suggestions and an "x:" for rejected ones
-std::string display_name(const label &l, const label_defn *defn)
+/// Label text: the class, with the score of suggestions and an "x:" for rejected ones. A review
+/// list row's says it's the list's, with its class even if the palette lacks it.
+std::string display_name(const label &l, const label_defn *defn, const app_state &state)
 {
+    if(app_state::row_of(l.m_id))
+        return state.row_label_text(l.m_id);
     std::string name = defn ? defn->m_class : std::string{};
     if(l.m_state == label_state::rejected)
         name = "x:" + name;
@@ -202,8 +205,9 @@ void waveform_view::render(const project_model &project, app_state &state)
         {
             const double duration = audio.duration_s();
             const double initial = state.m_settings.m_initial_view_s;
+            const double start = state.active_offset_s();
             state.m_view_request =
-                time_span{0., initial > 0. ? std::min(initial, duration) : duration};
+                time_span{start, start + (initial > 0. ? std::min(initial, duration) : duration)};
         }
     }
     if(!state.m_view_request)
@@ -431,13 +435,23 @@ void waveform_view::render_waveform(app_state &state)
     const auto plot_width = std::max<size_t>(1U, static_cast<size_t>(ImPlot::GetPlotSize().x));
     const double rate = audio_buf.m_sample_rate_hz;
     const auto frames = audio_buf.num_frames();
+    // A clip is drawn at its place in its recording
+    const double offset = state.active_offset_s();
+    if(offset < 0.)
+    {
+        // Padding before the recording's start, in a clip cut near it
+        auto *dl = ImPlot::GetPlotDrawList();
+        const auto p0 = ImPlot::PlotToPixels(offset, 1.);
+        const auto p1 = ImPlot::PlotToPixels(0., -1.);
+        dl->AddRectFilled(p0, p1, IM_COL32(128, 128, 128, 40));
+    }
 
     // Only the visible range, a little wider so the edges are drawn
     const double margin = m_transform.view_duration() * 0.01;
     const auto first = static_cast<size_t>(
-        std::clamp((m_transform.m_view_start_s - margin) * rate, 0., double(frames)));
+        std::clamp((m_transform.m_view_start_s - offset - margin) * rate, 0., double(frames)));
     const auto last = static_cast<size_t>(
-        std::clamp((m_transform.m_view_end_s + margin) * rate, 0., double(frames)));
+        std::clamp((m_transform.m_view_end_s - offset + margin) * rate, 0., double(frames)));
     if(last <= first)
         return;
     const size_t frames_per_px = std::max<size_t>(1U, (last - first) / plot_width);
@@ -459,7 +473,7 @@ void waveform_view::render_waveform(app_state &state)
             m_hi.data(),
             static_cast<int>(m_hi.size()),
             1. / rate,
-            double(first) / rate,
+            double(first) / rate + offset,
             spec);
         return;
     }
@@ -472,7 +486,7 @@ void waveform_view::render_waveform(app_state &state)
     const size_t b1 = std::min(bins, last / level->m_samples_per_bin + 1U);
     for(size_t b = b0; b < b1; ++b)
     {
-        m_x.push_back(level->m_bin_times[b]);
+        m_x.push_back(level->m_bin_times[b] + offset);
         m_lo.push_back(clip(level->m_min_vals[b] * gain));
         m_hi.push_back(clip(level->m_max_vals[b] * gain));
     }
@@ -498,7 +512,10 @@ void waveform_view::render_spectrogram(app_state &state)
     if(state.get_audio_buffer().num_frames() == 0)
         return;
 
-    const double start = m_transform.m_view_start_s, stop = m_transform.m_view_end_s;
+    // Tiles are in the audio's own time; a clip is drawn at its place in its recording
+    const double offset = state.active_offset_s();
+    const double start = m_transform.m_view_start_s - offset;
+    const double stop = m_transform.m_view_end_s - offset;
     const double px_s = m_transform.view_duration() / std::max(1.f, ImPlot::GetPlotSize().x);
     const int level = m_tiles.level_for(px_s);
 
@@ -515,8 +532,8 @@ void waveform_view::render_spectrogram(app_state &state)
         ImPlot::PlotImage(
             "##Spectrogram",
             static_cast<ImTextureID>(texture),
-            ImPlotPoint{tile->m_image.m_start_s, -1.},
-            ImPlotPoint{tile->m_image.m_stop_s, 1.});
+            ImPlotPoint{tile->m_image.m_start_s + offset, -1.},
+            ImPlotPoint{tile->m_image.m_stop_s + offset, 1.});
     }
 }
 
@@ -542,7 +559,7 @@ void waveform_view::render_annotations(
     {
         const auto *defn = project.m_label_dict.find_ptr(label->m_defn_id);
         const ImColor col = label_colour(*label, defn, state);
-        const auto name = display_name(*label, defn);
+        const auto name = display_name(*label, defn, state);
         const bool banded = spectrogram && !label->m_band.is_full();
         const auto band = bands.contains(label->m_id) ? bands.at(label->m_id) : lane{};
         const double y_min = banded ? m_axis.y_of(label->m_band.m_low_hz) : band.m_y_min;
@@ -580,6 +597,14 @@ void waveform_view::render_annotations(
             rect_held = true;
         if(spectrogram && m_hovered_flag == label->m_id)
             dl->AddRect(box_top, box_bottom, opaque(colours::brighter(col), 1.f), 0.f, 0, 2.f);
+        // A review list row's start, over the full height: whether it sits on the sound's start
+        // is part of what's judged
+        if(app_state::row_of(label->m_id))
+        {
+            const ImU32 line = opaque(colours::brighter(col), 0.9f);
+            dl->AddLine({box_top.x, plot_top}, {box_top.x, plot_bottom}, line, 2.f);
+            dl->AddRect(box_top, box_bottom, opaque(colours::brighter(col), 0.8f), 0.f, 0, 1.f);
+        }
     }
     if(spectrogram)
         m_rect_held = rect_held;
@@ -718,7 +743,7 @@ void waveform_view::render_flags(const project_model &project, const app_state &
         dl->AddRectFilled(f.m_min, f.m_max, opaque(col, selected || hovered ? 0.95f : 0.75f));
         if(selected || hovered)
             dl->AddRect(f.m_min, f.m_max, IM_COL32(255, 255, 255, selected ? 220 : 120));
-        const auto name = display_name(*l, defn);
+        const auto name = display_name(*l, defn, state);
         if(!name.empty())
         {
             dl->PushClipRect(f.m_min, {text_right, f.m_max.y}, true);
@@ -774,9 +799,9 @@ void waveform_view::update_waveform_drag(
     if(drag.is_dragging() && ImGui::IsMouseReleased(ImGuiMouseButton_Left))
     {
         auto drag_range = drag.get_drag_range();
-        const double duration_s = state.get_audio_buffer().duration_s();
-        drag_range.first = std::clamp(drag_range.first, 0., duration_s);
-        drag_range.second = std::clamp(drag_range.second, 0., duration_s);
+        const auto extent = state.active_extent();
+        drag_range.first = std::clamp(drag_range.first, extent.first, extent.second);
+        drag_range.second = std::clamp(drag_range.second, extent.first, extent.second);
 
         // Only commit the drag selection if the drag duration and range exceeded some amount,
         // otherwise likely a cursor click:

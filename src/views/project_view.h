@@ -31,6 +31,7 @@ private:
     void take_dialog_answers(const project_model &project, app_state &state);
     void render_open_project(app_state &state);
     void render_new_project(app_state &state);
+    void render_review_import(app_state &state);
 
     // Open project, typed, if no system dialog could be shown:
     bool m_show_open_fallback{false};

@@ -29,6 +29,7 @@ add_library(audio_labeller_core STATIC
     "review/review.h" "review/review.cpp"
 
     "manifest/clip_manifest.h" "manifest/clip_manifest.cpp"
+    "manifest/review_import.h" "manifest/review_import.cpp"
 
     "assist/assisted_labeller.h" "assist/assisted_labeller.cpp"
 

@@ -39,6 +39,8 @@ public:
 protected:
     /// The main window, eg. as the parent of dialogs. Null before run() has created it.
     SDL_Window *window() const { return m_window; }
+    /// The title the window was created with
+    const std::string &base_title() const { return m_config.m_title; }
 
     virtual void on_init() { }
     virtual void on_frame() = 0;

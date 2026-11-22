@@ -38,6 +38,7 @@ struct class_filter
     bool m_suggestions{false}; ///< Count suggestions as well as confirmed labels
     bool m_rejected{false};    ///< And rejected candidates
 
+    bool operator==(const class_filter &) const = default;
     bool has(const std::string &name) const;
     void toggle(const std::string &name);
 
@@ -64,6 +65,8 @@ struct file_list_settings
     class_filter m_classes;
     file_sort m_sort{file_sort::path};
     bool m_descending{false};
+
+    bool operator==(const file_list_settings &) const = default;
 };
 
 /// Whether a text contains every word of a query, ignoring (ASCII) case. Always for no words.

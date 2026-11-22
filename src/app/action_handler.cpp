@@ -117,7 +117,7 @@ void action_handler::restore_active_audio()
         return;
     m_state.m_playing_clip = false;
     m_playing_band = false;
-    m_audio_engine.set_audio_clip(m_state.get_audio_buffer_ptr());
+    m_audio_engine.set_audio_clip(m_state.get_audio_buffer_ptr(), m_state.active_offset_s());
 }
 
 void action_handler::select_region(time_span t, frequency_band band)
@@ -125,7 +125,8 @@ void action_handler::select_region(time_span t, frequency_band band)
     const auto &audio = m_state.get_audio_buffer();
     const auto &settings = m_state.m_settings;
     const band_playback_settings bp{settings.m_band_shift, settings.m_band_shift_to_hz};
-    if(!plan_band(band, audio.m_sample_rate_hz, bp).filters())
+    // A clip is placed at an offset; bands are only drawn on the project's recordings
+    if(m_state.active_is_clip() || !plan_band(band, audio.m_sample_rate_hz, bp).filters())
     {
         restore_active_audio();
         m_audio_engine.select_region(t, m_state.m_loop);
@@ -168,6 +169,16 @@ void action_handler::operator()(const actions::load_file &f)
 
 void action_handler::operator()(const actions::add_label &r)
 {
+    // While a review list's row is shown, a region drawn is a sound the list didn't have
+    if(m_state.list_mode() && m_state.is_selected_file(r.m_file))
+    {
+        const auto &shown = m_state.m_review_list->m_rows[*m_state.m_review_list_row];
+        const auto *defn = r.m_defn_id ? m_proj.m_label_dict.find_ptr(*r.m_defn_id) : nullptr;
+        add_list_row(r.m_t, defn ? defn->m_class : shown.reviewed_label());
+        return;
+    }
+    if(m_state.active_is_clip())
+        return; // A clip isn't a recording of the project, so it has no labels
     undoable(
         r.m_file,
         [&]
@@ -282,8 +293,35 @@ void action_handler::operator()(const actions::select_labels &s)
                 last->m_start_s,
                 last->m_score
             };
+        select_row_of(*last);
         play_label(*last);
     }
+}
+
+void action_handler::select_row_of(const label &l)
+{
+    if(!m_state.m_review_list || !m_state.m_active_file)
+        return;
+    if(const auto row = app_state::row_of(l.m_id))
+    {
+        m_state.m_review_list_row = *row;
+        return;
+    }
+    // A project label: the row in this recording whose start it holds, the nearest its start
+    const auto &rows = m_state.m_review_list->m_rows;
+    const double window = m_state.m_review_list_settings.m_match_s;
+    std::optional<size_t> best;
+    for(size_t r = 0U; r != rows.size(); ++r)
+    {
+        const auto &row = rows[r];
+        if(!row.present() || row.m_source != m_state.m_active_file || m_state.active_is_clip() ||
+           row.m_start_s < l.m_start_s - window || row.m_start_s > std::max(l.m_stop_s, l.m_start_s) + window)
+            continue;
+        if(!best || std::abs(row.m_start_s - l.m_start_s) < std::abs(rows[*best].m_start_s - l.m_start_s))
+            best = r;
+    }
+    if(best)
+        m_state.m_review_list_row = *best;
 }
 
 void action_handler::operator()(const actions::toggle_label_selection &t)
@@ -293,7 +331,10 @@ void action_handler::operator()(const actions::toggle_label_selection &t)
     // A newly selected label becomes the playback region, so Space plays it
     const auto labels = m_state.visible_labels(m_proj);
     if(auto it = std::ranges::find(labels, t.m_id, &label::m_id); it != labels.end())
+    {
+        select_row_of(**it);
         play_label(**it);
+    }
 }
 
 void action_handler::operator()(const actions::clear_selection &c) { m_state.clear_selections(); }
@@ -349,21 +390,30 @@ void action_handler::operator()(const actions::set_active_class &a)
     if(!a.m_defn_id || !m_state.has_active_file())
         return;
 
-    undoable(
-        m_state.m_active_file.value(),
-        [&] { assign_class(m_state.selected_labels(), a.m_defn_id.value()); });
+    // Selected review list rows are relabelled in the list, not the label file
+    const auto *defn = m_proj.m_label_dict.find_ptr(*a.m_defn_id);
+    const auto ids = rows_judged(
+        m_state.selected_labels(),
+        clip_verdict::relabel,
+        defn ? defn->m_class : std::string{});
+    if(ids.empty() || m_state.active_is_clip())
+        return;
+    undoable(m_state.m_active_file.value(), [&] { assign_class(ids, a.m_defn_id.value()); });
 }
 
 void action_handler::operator()(const actions::add_class &a)
 {
+    if(m_state.active_is_clip())
+        return; // A clip has no labels of the project
     if(!m_state.has_active_file() || m_state.selected_labels().empty())
         return;
     const auto &file = m_state.m_active_file.value();
 
     std::vector<label> unclassified;
     std::vector<label> selected;
+    // Not over review list rows: a review doesn't make labels in the label file
     for(const auto *l : m_state.visible_labels(m_proj))
-        if(m_state.is_label_selected(l->m_id))
+        if(m_state.is_label_selected(l->m_id) && !app_state::row_of(l->m_id))
             (m_state.m_unlabelled.find_ptr(l->m_id) ? unclassified : selected).push_back(*l);
 
     const auto plan = plan_add_class(m_proj.get_labels(file), unclassified, selected, a.m_defn_id);
@@ -404,6 +454,8 @@ void action_handler::operator()(const actions::add_class &a)
 
 void action_handler::operator()(const actions::select_whole_file &)
 {
+    if(m_state.active_is_clip())
+        return; // A clip has no labels of the project
     if(!m_state.has_active_file())
         return;
     const auto &file = m_state.m_active_file.value();
@@ -424,21 +476,32 @@ void action_handler::operator()(const actions::assign_class &a)
 {
     if(!m_state.has_active_file())
         return;
-    undoable(m_state.m_active_file.value(), [&] { assign_class(a.m_ids, a.m_defn_id); });
+    const auto *defn = m_proj.m_label_dict.find_ptr(a.m_defn_id);
+    const auto ids =
+        rows_judged(a.m_ids, clip_verdict::relabel, defn ? defn->m_class : std::string{});
+    if(ids.empty() || m_state.active_is_clip())
+        return;
+    undoable(m_state.m_active_file.value(), [&] { assign_class(ids, a.m_defn_id); });
 }
 
 void action_handler::operator()(const actions::accept_labels &a)
 {
     if(!m_state.has_active_file())
         return;
+    const auto ids = rows_judged(a.m_ids, clip_verdict::correct);
+    if(ids.empty() || m_state.active_is_clip())
+        return;
     undoable(
         m_state.m_active_file.value(),
-        [&] { edit_labels(a.m_ids, [](label &l) { l.m_state = label_state::confirmed; }); });
+        [&] { edit_labels(ids, [](label &l) { l.m_state = label_state::confirmed; }); });
 }
 
-void action_handler::operator()(const actions::reject_labels &r)
+void action_handler::operator()(const actions::reject_labels &rejected)
 {
     if(!m_state.has_active_file())
+        return;
+    const actions::reject_labels r{rows_judged(rejected.m_ids, clip_verdict::not_event)};
+    if(r.m_ids.empty() || m_state.active_is_clip())
         return;
     undoable(
         m_state.m_active_file.value(),
@@ -460,12 +523,28 @@ void action_handler::operator()(const actions::delete_labels &d)
     if(!m_state.has_active_file())
         return;
 
+    // Rows the reviewer added can be taken back; the list's own rows stay
+    std::set<label_id> ids;
+    for(const auto id : d.m_ids)
+    {
+        const auto row = app_state::row_of(id);
+        if(!row)
+            ids.insert(id);
+        else if(m_state.m_review_list && *row < m_state.m_review_list->m_rows.size() &&
+                m_state.m_review_list->m_rows[*row].m_added)
+        {
+            change_row(*row, [](row_verdict &v) { v = {}; });
+            m_state.deselect(id);
+        }
+    }
+    if(ids.empty() || m_state.active_is_clip())
+        return;
     const auto &file = m_state.m_active_file.value();
     undoable(
         file,
         [&]
         {
-            for(auto id : d.m_ids)
+            for(auto id : ids)
             {
                 m_state.m_unlabelled.erase(id);
                 m_proj.erase_label(file, id);
@@ -476,6 +555,8 @@ void action_handler::operator()(const actions::delete_labels &d)
 
 void action_handler::operator()(const actions::copy_labels &c)
 {
+    if(m_state.active_is_clip())
+        return; // A clip has no labels of the project
     if(!m_state.has_active_file())
         return;
     // Rejected candidates aren't sounds to look for, and unclassified selections have no class
@@ -494,6 +575,8 @@ void action_handler::operator()(const actions::copy_labels &c)
 
 void action_handler::operator()(const actions::paste_labels &p)
 {
+    if(m_state.active_is_clip())
+        return; // A clip has no labels of the project
     const auto &clipboard = m_state.m_label_clipboard;
     if(!m_state.has_active_file() || clipboard.m_labels.empty())
         return;
@@ -551,6 +634,38 @@ void action_handler::operator()(const actions::move_label &m)
     const double wanted_start = std::min(m.m_start_s, m.m_stop_s);
     const double wanted_stop = std::max(m.m_start_s, m.m_stop_s);
 
+    // A review list row: its new times, in the recording's time, go to the results
+    if(const auto row = app_state::row_of(m.m_id))
+    {
+        if(!m_state.m_review_list || *row >= m_state.m_review_list->m_rows.size())
+            return;
+        const auto extent = m_state.active_extent();
+        // An edge left where the list put it isn't a change
+        const auto listed =
+            m_state.m_review_list->m_rows[*row].span(m_state.m_review_list_settings.m_region_s);
+        const auto moved_to = [](double t, double was) -> std::optional<double>
+        {
+            if(std::abs(t - was) < 1e-9)
+                return std::nullopt;
+            return t;
+        };
+        change_row(
+            *row,
+            [&](row_verdict &v)
+            {
+                v.m_new_start_s = moved_to(
+                    std::clamp(wanted_start, extent.first, extent.second),
+                    listed.first);
+                v.m_new_stop_s = moved_to(
+                    std::clamp(wanted_stop, extent.first, extent.second),
+                    listed.second);
+            },
+            history::merge_key{m.m_drag_seq, m.m_id});
+        return;
+    }
+    if(m_state.active_is_clip())
+        return;
+
     undoable(
         file,
         [&]
@@ -581,6 +696,8 @@ void action_handler::operator()(const actions::move_label &m)
 
 void action_handler::operator()(const actions::snap_labels &s)
 {
+    if(m_state.active_is_clip())
+        return; // A clip has no labels of the project
     if(!m_state.has_active_file())
         return;
     const auto &audio = m_state.get_audio_buffer();
@@ -613,6 +730,8 @@ double sound_end(const audio_buffer &audio, double start_s)
 
 void action_handler::operator()(const actions::extend_labels &e)
 {
+    if(m_state.active_is_clip())
+        return; // A clip has no labels of the project
     if(!m_state.has_active_file())
         return;
     const auto &audio = m_state.get_audio_buffer();
@@ -632,6 +751,8 @@ void action_handler::operator()(const actions::extend_labels &e)
 
 void action_handler::operator()(const actions::mark_sound &m)
 {
+    if(m_state.active_is_clip())
+        return; // A clip has no labels of the project
     if(!m_state.has_active_file())
         return;
     const double start = std::clamp(m.m_t_s, 0., m_state.get_audio_buffer().duration_s());
@@ -669,6 +790,8 @@ void action_handler::restore_step(const history::entry &e, bool undo)
 {
     if(!e.m_file.empty())
         restore(e.m_file, undo ? e.m_before : e.m_after);
+    for(const auto &more : e.m_more)
+        restore(more.m_file, undo ? more.m_before : more.m_after);
     if(const auto &change = e.m_list_change)
         set_row_verdict(change->m_list, change->m_row, undo ? change->m_before : change->m_after);
 }
@@ -687,6 +810,8 @@ void action_handler::operator()(const actions::redo &r)
 
 void action_handler::operator()(const actions::set_file_status &s)
 {
+    if(m_state.active_is_clip() && m_state.is_selected_file(s.m_file))
+        return; // A clip isn't one of the project's recordings
     m_proj.set_status(s.m_file, s.m_status);
 }
 
@@ -702,11 +827,11 @@ void action_handler::reload_active_audio()
     if(!m_state.m_active_file)
         return;
     const auto &file = *m_state.m_active_file;
-    m_state.load_audio(file, m_proj.get_channel(file));
+    m_state.load_audio(file, m_state.active_is_clip() ? std::nullopt : m_proj.get_channel(file));
     m_state.m_playing_clip = false;
     m_playing_band = false;
     const auto state = m_audio_engine.get_state();
-    m_audio_engine.set_audio_clip(m_state.get_audio_buffer_ptr());
+    m_audio_engine.set_audio_clip(m_state.get_audio_buffer_ptr(), m_state.active_offset_s());
     m_audio_engine.select_region(
         time_span{state.m_playhead_s, m_state.get_audio_buffer().duration_s()},
         m_state.m_loop);
@@ -1058,6 +1183,15 @@ void action_handler::operator()(const actions::open_review_list &o)
             settings = clip_manifest_settings::for_list(section, o.m_file);
 
         auto list = load_clip_manifest(m_proj, settings);
+        // A project that doesn't scan its roots lists the recordings the list names
+        if(!m_proj.scans_roots())
+        {
+            std::vector<std::filesystem::path> named;
+            for(const auto &row : list.m_rows)
+                if(row.m_source)
+                    named.push_back(*row.m_source);
+            m_proj.add_files(named);
+        }
         m_state.m_settings.add_recent_list(
             {generic_utf8(list.m_path), generic_utf8(m_proj.config().m_filename)});
         m_state.m_review_list = std::move(list);
@@ -1085,47 +1219,73 @@ void action_handler::operator()(const actions::show_list_row &s)
     const auto &settings = m_state.m_review_list_settings;
     const auto &row = m_state.m_review_list->m_rows[s.m_row];
     m_state.m_review_list_row = s.m_row;
+    const auto span = row.reviewed_span(settings.m_region_s);
+    const label event{0U, label_defn_id{}, span.first, span.second};
 
     if(!row.m_source)
     {
-        if(row.m_clip)
+        if(!row.m_clip)
         {
+            m_state.report_info("This row's recording isn't in the project, and it has no clip.");
+            return;
+        }
+        // The clip, placed at its offset, so its times are the recording's
+        m_state.set_selected_clip(*row.m_clip, row.m_clip_offset_s);
+        m_state.m_playing_clip = false;
+        m_playing_band = false;
+        m_audio_engine.set_audio_clip(m_state.get_audio_buffer_ptr(), m_state.active_offset_s());
+    }
+    else
+    {
+        const auto &file = *row.m_source;
+        // The row's channel, for this row only: the file's own choice stays as it is
+        const auto channel = row.m_channel ? row.m_channel : m_proj.get_channel(file);
+        if(!m_state.is_selected_file(file) || m_state.active_is_clip())
+        {
+            // Play the event's stretch first, so it's heard without waiting for the whole
+            // recording to be read; a second either side lets the high-pass settle
+            const label at_file{0U, label_defn_id{}, span.first, span.second};
+            const auto window = ::playback_window(at_file, m_state.m_review, 1e12);
             if(s.m_play)
-                (*this)(actions::play_clip{*row.m_clip});
+            {
+                double start_s{};
+                auto excerpt = load_mono_range(
+                    file,
+                    channel,
+                    {window.first - 1., window.second + 1.},
+                    start_s);
+                apply_high_pass(excerpt.m_samples, excerpt.m_sample_rate_hz, m_state.m_high_pass);
+                m_audio_engine.set_audio_clip(
+                    std::make_shared<const audio_buffer>(std::move(excerpt)),
+                    start_s);
+                m_audio_engine.select_region(window, false);
+                m_audio_engine.play();
+            }
+            // Then the whole recording for the view; the excerpt plays on until something else
+            // is played
+            m_state.set_selected_file(file, channel);
+            m_state.m_playing_clip = false;
+            m_playing_band = s.m_play;
+            if(!s.m_play)
+                m_audio_engine.set_audio_clip(m_state.get_audio_buffer_ptr());
         }
         else
-            m_state.report_info("This row's recording isn't in the project, and it has no clip.");
-        return;
+        {
+            restore_active_audio();
+            if(channel != m_state.active_channel())
+            {
+                m_state.load_audio(file, channel);
+                m_audio_engine.set_audio_clip(m_state.get_audio_buffer_ptr());
+            }
+        }
     }
 
-    const auto &file = *row.m_source;
-    (*this)(actions::load_file{file});
-    restore_active_audio();
-    // The row's channel, for this row only: the file's own choice stays as it is
-    const auto channel = row.m_channel ? row.m_channel : m_proj.get_channel(file);
-    if(channel != m_state.active_channel())
-    {
-        m_state.load_audio(file, channel);
-        m_audio_engine.set_audio_clip(m_state.get_audio_buffer_ptr());
-    }
-
-    // The event as the list gives it; with no end there, the label's, else region_s
-    const auto *l = find_label_at(
-        m_proj.get_labels(file),
-        row.m_onset_s,
-        settings.m_match_s,
-        class_named(m_proj.m_label_dict, row.m_label));
-    auto span = row.span(settings.m_region_s);
-    if(!row.m_stop_s && l && !l->is_onset())
-        span.second = std::max(span.first, l->m_stop_s);
-    const label event{0U, label_defn_id{}, span.first, span.second};
-
-    if(l)
-        m_state.set_selection({l->m_id});
-    else
-        m_state.clear_selections();
+    m_state.refresh_row_labels(m_proj);
+    m_state.set_selection({app_state::row_label_base + s.m_row});
     m_state.m_view_request = review_view(event, m_state.m_review);
-    select_region(m_state.playback_window(event), l ? l->m_band : frequency_band{});
+    if(m_playing_band)
+        return; // Playing the excerpt already
+    select_region(m_state.playback_window(event), frequency_band{});
     if(s.m_play)
         m_audio_engine.play(); // Hearing the list means listening, whatever auto play says
 }
@@ -1141,9 +1301,10 @@ void action_handler::set_row_verdict(const std::filesystem::path &list, size_t r
         return;
     }
     open->m_rows[row].m_result = v;
+    ++m_state.m_review_list_revision;
     try
     {
-        write_results(*open);
+        write_results(*open, m_state.m_settings.m_review_changes_file);
     }
     catch(const std::exception &e)
     {
@@ -1152,53 +1313,131 @@ void action_handler::set_row_verdict(const std::filesystem::path &list, size_t r
     }
 }
 
-void action_handler::operator()(const actions::judge_clip &j)
+template <typename F>
+void action_handler::change_row(size_t row, F &&change, std::optional<history::merge_key> key)
 {
-    if(!m_state.m_review_list || j.m_row >= m_state.m_review_list->m_rows.size())
+    if(!m_state.m_review_list || row >= m_state.m_review_list->m_rows.size())
         return;
     const auto &list = *m_state.m_review_list;
-    const auto &settings = m_state.m_review_list_settings;
-    const auto row = list.m_rows[j.m_row]; // A copy, as setting the verdict changes the row
-
-    auto after = row.m_result;
-    after.m_verdict = verdict_name(j.m_verdict);
-    after.m_new_label.clear();
-    if(j.m_verdict == clip_verdict::relabel)
-        if(const auto *defn = m_proj.m_label_dict.find_ptr(j.m_defn_id))
-            after.m_new_label = defn->m_class;
-
+    const auto before = list.m_rows[row].m_result;
+    auto after = before;
+    change(after);
+    if(after == before)
+        return;
     history::entry step;
-    step.m_list_change = row_verdict_change{list.m_path, j.m_row, row.m_result, after};
-    if(row.m_source)
-    {
-        // So the verdict lands in the annotations and survives the next re-cut
-        step.m_file = *row.m_source;
-        step.m_before = snapshot(step.m_file);
-        apply_clip_verdict(
-            m_proj,
-            *row.m_source,
-            row.span(settings.m_region_s),
-            settings.m_match_s,
-            j.m_verdict,
-            j.m_defn_id);
-        step.m_after = snapshot(step.m_file);
-    }
-    set_row_verdict(list.m_path, j.m_row, after);
+    step.m_merge_key = key;
+    step.m_list_change = row_verdict_change{list.m_path, row, before, after};
+    set_row_verdict(list.m_path, row, after);
     m_state.m_history.push(std::move(step));
+}
+
+void action_handler::add_list_row(time_span span, const std::string &label)
+{
+    if(!m_state.list_mode())
+        return;
+    auto &list = *m_state.m_review_list;
+    const auto row = list.add_row(*m_state.m_review_list_row, span, label);
+    const auto added = list.m_rows[row].m_result;
+    list.m_rows[row].m_result = {}; // So the step records it appearing
+    history::entry step;
+    step.m_list_change = row_verdict_change{list.m_path, row, {}, added};
+    set_row_verdict(list.m_path, row, added);
+    m_state.m_history.push(std::move(step));
+    m_state.refresh_row_labels(m_proj);
+    m_state.set_selection({app_state::row_label_base + row});
+}
+
+std::set<label_id> action_handler::rows_judged(
+    const std::set<label_id> &ids,
+    clip_verdict v,
+    const std::string &new_label)
+{
+    std::set<label_id> others;
+    for(const auto id : ids)
+        if(const auto row = app_state::row_of(id))
+            (*this)(actions::judge_clip{*row, v, new_label});
+        else
+            others.insert(id);
+    return others;
+}
+
+void action_handler::operator()(const actions::judge_clip &j)
+{
+    change_row(
+        j.m_row,
+        [&](row_verdict &v)
+        {
+            // An added row stays added; relabelling it changes its class
+            if(v.m_verdict == "added")
+            {
+                if(j.m_verdict == clip_verdict::relabel)
+                    v.m_new_label = j.m_new_label;
+                return;
+            }
+            v.m_verdict = verdict_name(j.m_verdict);
+            v.m_new_label = j.m_verdict == clip_verdict::relabel ? j.m_new_label : std::string{};
+        });
 }
 
 void action_handler::operator()(const actions::set_row_note &n)
 {
-    if(!m_state.m_review_list || n.m_row >= m_state.m_review_list->m_rows.size())
-        return;
-    const auto &list = *m_state.m_review_list;
-    const auto before = list.m_rows[n.m_row].m_result;
-    auto after = before;
-    after.m_note = n.m_note;
+    change_row(n.m_row, [&](row_verdict &v) { v.m_note = n.m_note; });
+}
+
+void action_handler::operator()(const actions::plan_review_import &p)
+{
+    auto &request = m_state.m_review_import.emplace();
+    request.m_results = p.m_results;
+    try
+    {
+        const auto settings =
+            clip_manifest_settings::for_list(m_proj.config().m_clip_manifest, p.m_results);
+        const auto results = load_results_file(m_proj, settings, p.m_results);
+        request.m_plan = plan_review_import(m_proj, results, settings.m_match_s);
+    }
+    catch(const std::exception &e)
+    {
+        request.m_error = e.what();
+    }
+}
+
+void action_handler::operator()(const actions::apply_review_import &a)
+{
+    m_state.m_review_import.reset();
+    const auto settings =
+        clip_manifest_settings::for_list(m_proj.config().m_clip_manifest, a.m_results);
+    const auto results = load_results_file(m_proj, settings, a.m_results);
+    auto plan = plan_review_import(m_proj, results, settings.m_match_s);
+    if(a.m_add_classes && !plan.m_unknown_classes.empty())
+    {
+        m_proj.add_palette_classes({plan.m_unknown_classes.begin(), plan.m_unknown_classes.end()});
+        plan = plan_review_import(m_proj, results, settings.m_match_s);
+    }
+
+    // One undo step over every recording it changes
     history::entry step;
-    step.m_list_change = row_verdict_change{list.m_path, n.m_row, before, after};
-    set_row_verdict(list.m_path, n.m_row, after);
-    m_state.m_history.push(std::move(step));
+    for(const auto &[file, after] : plan.m_files)
+    {
+        history::entry e{file, snapshot(file), {}, std::nullopt};
+        m_proj.set_labels(file, after);
+        e.m_after = snapshot(file);
+        if(a.m_clear_done && m_proj.get_status(file) == file_status::done)
+            m_proj.set_status(file, file_status::todo);
+        if(step.m_file.empty())
+            step = std::move(e);
+        else
+            step.m_more.push_back(std::move(e));
+    }
+    if(!step.m_file.empty())
+        m_state.m_history.push(std::move(step));
+    m_state.report_info(fmt::format(
+        "Imported the review: {} labels changed, {} added, {} marked not an event, {} already as "
+        "the review says; {} rows not applied.",
+        plan.m_changed,
+        plan.m_added,
+        plan.m_rejected,
+        plan.m_unchanged,
+        plan.unapplied()));
 }
 
 void action_handler::operator()(const actions::jump_to &j)

@@ -9,3 +9,8 @@ CMakeUserPresets.json
 .vs
 *.bat
 compile_commands.json
+# Written by reviewing or exporting the example project
+examples/*.results.csv
+examples/*.results.json
+examples/*.changes.csv
+examples/export*

@@ -167,10 +167,8 @@ void file_list_view::render(const project_model &project, app_state &state)
 
     render_filters(project, state);
 
-    const auto rows = state.filtered_files(project);
-    size_t num_finished = 0U;
-    for(const auto &file : project.get_files())
-        num_finished += project.get_status(file.m_path) != file_status::todo;
+    const auto &rows = state.filtered_files(project);
+    const size_t num_finished = state.finished_files(project);
     if(rows.size() == project.get_files().size())
         ImGui::Text("%zu of %zu files done or skipped", num_finished, project.get_files().size());
     else
@@ -283,8 +281,14 @@ void file_list_view::render(const project_model &project, app_state &state)
         ImGui::EndTable();
     }
 
-    // Status of the active file
-    if(state.has_active_file())
+    // Status of the active file. A project that doesn't scan its roots is for reviewing lists,
+    // whose output is the results file, so status and export don't apply.
+    const bool scans = project.scans_roots();
+    if(!scans)
+        ImGui::TextWrapped(
+            "Dataset roots aren't scanned (\"scan-roots\": false): the list holds the recordings "
+            "the label file and the review list name.");
+    if(state.has_active_file() && scans && !state.active_is_clip())
     {
         const auto &active = state.m_active_file.value();
         int status = static_cast<int>(project.get_status(active));
@@ -308,11 +312,14 @@ void file_list_view::render(const project_model &project, app_state &state)
 
     if(ImGui::Button("Rescan files"))
         state.add_action(actions::rescan_files{});
-    ImGui::SameLine();
-    if(ImGui::Button("Export CSV"))
-        state.add_action(actions::export_csv{});
+    if(scans)
+    {
+        ImGui::SameLine();
+        if(ImGui::Button("Export CSV"))
+            state.add_action(actions::export_csv{});
+    }
 
-    if(state.is_exporting())
+    if(scans && state.is_exporting())
     {
         const auto &progress = *state.m_export_progress;
         const auto total = std::max<size_t>(1U, progress.m_total);
@@ -326,7 +333,7 @@ void file_list_view::render(const project_model &project, app_state &state)
         if(ImGui::Button("Cancel"))
             state.add_action(actions::cancel_export{});
     }
-    else
+    else if(scans)
     {
         if(ImGui::Button("Export clips"))
             state.add_action(actions::export_dataset{});

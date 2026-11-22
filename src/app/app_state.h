@@ -18,6 +18,7 @@
 #include "../export/clip_export.h"
 #include "../interchange/annotation_tree.h"
 #include "../manifest/clip_manifest.h"
+#include "../manifest/review_import.h"
 #include "../model/audio_buffer.h"
 #include "../model/file_finder.h"
 #include "../model/history.h"
@@ -32,6 +33,7 @@ struct review_list_view
     std::string m_filter;
     std::string m_sort_column; ///< By name, empty for the list's own order
     bool m_descending{false};
+    std::vector<std::string> m_hidden; ///< Columns hidden, by name
 };
 
 /// A review list opened recently, and the project it was opened in
@@ -83,6 +85,7 @@ struct app_settings
     std::vector<std::string> m_favourite_classes;
     std::vector<recent_review_list> m_recent_lists; ///< Most recent first
     std::map<std::string, review_list_view> m_list_views; ///< By list path, for the recent ones
+    bool m_review_changes_file{false}; ///< Also write <list>.changes.csv, the changed rows alone
 
     /// Put a list first in the recent ones, keeping at most ten
     void add_recent_list(const recent_review_list &list);
@@ -178,6 +181,19 @@ public:
 
     void set_selected_file(const std::filesystem::path &path, std::optional<uint32_t> channel);
 
+    /// Show a review list row's clip rather than a recording of the project: placed at its
+    /// offset in its recording, so times are the recording's. Labels can't be made on it.
+    void set_selected_clip(const std::filesystem::path &clip, double offset_s);
+    /// Where the active audio starts in its recording: 0, except for a clip
+    double active_offset_s() const { return m_active_offset_s; }
+    /// The active file is a review list row's clip, not a recording of the project
+    bool active_is_clip() const { return m_active_is_clip; }
+    /// The time span of the active audio, in the recording's time
+    time_span active_extent() const
+    {
+        return {m_active_offset_s, m_active_offset_s + m_active_audio->duration_s()};
+    }
+
     bool has_active_file() const { return m_active_file.has_value(); }
 
     /// Load a file's audio for viewing and playing, as one channel or a mix, with the high-pass
@@ -232,8 +248,11 @@ public:
     uint64_t next_edit_seq() { return ++m_edit_seq; }
 
     /* File list: */
-    /// The project's files that pass the filters, in list order
-    std::vector<file_row> filtered_files(const project_model &project) const;
+    /// The project's files that pass the filters, in list order. Kept until the project, its
+    /// files or the filters change, since working it out runs over every file.
+    const std::vector<file_row> &filtered_files(const project_model &project) const;
+    /// The files done or skipped, kept with the filtered list
+    size_t finished_files(const project_model &project) const;
 
     /* Display: */
     /// Labels of the active file that are drawn and can be clicked: its labels, including
@@ -289,6 +308,34 @@ public:
     std::string m_review_list_error; ///< Why the last list couldn't be opened
     std::optional<size_t> m_review_list_row; ///< The row last shown, in the list's own order
     bool m_focus_review_list{false};        ///< Bring the list's window to the front
+    uint64_t m_review_list_revision{};      ///< Counts changes to the open list's rows
+
+    /// The Import review edits dialog: a results file and what importing it would do
+    struct review_import_request
+    {
+        std::filesystem::path m_results;
+        std::optional<review_import_plan> m_plan;
+        std::string m_error;
+        bool m_add_classes{true};
+        bool m_clear_done{true};
+    };
+    std::optional<review_import_request> m_review_import;
+
+    /* The open list's rows in the active file, drawn as labels apart from the project's: */
+    static constexpr label_id row_label_base = label_id{1} << 62U;
+    /// The list row a label stands for, if it's a row's label
+    static std::optional<size_t> row_of(label_id id)
+    {
+        return id >= row_label_base ? std::optional{static_cast<size_t>(id - row_label_base)}
+                                    : std::nullopt;
+    }
+    /// Fill the row labels again if the list, its rows or the active file changed
+    void refresh_row_labels(const project_model &project);
+    const labels &row_labels() const { return m_row_labels; }
+    /// The row shown from the list is in the active file, so drawing on it adds rows
+    bool list_mode() const;
+    /// What a row label says: its class as reviewed, marked as the list's
+    std::string row_label_text(label_id id) const;
     uint64_t m_review_list_generation{};    ///< Counts the lists opened, so views can tell
 
     bool m_keys_captured{false}; ///< A view with focus handles the keys, eg. the clip list
@@ -337,8 +384,33 @@ private:
     std::set<label_id> m_selected_labels;
     uint64_t m_edit_seq{};
 
+    struct file_list_cache
+    {
+        const project_model *m_project{};
+        uint64_t m_revision{};
+        uint64_t m_files_version{};
+        size_t m_classes{}; ///< The palette's size
+        file_list_settings m_settings;
+        std::vector<file_row> m_rows;
+        size_t m_finished{};
+    };
+    mutable std::optional<file_list_cache> m_file_list_cache;
+    const file_list_cache &file_list(const project_model &project) const;
+
     std::shared_ptr<const audio_buffer> m_active_audio{std::make_shared<audio_buffer>()};
     std::optional<uint32_t> m_active_channel;
+    double m_active_offset_s{};
+    bool m_active_is_clip{false};
+
+    labels m_row_labels;
+    struct row_labels_key
+    {
+        uint64_t m_generation{}, m_revision{};
+        std::optional<std::filesystem::path> m_file;
+        size_t m_classes{}; ///< The palette's size, as a class may be added to it
+        bool operator==(const row_labels_key &) const = default;
+    };
+    std::optional<row_labels_key> m_row_labels_key;
 
     audio_min_max_pyramid_map m_audio_min_max_map;
 };

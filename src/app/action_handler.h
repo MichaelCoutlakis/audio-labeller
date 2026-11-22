@@ -57,6 +57,8 @@ struct action_handler
     void operator()(const actions::open_review_list &o);
     void operator()(const actions::show_list_row &s);
     void operator()(const actions::judge_clip &j);
+    void operator()(const actions::plan_review_import &p);
+    void operator()(const actions::apply_review_import &a);
     void operator()(const actions::set_row_note &n);
     void operator()(const actions::jump_to &j);
     void operator()(const actions::run_assist &r);
@@ -117,6 +119,16 @@ private:
 
     /// Set a review list row's verdict and write the results, if the list is still open
     void set_row_verdict(const std::filesystem::path &list, size_t row, const row_verdict &v);
+    /// Change a row of the open list as one undo step (merged with others of the same key)
+    template <typename F>
+    void change_row(size_t row, F &&change, std::optional<history::merge_key> key = std::nullopt);
+    /// Add a row to the open list near the row shown, as one undo step
+    void add_list_row(time_span span, const std::string &label);
+    /// Handle the review list rows among labels being edited, returning the others
+    std::set<label_id> rows_judged(const std::set<label_id> &ids, clip_verdict v, const std::string &new_label = {});
+    /// Show in the review list the row a clicked label stands for: a row's own label, or the row
+    /// whose start a project label holds
+    void select_row_of(const label &l);
     /// Undo or redo a step: its labels, and the review list row it changed
     void restore_step(const history::entry &e, bool undo);
 

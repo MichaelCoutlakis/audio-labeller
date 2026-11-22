@@ -12,6 +12,7 @@
 #include <set>
 #include <string>
 #include <utility>
+#include <vector>
 
 #include "label.h"
 
@@ -29,8 +30,12 @@ struct label_snapshot
 /// What a review list (see manifest/clip_manifest.h) says about one of its rows once heard
 struct row_verdict
 {
-    std::string m_verdict;   ///< correct, relabel or not_event; empty while unheard
-    std::string m_new_label; ///< The class it was relabelled to
+    /// correct, relabel, not_event, or added for a row the reviewer added; empty while unheard
+    std::string m_verdict;
+    std::string m_new_label; ///< The class it was relabelled to, or an added row's class
+    /// Where the reviewer moved it to, in the recording's time; nullopt if not moved
+    std::optional<double> m_new_start_s;
+    std::optional<double> m_new_stop_s;
     std::string m_note;
 
     bool operator==(const row_verdict &) const = default;
@@ -61,6 +66,8 @@ public:
         std::optional<merge_key> m_merge_key;
         /// A review list row the step also changed. m_file is empty if it changed no labels.
         std::optional<row_verdict_change> m_list_change;
+        /// More recordings the step changed, eg. importing a review's edits
+        std::vector<entry> m_more;
     };
 
     void push(entry e)
@@ -77,6 +84,8 @@ public:
            m_undo.back().m_file == e.m_file)
         {
             m_undo.back().m_after = std::move(e.m_after);
+            if(auto &change = m_undo.back().m_list_change; change && e.m_list_change)
+                change->m_after = std::move(e.m_list_change->m_after);
             return;
         }
         m_undo.push_back(std::move(e));

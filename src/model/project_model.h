@@ -46,6 +46,10 @@ struct project_config
     nlohmann::json m_assisted_labellers;   ///< Detectors, see assisted_labeller_settings
     nlohmann::json m_high_pass; ///< Filter applied when reading audio, see high_pass_settings
     std::optional<uint32_t> m_channel;     ///< Channel to view and play by default, else a mix
+    /// Whether the dataset roots are walked to fill the file list. Without, the list holds only
+    /// the recordings something names: the label file, a review list. For reviewing lists that
+    /// draw on large datasets.
+    bool m_scan_roots{true};
 };
 
 /// The settings of a project that the app edits. The rest of the project file (annotation trees,
@@ -69,6 +73,7 @@ struct audio_file_entry
 {
     std::filesystem::path m_path; ///< Absolute and normalised. The key for a file's labels
     std::string m_display_name;   ///< UTF-8 path relative to its dataset root
+    std::string m_search_text;    ///< UTF-8 dataset root as written, then the path below it
 };
 
 enum class file_status
@@ -178,6 +183,11 @@ public:
 
     const std::vector<audio_file_entry> &get_files() const { return m_files; }
 
+    /// Whether the file list is every audio file under the dataset roots, or only those named
+    bool scans_roots() const { return m_cfg.m_scan_roots; }
+    /// For a project that doesn't scan its roots: add recordings under them to the file list
+    void add_files(const std::vector<std::filesystem::path> &files);
+
     label_dict m_label_dict;
 
     /* Labels. All changes go through these, so that the revision tracks them. */
@@ -223,11 +233,20 @@ public:
 
     /* Saving: */
     bool is_dirty() const { return m_revision != m_saved_revision; }
+    /// Changes with every change to the labels, statuses or settings, so views can keep what
+    /// they work out from them until it changes
+    uint64_t revision() const { return m_revision; }
+    /// Changes whenever the file list is filled again
+    uint64_t files_version() const { return m_files_version; }
     /// Atomically write the label file, if anything changed since it was last read or written
     void save_if_dirty();
 
     /// Add a class that isn't in the palette, for this session, with the next free ID
     label_defn_id add_session_class(const std::string &name);
+
+    /// Add classes to the palette file and to this session, each with the next free ID and a
+    /// colour of its own. Throws if the palette can't be written.
+    void add_palette_classes(const std::vector<std::string> &names);
 
     /// Labels that refer to audio that couldn't be found
     size_t num_unresolved() const { return m_unresolved_labels.size(); }
@@ -239,6 +258,9 @@ public:
 private:
     project_config m_cfg;
     std::vector<audio_file_entry> m_files; //!< Available files for labelling
+    std::set<std::filesystem::path> m_named_files; ///< Without a scan, the files named so far
+    /// Fill m_files from the named files, for a project that doesn't scan its roots
+    void list_named_files();
 
     std::map<std::filesystem::path, labels> m_file_labels;     //!< Labels per file
     std::map<std::filesystem::path, file_state> m_file_states; //!< Only non-default states
@@ -249,6 +271,7 @@ private:
     std::vector<std::string> m_notices;
 
     uint64_t m_revision{};       ///< Incremented by every change
+    uint64_t m_files_version{};
     uint64_t m_saved_revision{}; ///< Revision matching the label file on disk
 
     std::string class_name_of(const label &l) const;

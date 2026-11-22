@@ -1,29 +1,76 @@
 {
   "$schema": "../schemas/labels.schema.json",
+  "files": [],
   "labels": [
     {
       "class-id": 0,
       "class-name": "Dog",
-      "filename": "..\\..\\..\\..\\Dog goes woof.wav",
+      "dataset-root": "audio",
+      "filename": "farm.wav",
       "label-id": 1,
-      "start [s]": 0.023662770339203693,
-      "stop [s]": 0.2650230277990814
+      "start_s": 1.0,
+      "stop_s": 1.26
     },
     {
-      "class-id": 2,
-      "class-name": "Pig",
-      "filename": "..\\..\\..\\..\\The Fox.wav",
-      "label-id": 1,
-      "start [s]": 0.7709203257950915,
-      "stop [s]": 1.145276697991885
+      "class-id": 0,
+      "class-name": "Dog",
+      "dataset-root": "audio",
+      "filename": "farm.wav",
+      "label-id": 2,
+      "start_s": 1.45,
+      "stop_s": 1.71
     },
     {
       "class-id": 1,
-      "class-name": "Fox",
-      "filename": "..\\..\\..\\..\\The Fox.wav",
+      "class-name": "Cat",
+      "dataset-root": "audio",
+      "filename": "farm.wav",
       "label-id": 3,
-      "start [s]": 1.3116599021125168,
-      "stop [s]": 1.7203655237852575
+      "start_s": 4.0,
+      "stop_s": 4.7
+    },
+    {
+      "class-id": 2,
+      "class-name": "Bird",
+      "dataset-root": "audio",
+      "filename": "farm.wav",
+      "label-id": 4,
+      "start_s": 7.0,
+      "stop_s": 7.42
+    },
+    {
+      "class-id": 0,
+      "class-name": "Dog",
+      "dataset-root": "audio",
+      "filename": "farm.wav",
+      "label-id": 5,
+      "start_s": 10.0,
+      "stop_s": 10.26,
+      "state": "suggested",
+      "score": 0.41
+    },
+    {
+      "class-id": 1,
+      "class-name": "Cat",
+      "dataset-root": "audio",
+      "filename": "farm.wav",
+      "label-id": 6,
+      "start_s": 12.5,
+      "stop_s": 13.2,
+      "state": "suggested",
+      "score": 0.83
+    },
+    {
+      "class-id": 1,
+      "class-name": "Cat",
+      "dataset-root": "audio",
+      "filename": "farm.wav",
+      "label-id": 7,
+      "start_s": 15.2,
+      "stop_s": 15.6,
+      "state": "suggested",
+      "score": 0.35
     }
-  ]
+  ],
+  "version": 3
 }

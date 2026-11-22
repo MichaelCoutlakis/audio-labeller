@@ -127,7 +127,7 @@ void keyboard_controller::handle(const project_model &project, app_state &state)
 
     // The whole file, as when it's opened with the view set to show all of it
     if(pressed(ImGuiKey_Home) && state.has_active_file())
-        state.m_view_request = time_span{0., state.get_audio_buffer().duration_s()};
+        state.m_view_request = state.active_extent();
 
     if(pressed(ImGuiKey_H))
         state.m_settings.m_show_rejected = !state.m_settings.m_show_rejected;
@@ -318,7 +318,6 @@ void keyboard_controller::handle_nudges(const project_model &project, app_state 
 
 void keyboard_controller::handle_files(const project_model &project, app_state &state)
 {
-    const auto files = state.filtered_files(project);
     const auto &all = project.get_files();
     if(all.empty())
         return;
@@ -339,8 +338,11 @@ void keyboard_controller::handle_files(const project_model &project, app_state &
     };
 
     // N and P step through the files in the list as filtered
-    if(!files.empty() && (pressed(ImGuiKey_N) || pressed(ImGuiKey_P)))
+    if(pressed(ImGuiKey_N) || pressed(ImGuiKey_P))
     {
+        const auto &files = state.filtered_files(project);
+        if(files.empty())
+            return;
         const auto n = static_cast<ptrdiff_t>(files.size());
         const auto i = position(files, [](const file_row &r) { return r.m_file->m_path; });
         const auto step = pressed(ImGuiKey_N) ? 1 : -1;

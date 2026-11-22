@@ -6,6 +6,7 @@
 
 #include <cstdint>
 #include <optional>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -30,7 +31,7 @@ private:
     void remember_view(app_state &state) const;
     void handle_keys(const project_model &project, app_state &state);
     void select(app_state &state, size_t position, bool play = true);
-    void verdict(const project_model &project, app_state &state, clip_verdict v, label_defn_id cls);
+    void verdict(app_state &state, clip_verdict v, const std::string &new_label = {});
     void render_note(app_state &state);
 
     /// The text of a cell: the list's columns, then the verdict, note and what the recording says
@@ -56,4 +57,7 @@ private:
     std::string m_note;                  ///< Being typed for the selected row
     std::optional<size_t> m_note_row;    ///< The row m_note is for
     bool m_focus_note{false};
+    size_t m_present{};                ///< Rows in the list when last filtered
+    std::set<std::string> m_hidden;    ///< Columns hidden, by name
+    std::optional<size_t> m_shown_row; ///< The row shown, as last seen
 };

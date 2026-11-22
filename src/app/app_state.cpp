@@ -116,6 +116,7 @@ app_settings app_settings::load()
             s.m_spectrogram_share = std::clamp(spec->value("share", s.m_spectrogram_share), 0.1f, 0.9f);
         }
         s.m_favourite_classes = j.value("favourite_classes", s.m_favourite_classes);
+        s.m_review_changes_file = j.value("review_changes_file", s.m_review_changes_file);
         if(auto lists = j.find("review_lists"); lists != j.end() && lists->is_array())
             for(const auto &l : *lists)
             {
@@ -126,7 +127,8 @@ app_settings app_settings::load()
                 s.m_list_views[list] = review_list_view{
                     l.value("filter", std::string{}),
                     l.value("sort", std::string{}),
-                    l.value("descending", false)};
+                    l.value("descending", false),
+                    l.value("hidden", std::vector<std::string>{})};
             }
     }
     catch(const nlohmann::json::exception &e)
@@ -187,10 +189,12 @@ void app_settings::save()
             l["filter"] = it->second.m_filter;
             l["sort"] = it->second.m_sort_column;
             l["descending"] = it->second.m_descending;
+            l["hidden"] = it->second.m_hidden;
         }
         lists.push_back(std::move(l));
     }
     j["review_lists"] = std::move(lists);
+    j["review_changes_file"] = m_review_changes_file;
     if(!m_device_name.empty())
         j["audio_device"] = {{"name", m_device_name}};
     std::ofstream f(m_filename);
@@ -244,6 +248,10 @@ void app_state::reset_project_state()
     m_active_file.reset();
     m_active_audio = std::make_shared<audio_buffer>();
     m_active_channel.reset();
+    m_active_offset_s = 0.;
+    m_active_is_clip = false;
+    m_row_labels.clear();
+    m_row_labels_key.reset();
     m_audio_min_max_map = {};
     m_drag = {};
     m_unlabelled.clear();
@@ -271,6 +279,7 @@ void app_state::reset_project_state()
     m_review_list_settings = {};
     m_review_list_error.clear();
     m_review_list_row.reset();
+    m_file_list_cache.reset();
 }
 
 void app_state::set_selected_file(
@@ -283,8 +292,82 @@ void app_state::set_selected_file(
     // File not yet selected - select it and load the audio
     load_audio(path, channel);
     m_active_file = path;
+    m_active_offset_s = 0.;
+    m_active_is_clip = false;
     m_selected_labels.clear();
     m_unlabelled.clear();
+}
+
+void app_state::set_selected_clip(const std::filesystem::path &clip, double offset_s)
+{
+    if(!(m_active_is_clip && is_selected_file(clip) && m_active_offset_s == offset_s))
+    {
+        load_audio(clip, std::nullopt);
+        m_active_file = clip;
+        m_active_offset_s = offset_s;
+        m_active_is_clip = true;
+    }
+    m_selected_labels.clear();
+    m_unlabelled.clear();
+}
+
+void app_state::refresh_row_labels(const project_model &project)
+{
+    const row_labels_key key{
+        m_review_list_generation,
+        m_review_list_revision,
+        m_active_file,
+        project.m_label_dict.size()};
+    if(m_row_labels_key == key)
+        return;
+    m_row_labels_key = key;
+    m_row_labels.clear();
+    if(!m_review_list || !m_active_file)
+        return;
+    const auto &rows = m_review_list->m_rows;
+    const auto region = m_review_list_settings.m_region_s;
+    for(size_t r = 0U; r != rows.size(); ++r)
+    {
+        const auto &row = rows[r];
+        const bool here = m_active_is_clip ? row.on_clip() && *row.m_clip == *m_active_file
+                                           : row.m_source == m_active_file;
+        if(!here || !row.present())
+            continue;
+        const auto t = row.reviewed_span(region);
+        label l{row_label_base + r, label_defn_id{}, t.first, t.second};
+        if(const auto cls = class_named(project.m_label_dict, row.reviewed_label()))
+            l.m_defn_id = *cls;
+        const auto &verdict = row.m_result.m_verdict;
+        l.m_state = verdict.empty()      ? label_state::suggested
+            : verdict == "not_event" ? label_state::rejected
+                                     : label_state::confirmed;
+        m_row_labels.add(l);
+    }
+}
+
+bool app_state::list_mode() const
+{
+    if(!m_review_list || !m_review_list_row || !m_active_file ||
+       *m_review_list_row >= m_review_list->m_rows.size())
+        return false;
+    const auto &row = m_review_list->m_rows[*m_review_list_row];
+    return m_active_is_clip ? row.on_clip() && *row.m_clip == *m_active_file
+                            : row.m_source == m_active_file;
+}
+
+std::string app_state::row_label_text(label_id id) const
+{
+    const auto r = row_of(id);
+    if(!r || !m_review_list || *r >= m_review_list->m_rows.size())
+        return {};
+    const auto &row = m_review_list->m_rows[*r];
+    const auto &name = row.reviewed_label();
+    const auto text = name.empty() ? std::string{"(no class)"} : name;
+    if(row.m_added)
+        return "list+ " + text;
+    if(row.m_result.m_verdict == "not_event")
+        return "list x:" + text;
+    return "list: " + text;
 }
 
 void app_state::load_audio(const std::filesystem::path &path, std::optional<uint32_t> channel)
@@ -302,7 +385,9 @@ std::vector<const label *> app_state::visible_labels(const project_model &projec
     std::vector<const label *> out;
     for(const auto &l : m_unlabelled)
         out.push_back(&l);
-    if(m_active_file)
+    for(const auto &l : m_row_labels)
+        out.push_back(&l);
+    if(m_active_file && !m_active_is_clip)
         for(const auto &l : project.get_labels(*m_active_file))
             if(l.m_state != label_state::rejected || m_settings.m_show_rejected)
                 out.push_back(&l);
@@ -336,12 +421,46 @@ std::map<label_id, lane> app_state::label_bands(const project_model &project) co
 
 time_span app_state::playback_window(const label &l) const
 {
-    return ::playback_window(l, m_review, m_active_audio->duration_s());
+    // In the audio's own time, then back in the recording's (they differ for a clip)
+    auto shifted = l;
+    shifted.m_start_s -= m_active_offset_s;
+    shifted.m_stop_s -= m_active_offset_s;
+    const auto w = ::playback_window(shifted, m_review, m_active_audio->duration_s());
+    return {w.first + m_active_offset_s, w.second + m_active_offset_s};
 }
 
-std::vector<file_row> app_state::filtered_files(const project_model &project) const
+const app_state::file_list_cache &app_state::file_list(const project_model &project) const
 {
-    return list_files(project, m_settings.m_file_list);
+    auto &c = m_file_list_cache;
+    if(!c ||
+       c->m_project != &project ||
+       c->m_revision != project.revision() ||
+       c->m_files_version != project.files_version() ||
+       c->m_classes != project.m_label_dict.size() ||
+       c->m_settings != m_settings.m_file_list)
+    {
+        c = file_list_cache{
+            &project,
+            project.revision(),
+            project.files_version(),
+            project.m_label_dict.size(),
+            m_settings.m_file_list,
+            list_files(project, m_settings.m_file_list),
+            0U};
+        for(const auto &file : project.get_files())
+            c->m_finished += project.get_status(file.m_path) != file_status::todo;
+    }
+    return *c;
+}
+
+const std::vector<file_row> &app_state::filtered_files(const project_model &project) const
+{
+    return file_list(project).m_rows;
+}
+
+size_t app_state::finished_files(const project_model &project) const
+{
+    return file_list(project).m_finished;
 }
 
 const audio_min_max_level *app_state::get_audio_min_max_level(size_t samples_per_px) const

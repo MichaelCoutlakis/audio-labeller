@@ -14,5 +14,11 @@ void write_file_atomically(const std::filesystem::path &target, const std::strin
 /// Quote a CSV field if needed
 std::string csv_escape(const std::string &s);
 
+/// 16 hex digits of a 64-bit FNV-1a hash, to tell whether a file's contents changed
+std::string content_hash(const std::string &contents);
+
+/// A file's contents, empty if it can't be read
+std::string read_whole_file(const std::filesystem::path &path);
+
 /// The current time in UTC, ISO 8601, to the second
 std::string utc_now_iso8601();

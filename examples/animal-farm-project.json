@@ -1,7 +1,8 @@
 {
     "$schema": "../schemas/project.schema.json",
-    "dataset-roots": ["../"],
+    "dataset-roots": ["audio"],
     "export-prefix": "export",
     "label-palette": "animal-palette.json",
-    "label-file": "animal-labels.json"
+    "label-file": "animal-labels.json",
+    "clip-manifest": { "path": "review-list.csv" }
 }
