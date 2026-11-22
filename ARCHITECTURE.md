@@ -208,9 +208,10 @@ A label also has a frequency band (`frequency_band`, in `model/types.h`), every
 frequency by default. A drag on the spectrogram sets it, from the box's bottom
 and top; a box within a few pixels of an edge reaches 0 Hz or Nyquist there, and
 a drag only a few pixels tall is time only. On the spectrogram, a label with a
-band is drawn and hit at its frequencies, and its vertical edges are dragged
-like its times; labels without one, and every label on the waveform, keep their
-lane. The label file stores `low_hz` and `high_hz` only when they're set.
+band is drawn and hit at its frequencies, and its top and bottom edges are
+dragged like its times. A label without one is drawn over the full height
+there, and gets a band when its top or bottom is dragged, though not when it's
+moved, which shifts both. Every label on the waveform keeps its lane. The label file stores `low_hz` and `high_hz` only when they're set.
 Annotation trees, the CSV and clip export ignore bands for now.
 
 ### Layout

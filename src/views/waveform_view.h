@@ -49,7 +49,7 @@ private:
         double y_min,
         double y_max,
         bool faint,
-        bool banded,
+        bool on_spectrogram,
         bool editable);
 
     /* Flags along the top of the spectrogram, one per region: where its labels are selected and

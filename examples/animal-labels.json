@@ -34,7 +34,9 @@
       "class-name": "Bird",
       "dataset-root": "audio",
       "filename": "farm.wav",
+      "high_hz": 6200.0,
       "label-id": 4,
+      "low_hz": 2800.0,
       "start_s": 7.0,
       "stop_s": 7.42
     },

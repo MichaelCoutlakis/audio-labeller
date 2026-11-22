@@ -7,6 +7,7 @@
 #include <chrono>
 #include <cmath>
 #include <cstdint>
+#include <cstdio>
 #include <limits>
 
 #include <SDL3/SDL_opengl.h>
@@ -338,7 +339,22 @@ void waveform_view::render_plot(
         ImPlotAxisFlags_NoGridLines | (bottom ? 0 : ImPlotAxisFlags_NoTickLabels),
         ImPlotAxisFlags_NoGridLines | (spectrogram ? 0 : ImPlotAxisFlags_NoTickLabels));
     if(spectrogram)
+    {
         setup_frequency_ticks(state);
+        // The readout by the mouse in Hz, rather than the axis's own position
+        ImPlot::SetupAxisFormat(
+            ImAxis_Y1,
+            [](double y, char *buff, int size, void *data) -> int
+            {
+                if(y > 1.)
+                    return std::snprintf(buff, static_cast<size_t>(size), "%s", ""); // The flags
+                const double hz = static_cast<const frequency_axis *>(data)->hz_of(y);
+                return hz >= 1000.
+                    ? std::snprintf(buff, static_cast<size_t>(size), "%.2f kHz", hz / 1000.)
+                    : std::snprintf(buff, static_cast<size_t>(size), "%.0f Hz", hz);
+            },
+            &m_axis);
+    }
     // The spectrogram's y axis reaches past the top frequency by the height of the flags, so they
     // don't cover it. The rows are the whole file's, so the scale stays put while panning.
     double y_top = 1.;
@@ -590,7 +606,7 @@ void waveform_view::render_annotations(
                y_min,
                y_max,
                faint,
-               banded,
+               spectrogram,
                editable) &&
            spectrogram)
             rect_held = true;
@@ -881,9 +897,10 @@ bool waveform_view::render_resize_label_rect(
     double y_min,
     double y_max,
     bool faint,
-    bool banded,
+    bool on_spectrogram,
     bool editable)
 {
+    const bool banded = on_spectrogram && !l.m_band.is_full();
     // ImPlot edits the values in place, so it gets a copy and any change becomes an action. The
     // vertical extent is fixed by the label's lane, unless it's a band on the spectrogram. A box is
     // at least a few pixels wide, so that a short one can still be grabbed, and resizing doesn't
@@ -967,8 +984,12 @@ bool waveform_view::render_resize_label_rect(
             stop = start + length; // Moved, not resized: keep its length
         else
             stop = std::max(stop, start + min_width);
+        // On the spectrogram a band follows its edges. A label of every frequency gets a band
+        // when its top or bottom is dragged, but not when it's moved, which shifts both.
         std::optional<frequency_band> band;
-        if(banded && (top != y_max || bottom != y_min))
+        const bool edges_moved = top != y_max || bottom != y_min;
+        const bool height_changed = std::abs((top - bottom) - (y_max - y_min)) > 1e-9;
+        if(on_spectrogram && (banded ? edges_moved : height_changed))
             band = m_axis.band(bottom, top);
         m_drag_arm_id = l.m_id;
         state.add_action(actions::move_label{l.m_id, start, stop, m_drag_seq, band});

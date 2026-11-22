@@ -113,6 +113,13 @@
   an error in the log, rather than failing to open the project (or, for `0`,
   being taken as a mix).
 
+- A label covering every frequency gets a band when its top or bottom edge is
+  dragged on the spectrogram; before, only labels with a band could be
+  resized there. The example project's Bird label has a band, and the README
+  opens with an animation of drawing one.
+- The spectrogram's readout by the mouse shows the frequency (Hz or kHz),
+  rather than the plot's own height.
+
 ### Formats no longer read
 
 As CONTRIBUTING.md has it, older forms are no longer read before version 1:
