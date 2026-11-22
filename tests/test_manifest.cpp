@@ -136,6 +136,7 @@ TEST_CASE("review results are a diff of the list")
     CHECK(sidecar.at("list") == generic_utf8(list));
     CHECK(sidecar.at("list_hash") == content_hash(read_text(list)));
     CHECK(sidecar.contains("written"));
+    const auto hash = content_hash(read_text(list));
 
     // Read back after the pipeline wrote the list again in another order, with a new row
     write_text(
@@ -144,6 +145,9 @@ TEST_CASE("review results are a diff of the list")
         "c,rec.wav,6.0,7.0,Dog,0.1\n"
         "e,rec.wav,9.5,9.9,Dog,0.2\n"
         "a,rec.wav,1.0,1.5,Dog,0.3\n");
+    // Results still being written for the list as it was read name that list, not the new one
+    write_results(manifest);
+    CHECK(json::parse(read_text(results_sidecar_path(list))).at("list_hash") == hash);
     const auto again = p.load(list);
     REQUIRE(again.m_rows.size() == 4); // Three of the list's, and the one added
     CHECK(again.m_rows[0].m_result.m_new_start_s == 6.1);
@@ -186,6 +190,23 @@ TEST_CASE("without IDs, results are matched by path, start and label")
     CHECK(
         results_csv(fed) ==
         "path,start_s,verdict,new_label,new_start_s,new_stop_s,note\nrec.wav,1.0,not_event,,,,\n");
+}
+
+TEST_CASE("a list's own column named like a result column is kept")
+{
+    two_roots p;
+    const auto list = p.dir / "l.csv";
+    write_text(list, "path,start_s,note\nrec.wav,1.0,from the model\n");
+    auto manifest = p.load(list);
+    manifest.m_rows[0].m_result = {"correct", "", std::nullopt, std::nullopt, "heard it"};
+    write_results(manifest);
+    CHECK(
+        read_text(manifest.m_results_path) ==
+        "path,start_s,list_note,verdict,new_label,new_start_s,new_stop_s,note\n"
+        "rec.wav,1.0,\"from the model\",correct,,,,\"heard it\"\n");
+    const auto again = p.load(list);
+    CHECK(again.m_rows[0].m_fields[2] == "from the model");
+    CHECK(again.m_rows[0].m_result.m_note == "heard it");
 }
 
 TEST_CASE("a clip carries where it starts in its recording")

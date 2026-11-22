@@ -12,6 +12,7 @@
 #include <spdlog/spdlog.h>
 
 #include "../io/audio_source.h"
+#include "../io/files.h"
 #include "../model/palette.h"
 #include "../model/paths.h"
 #include "actions.h"
@@ -102,9 +103,6 @@ app_settings app_settings::load()
             s.m_band_shift_to_hz =
                 std::clamp(band->value("shift_to_hz", s.m_band_shift_to_hz), 100.f, 8000.f);
         }
-        // Earlier versions kept the gain as a factor
-        if(auto factor = j.find("waveform_gain"); factor != j.end() && factor->is_number())
-            s.m_waveform_gain_db = 20.f * std::log10(std::max(1.f, factor->get<float>()));
         s.m_waveform_gain_db =
             std::clamp(j.value("waveform_gain_db", s.m_waveform_gain_db), 0.f, 60.f);
         if(auto spec = j.find("spectrogram"); spec != j.end() && spec->is_object())
@@ -197,8 +195,7 @@ void app_settings::save()
     j["review_changes_file"] = m_review_changes_file;
     if(!m_device_name.empty())
         j["audio_device"] = {{"name", m_device_name}};
-    std::ofstream f(m_filename);
-    f << j.dump(2);
+    write_file_atomically(m_filename, j.dump(2));
 }
 
 void app_settings::add_recent_list(const recent_review_list &list)
@@ -274,7 +271,6 @@ void app_state::reset_project_state()
     m_assist_progress.reset();
     m_assist_result = {};
     m_assist_report.clear();
-    m_playing_clip = false;
     m_review_list.reset();
     m_review_list_settings = {};
     m_review_list_error.clear();

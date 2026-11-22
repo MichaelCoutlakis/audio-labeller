@@ -255,10 +255,8 @@ export_job prepare_export(const project_model &project, const export_settings &s
                state->m_export &&
                state->m_export->m_directory == generic_utf8(job.m_directory))
             {
-                auto id = state->m_export->m_source_id;
-                if(id.empty() && state->m_source_id)
-                    id = state->m_source_id->m_id; // A record from before the ID was kept
-                job.m_withdrawn.push_back(export_job::withdrawn{file.m_path, id});
+                job.m_withdrawn.push_back(
+                    export_job::withdrawn{file.m_path, state->m_export->m_source_id});
             }
             continue;
         }
@@ -289,6 +287,15 @@ export_summary export_dataset(project_model &project, const export_settings &set
     return outcome.m_summary;
 }
 
+namespace
+{
+void remove_quietly(const fs::path &p)
+{
+    std::error_code ec;
+    fs::remove(p, ec);
+}
+}
+
 export_outcome run_export(const export_job &job, export_progress *progress)
 {
     export_outcome outcome;
@@ -307,18 +314,25 @@ export_outcome run_export(const export_job &job, export_progress *progress)
     auto sources = dataset.value("sources", json::object());
 
     std::map<std::string, std::vector<json>> new_rows; // By source ID
+    // Clips are written beside their final names and moved into place once the export is
+    // complete, so a failed file or a cancelled export never changes clips already listed
+    std::map<fs::path, fs::path> staged; // Final path -> written path
     const auto now = utc_now_iso8601();
 
     for(const auto &file : job.m_files)
     {
         if(progress && progress->m_cancel)
         {
+            // Nothing is recorded, so nothing written so far may replace what's there
+            for(const auto &[target, tmp] : staged)
+                remove_quietly(tmp);
             outcome.m_cancelled = true;
             return outcome;
         }
         const auto &labels = file.m_labels;
         const auto &unsure = file.m_unsure;
 
+        std::map<fs::path, fs::path> file_staged;
         try
         {
             const auto id_cache = current_source_id(file.m_path, file.m_cached_id);
@@ -329,8 +343,7 @@ export_outcome run_export(const export_job &job, export_progress *progress)
             for(auto &background : plan_background(unsure, format.duration_s(), settings))
                 plans.push_back(std::move(background));
 
-            auto &rows = new_rows[source_id];
-            rows.clear();
+            std::vector<json> rows;
             std::set<std::string> names;
             size_t verified = 0U;
             for(const auto &plan : plans)
@@ -353,8 +366,11 @@ export_outcome run_export(const export_job &job, export_progress *progress)
                 names.insert(name);
                 const auto file_name = "clips/" + name + ".wav";
 
-                const auto copied =
-                    copy_wav_range(source, start, stop - start, dir / path_from_utf8(file_name));
+                const auto target = dir / path_from_utf8(file_name);
+                auto tmp = target;
+                tmp += ".part";
+                file_staged.emplace(target, tmp);
+                const auto copied = copy_wav_range(source, start, stop - start, tmp);
                 verified += copied.m_verified;
 
                 // Times are from the samples actually cut, rather than the plan
@@ -382,6 +398,10 @@ export_outcome run_export(const export_job &job, export_progress *progress)
                     });
             }
 
+            new_rows[source_id] = std::move(rows);
+            staged.merge(file_staged);
+            const auto &rows_written = new_rows[source_id];
+
             const auto &portable = file.m_portable;
             sources[source_id] = json{
                 {"dataset_root", portable.m_root},
@@ -393,24 +413,31 @@ export_outcome run_export(const export_job &job, export_progress *progress)
                 {"exported_at", now}
             };
 
-            const bool all_verified = verified == rows.size();
+            const auto clips = rows_written.size();
             outcome.m_results.push_back(
                 export_outcome::file_result{
                     file.m_path,
                     id_cache,
-                    export_record{now, generic_utf8(dir), rows.size(), all_verified, source_id}
+                    export_record{now, generic_utf8(dir), clips, verified == clips, source_id}
                 });
             ++summary.m_files;
-            summary.m_clips += rows.size();
-            summary.m_unverified_clips += rows.size() - verified;
+            summary.m_clips += clips;
+            summary.m_unverified_clips += clips - verified;
         }
         catch(const std::exception &e)
         {
+            // Its earlier entries and clips stay as they were
+            for(const auto &[target, tmp] : file_staged)
+                if(!staged.contains(target))
+                    remove_quietly(tmp);
             summary.m_errors.push_back(file.m_display_name + ": " + e.what());
         }
         if(progress)
             ++progress->m_done;
     }
+
+    for(const auto &[target, tmp] : staged)
+        fs::rename(tmp, target);
 
     // Sources of files no longer done, unless another copy of the same audio was just exported
     std::set<std::string> withdrawn;

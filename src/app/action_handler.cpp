@@ -63,9 +63,6 @@ void action_handler::release_playback_of_removed(
     const label_snapshot &before,
     const label_snapshot &after)
 {
-    if(m_state.m_playing_clip)
-        return;
-
     // Drawing or moving a label plays just its span. If the label goes or moves, so does that
     // limit.
     const auto region = m_audio_engine.get_region();
@@ -113,9 +110,8 @@ void action_handler::edit_labels(const std::set<label_id> &ids, F &&edit)
 
 void action_handler::restore_active_audio()
 {
-    if(!m_state.m_playing_clip && !m_playing_band)
+    if(!m_playing_band)
         return;
-    m_state.m_playing_clip = false;
     m_playing_band = false;
     m_audio_engine.set_audio_clip(m_state.get_audio_buffer_ptr(), m_state.active_offset_s());
 }
@@ -136,7 +132,6 @@ void action_handler::select_region(time_span t, frequency_band band)
     m_audio_engine.set_audio_clip(
         std::make_shared<const audio_buffer>(std::move(excerpt.m_audio)),
         excerpt.m_start_s);
-    m_state.m_playing_clip = false;
     m_playing_band = true;
     m_audio_engine.select_region(t, m_state.m_loop);
 }
@@ -158,7 +153,6 @@ void action_handler::operator()(const actions::load_file &f)
     }
     spdlog::info("loading file {}", generic_utf8(f.m_file_path));
     m_state.set_selected_file(f.m_file_path, m_proj.get_channel(f.m_file_path));
-    m_state.m_playing_clip = false;
     m_playing_band = false;
 
     m_audio_engine.set_audio_clip(m_state.get_audio_buffer_ptr());
@@ -828,7 +822,6 @@ void action_handler::reload_active_audio()
         return;
     const auto &file = *m_state.m_active_file;
     m_state.load_audio(file, m_state.active_is_clip() ? std::nullopt : m_proj.get_channel(file));
-    m_state.m_playing_clip = false;
     m_playing_band = false;
     const auto state = m_audio_engine.get_state();
     m_audio_engine.set_audio_clip(m_state.get_audio_buffer_ptr(), m_state.active_offset_s());
@@ -1150,18 +1143,6 @@ void action_handler::operator()(const actions::export_annotations &e)
         m_state.report_error("Could not export " + error);
 }
 
-void action_handler::operator()(const actions::play_clip &p)
-{
-    auto decoded = load_mono(p.m_clip);
-    apply_high_pass(decoded.m_samples, decoded.m_sample_rate_hz, m_state.m_high_pass);
-    auto clip = std::make_shared<const audio_buffer>(std::move(decoded));
-    m_audio_engine.set_audio_clip(clip);
-    m_audio_engine.select_region(time_span{0., clip->duration_s()}, false);
-    m_audio_engine.play();
-    m_state.m_playing_clip = true;
-    m_playing_band = false;
-}
-
 void action_handler::operator()(const actions::open_review_list &o)
 {
     const auto &section = m_proj.config().m_clip_manifest;
@@ -1231,8 +1212,7 @@ void action_handler::operator()(const actions::show_list_row &s)
         }
         // The clip, placed at its offset, so its times are the recording's
         m_state.set_selected_clip(*row.m_clip, row.m_clip_offset_s);
-        m_state.m_playing_clip = false;
-        m_playing_band = false;
+            m_playing_band = false;
         m_audio_engine.set_audio_clip(m_state.get_audio_buffer_ptr(), m_state.active_offset_s());
     }
     else
@@ -1264,8 +1244,7 @@ void action_handler::operator()(const actions::show_list_row &s)
             // Then the whole recording for the view; the excerpt plays on until something else
             // is played
             m_state.set_selected_file(file, channel);
-            m_state.m_playing_clip = false;
-            m_playing_band = s.m_play;
+                    m_playing_band = s.m_play;
             if(!s.m_play)
                 m_audio_engine.set_audio_clip(m_state.get_audio_buffer_ptr());
         }

@@ -265,7 +265,7 @@ and easy to turn into regions.
 Done: import predictions with scores, with accept and reject keys (as
 suggestions, in Phase 3b); assisted labellers, external detector commands from
 the project run per recording in the background, and a built-in loudness
-detector for regions or onsets.
+detector for regions.
 
 - [ ] More built-in suggesters, eg. band-limited energy for a class's frequency
       range, or template matching against confirmed labels.
@@ -401,11 +401,14 @@ clean with Clang), UTF-8 project paths and a system font with wide coverage.
 
 - [ ] Add a `vcpkg.json` manifest and CI. Note that a `vcpkg.json` switches
       existing vcpkg toolchain builds into manifest mode.
-- [ ] Remove the backward compatibility kept so far (see CONTRIBUTING.md):
+- [x] Remove the backward compatibility kept so far (see CONTRIBUTING.md):
       the review settings' older keys (`onset_pre_s`, `onset_post_s`), the
-      palette's ignored `"kind"` key, and any other reader of an older
-      format. Check each against the files actually in use first, eg. label
-      files of an older version.
+      palette's `"kind"` key, version 1 label files and label records with
+      no dataset root, the loudness labeller's `onsets`, the settings'
+      `waveform_gain` factor and export records without a source ID.
+- [ ] On Windows, stop the processes an assisted labeller started when it's
+      cancelled or times out (a job object), as POSIX does with its process
+      group.
 - [x] Provide example audio: `*.wav` is git-ignored, so the example project
       couldn't run from a fresh clone. `examples/make_example_audio.py` makes
       it: synthetic animal calls at the times the example labels and review

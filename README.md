@@ -284,8 +284,10 @@ Results are written beside the list, never over it: `run.csv` gives
 | `new_start_s`, `new_stop_s` | Where it was moved to, if it was, whatever the verdict |
 | `note` | The reviewer's note |
 
-Added rows have no `id`. `run.results.json` records which list the results
-belong to (its path and a hash of its contents), when, and the app's version.
+A column of the list with one of those names (say the pipeline's own `note`)
+is written as `list_note`, so neither is lost. Added rows have no `id`.
+`run.results.json` records which list the results belong to (its path and a
+hash of its contents as it was opened), when, and the app's version.
 "Changes file" also writes `run.changes.csv`, with only the rows the review
 changed. Results are read back when the list is opened again, matched by `id`
 (or by path, start and label), with the added rows, and the list opens at the
@@ -365,8 +367,6 @@ The label palette uses a "paint class" style:
   undo step. An unclassified selection (drawn with no class active) is given
   the class instead, since it has none to keep. A span the class already has a
   label over is skipped, with a warning in the console.
-- Every class marks regions. Palettes that mark classes `"kind": "onset"`
-  still load, with a notice, and the key is ignored.
 - Favourites: right-click a class to pin it to the row at the top (and again to
   unpin). While any are pinned, 1-9 choose the favourites in the order they
   were pinned; otherwise the first nine classes of the palette. Each button
@@ -422,9 +422,9 @@ The list is also in the app, under Options > Keyboard shortcuts.
 - N / P: next / previous file in the file list (as filtered and sorted)
 - Alt+N / Alt+P: select and play the next / previous label in the file of the
   classes the file list is filtered by
-- D: mark the file done and open the next one to do. A done file with no
+- D: mark the file done and open the next one to do in the file list. A done file with no
   labels is taken to contain none of the classes.
-- S: mark the file skipped and open the next one to do
+- S: mark the file skipped and open the next one to do in the file list
 
 ### Files
 Each file is to do, done or skipped. The file list shows this, and the number

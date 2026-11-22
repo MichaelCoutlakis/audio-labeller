@@ -78,8 +78,8 @@ const std::vector<std::pair<const char *, const char *>> &keyboard_controller::d
         {"N, P", "Next / previous file in the list"},
         {"Alt+N, Alt+P",
          "Select and play the next / previous label of the classes the file list is filtered by"},
-        {"D", "Mark the file done and open the next one to do"},
-        {"S", "Mark the file skipped and open the next one to do"},
+        {"D", "Mark the file done and open the next one to do in the file list"},
+        {"S", "Mark the file skipped and open the next one to do in the file list"},
     };
     return keys;
 }
@@ -350,12 +350,14 @@ void keyboard_controller::handle_files(const project_model &project, app_state &
         load(files[static_cast<size_t>(next)].m_file);
     }
 
-    if(!state.has_active_file())
+    // A clip isn't one of the project's recordings, so it has no status
+    if(!state.has_active_file() || state.active_is_clip())
         return;
     const auto &active = state.m_active_file.value();
     const auto status = project.get_status(active);
 
-    // D marks the file done and moves on to the next one to do. S does the same for skip.
+    // D marks the file done and moves on to the next one to do in the list, as N does. S does
+    // the same for skip.
     for(const auto [key, target] :
         {std::pair{ImGuiKey_D, file_status::done}, std::pair{ImGuiKey_S, file_status::skip}})
     {
@@ -368,13 +370,16 @@ void keyboard_controller::handle_files(const project_model &project, app_state &
         }
         state.add_action(actions::set_file_status{active, target});
 
-        const auto i = position(all, [](const audio_file_entry &f) { return f.m_path; });
-        for(size_t step = 1; step < all.size(); ++step)
+        const auto &files = state.filtered_files(project);
+        const auto i = position(files, [](const file_row &r) { return r.m_file->m_path; });
+        const auto n = static_cast<ptrdiff_t>(files.size());
+        for(ptrdiff_t step = 1; step <= n; ++step)
         {
-            const auto &candidate = all[(static_cast<size_t>(i) + step) % all.size()];
-            if(project.get_status(candidate.m_path) == file_status::todo)
+            const auto *candidate = files[static_cast<size_t>((i + step + n) % n)].m_file;
+            if(!state.is_selected_file(candidate->m_path) &&
+               project.get_status(candidate->m_path) == file_status::todo)
             {
-                load(&candidate);
+                load(candidate);
                 break;
             }
         }

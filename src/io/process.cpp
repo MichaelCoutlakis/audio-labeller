@@ -201,6 +201,9 @@ process_result run_process(
         throw std::runtime_error("Could not start " + args.front());
     if(pid == 0)
     {
+        // A group of its own, so that cancelling stops whatever it started too (a shell's
+        // commands, a model's worker processes)
+        setpgid(0, 0);
         close(report[0]);
         if(!working_dir.empty() && chdir(working_dir.c_str()) != 0)
             _exit(126);
@@ -219,6 +222,7 @@ process_result run_process(
         [[maybe_unused]] auto n = write(report[1], &e, sizeof(e));
         _exit(127);
     }
+    setpgid(pid, pid); // As the child does, whichever runs first
     close(report[1]);
     int exec_error = 0;
     const bool failed = read(report[0], &exec_error, sizeof(exec_error)) == sizeof(exec_error);
@@ -241,7 +245,7 @@ process_result run_process(
         result.m_timed_out = expired(start, timeout_s);
         if(result.m_cancelled || result.m_timed_out)
         {
-            kill(pid, SIGKILL);
+            kill(-pid, SIGKILL);
             waitpid(pid, &status, 0);
             break;
         }

@@ -91,6 +91,40 @@
   `-DAUDIOLAB_SYSTEM_DEPS=ON` uses installed packages instead, as vcpkg builds
   did before; existing vcpkg presets need it to keep doing so.
 
+### Fixes
+
+- Clip export: a file that fails part way through keeps its earlier clips and
+  entries, rather than losing them, and a cancelled export changes no clip.
+  Clips are written as `.part` files and moved into place once the export is
+  complete.
+- Review results: the sidecar's `list_hash` is of the list as it was opened,
+  so results of a list the pipeline has since rewritten no longer claim the new
+  one. A column of the list named like a result column (eg. `note`) is kept, as
+  `list_note`, rather than dropped.
+- Palette colours may be `#rrggbb` (opaque), which was drawn invisible; a
+  colour that isn't hex is an error naming it.
+- D and S open the next file to do in the file list's order, with its filters,
+  as N does, and do nothing on a review list's clip.
+- Cancelling an assisted labeller, or its timeout, stops the processes it
+  started too (Linux and macOS).
+- The settings file and the CSV export are written atomically, and a failure
+  to write them is reported.
+- A label file's channel that isn't `mix` or a number from 1 is ignored with
+  an error in the log, rather than failing to open the project (or, for `0`,
+  being taken as a mix).
+
+### Formats no longer read
+
+As CONTRIBUTING.md has it, older forms are no longer read before version 1:
+
+- Label files of version 1 (`start [s]`, and paths relative to the working
+  directory with no dataset root) fail to open, and are left as they are.
+- The palette's `"kind"` key is no longer in the schema, and no notice is shown.
+- The review settings' `onset_pre_s` and `onset_post_s`, the loudness
+  labeller's `onsets`, and the settings file's `waveform_gain` factor are no
+  longer read: use `pre_roll_s`, `point_post_s`, `snap_starts` and
+  `waveform_gain_db`.
+
 ### Regions only
 
 Labels mark a sound from where it starts to where it stops; there's no longer

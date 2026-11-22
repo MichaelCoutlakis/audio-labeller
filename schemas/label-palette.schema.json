@@ -19,14 +19,9 @@
                         "type": "string"
                     },
                     "colour": {
-                        "description": "Hex RGBA",
+                        "description": "#rrggbb, or #rrggbbaa with an alpha",
                         "type": "string",
-                        "format": "color-hex"
-                    },
-                    "kind": {
-                        "description": "Ignored: every class marks regions, from where the sound starts to where it stops. Palettes with \"onset\" still load, with a notice.",
-                        "enum": [ "region", "onset" ],
-                        "deprecated": true
+                        "pattern": "^#([0-9a-fA-F]{6}|[0-9a-fA-F]{8})$"
                     }
                 },
                 "required": [ "class-id", "class", "colour" ]

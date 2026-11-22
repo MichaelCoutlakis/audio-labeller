@@ -423,3 +423,40 @@ TEST_CASE("only confirmed labels become clips, and exports can be cancelled")
     CHECK(saved["export"]["padding_s"] == 0.25);
     CHECK(saved["label-file"] == "labels.json");
 }
+
+TEST_CASE("a file that fails to export keeps its earlier clips and entries")
+{
+    temp_dir dir;
+    write_text(dir / "pal.json", R"({"label-palette":[{"class-id":0,"class":"Dog","colour":"#ccb42aab"}]})");
+    write_text(
+        dir / "proj.json",
+        R"({"dataset-roots":["data"],"export-prefix":"out","label-palette":"pal.json","label-file":"labels.json"})");
+    write_wav16(dir / "data/a.wav", 1000, 1, std::vector<int16_t>(10000, 100));
+    const auto a = dir / "data/a.wav";
+    const auto out = dir / "dataset";
+
+    project_model m(project_config::parse_from_file((dir / "proj.json").string()));
+    const auto first = get_next_label_id();
+    m.add_label(a, make_label(first, 1.0, 2.0));
+    m.add_label(a, make_label(get_next_label_id(), 5.0, 6.0));
+    m.set_status(a, file_status::done);
+    REQUIRE(export_dataset(m, export_settings{}).m_clips == 2);
+    const auto id = m.get_source_id(a);
+    const auto clip = out / "clips" / (id + "_000000500.wav");
+    const auto size_before = fs::file_size(clip);
+
+    // The first clip would grow under the same name, and the third can't be written
+    m.update_label(a, make_label(first, 1.0, 3.0));
+    m.add_label(a, make_label(get_next_label_id(), 8.0, 8.5));
+    fs::create_directories(out / "clips" / (id + "_000007500.wav.part"));
+    const auto summary = export_dataset(m, export_settings{});
+    CHECK(summary.m_errors.size() == 1);
+    CHECK(summary.m_files == 0);
+
+    const auto rows = read_jsonl(out / "metadata.jsonl");
+    REQUIRE(rows.size() == 2);
+    CHECK(rows[0]["duration_s"] == 2.0);
+    CHECK(fs::file_size(clip) == size_before);
+    CHECK(!fs::exists(out / "clips" / (id + "_000000500.wav.part")));
+    CHECK(!fs::exists(out / "clips" / (id + "_000004500.wav.part")));
+}

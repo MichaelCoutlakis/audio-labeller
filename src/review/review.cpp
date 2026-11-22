@@ -28,9 +28,8 @@ review_settings review_settings::from_json(const nlohmann::json &j)
     review_settings s;
     if(!j.is_object())
         return s;
-    // Older projects set the context of onsets apart from regions' pre-roll
-    s.m_pre_roll_s = j.value("pre_roll_s", j.value("onset_pre_s", s.m_pre_roll_s));
-    s.m_point_post_s = j.value("point_post_s", j.value("onset_post_s", s.m_point_post_s));
+    s.m_pre_roll_s = j.value("pre_roll_s", s.m_pre_roll_s);
+    s.m_point_post_s = j.value("point_post_s", s.m_point_post_s);
     s.m_view_pre_s = j.value("view_pre_s", s.m_view_pre_s);
     s.m_view_post_s = j.value("view_post_s", s.m_view_post_s);
     s.m_snap_window_s = j.value("snap_window_s", s.m_snap_window_s);

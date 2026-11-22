@@ -60,8 +60,6 @@ void audio_labeller_app::update_title()
 void audio_labeller_app::load_project_sections()
 {
     update_title();
-    for(const auto &notice : m_project.notices())
-        m_app_state.report_info(notice);
     try
     {
         m_app_state.m_review = review_settings::from_json(m_project.config().m_review);
@@ -167,7 +165,14 @@ void audio_labeller_app::on_init()
     m_app_state.add_action(actions::select_playback_device{it != devs.end() ? *it : devs.front()});
 
     // Written up front so that on a first run there's a file for the user to point at a project
-    m_app_state.m_settings.save();
+    try
+    {
+        m_app_state.m_settings.save();
+    }
+    catch(const std::exception &e)
+    {
+        m_app_state.report_error(std::string{"Could not save settings: "} + e.what());
+    }
 }
 
 void audio_labeller_app::on_frame()

@@ -340,7 +340,6 @@ public:
 
     bool m_keys_captured{false}; ///< A view with focus handles the keys, eg. the clip list
     bool m_focus_class_filter{false}; ///< Ctrl+F: put the keyboard in the palette's filter box
-    bool m_playing_clip{false};  ///< The audio engine has a manifest clip, not the active file
 
     /* Projects: */
     /// A project to switch to, taken by the app once the frame's actions are done

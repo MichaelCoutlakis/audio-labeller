@@ -18,9 +18,8 @@
 /// The project's "review" section: how labels are played and shown while checking them
 struct review_settings
 {
-    double m_pre_roll_s{0.2}; ///< Played before a label. Read from "onset_pre_s" if it's missing.
-    /// Played after the start of a zero-length label, which has no stop to play to. Read from
-    /// "onset_post_s" if it's missing.
+    double m_pre_roll_s{0.2}; ///< Played before a label
+    /// Played after the start of a zero-length label, which has no stop to play to
     double m_point_post_s{0.5};
     double m_view_pre_s{0.5}; ///< Shown before a suggestion, and after its stop, in review mode
     double m_view_post_s{1.}; ///< Shown at least this long after its start in review mode

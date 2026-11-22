@@ -53,7 +53,6 @@ struct action_handler
     void operator()(const actions::set_export_settings &s);
     void operator()(const actions::import_annotations &i);
     void operator()(const actions::export_annotations &e);
-    void operator()(const actions::play_clip &p);
     void operator()(const actions::open_review_list &o);
     void operator()(const actions::show_list_row &s);
     void operator()(const actions::judge_clip &j);

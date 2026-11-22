@@ -54,7 +54,7 @@ loudness_settings loudness_settings::from_json(const nlohmann::json &j)
     s.m_min_length_s = j.value("min_length_s", s.m_min_length_s);
     s.m_merge_gap_s = j.value("merge_gap_s", s.m_merge_gap_s);
     s.m_padding_s = j.value("padding_s", s.m_padding_s);
-    s.m_snap_starts = j.value("snap_starts", j.value("onsets", s.m_snap_starts));
+    s.m_snap_starts = j.value("snap_starts", s.m_snap_starts);
     return s;
 }
 

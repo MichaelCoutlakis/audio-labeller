@@ -261,12 +261,6 @@ struct export_annotations
     size_t m_tree{};
 };
 
-/// Play a clip file from a review list, rather than the active file
-struct play_clip
-{
-    std::filesystem::path m_clip;
-};
-
 /// Open a review list (a clip manifest) and its results. An empty path opens the project's own.
 struct open_review_list
 {
@@ -395,7 +389,6 @@ using app_action = std::variant<
     set_export_settings,
     import_annotations,
     export_annotations,
-    play_clip,
     open_review_list,
     show_list_row,
     judge_clip,

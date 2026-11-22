@@ -9,6 +9,8 @@
 #include <cstdlib>
 #include <fstream>
 #include <istream>
+#include <iterator>
+#include <sstream>
 #include <map>
 #include <set>
 #include <stdexcept>
@@ -326,12 +328,34 @@ fs::path results_sidecar_path(const fs::path &list)
     return list.parent_path() / name;
 }
 
+namespace
+{
+/// The name a list's column has in its results, if it's written there. A list fed back as its
+/// own results (it has a verdict column) loses its result columns, so they aren't there twice;
+/// in any other list, a column named like one (eg. a pipeline's "note") is kept as "list_note".
+std::optional<std::string> results_column_name(const std::vector<std::string> &columns, size_t c)
+{
+    const auto &name = columns[c];
+    if(!is_result_column(name))
+        return name;
+    const bool fed_back =
+        std::ranges::any_of(columns, [](const std::string &n) { return lower(n) == "verdict"; });
+    if(fed_back)
+        return std::nullopt;
+    return "list_" + name;
+}
+}
+
 std::string results_csv(const clip_manifest &manifest, bool changed_only)
 {
     std::vector<size_t> kept;
+    std::vector<std::string> header;
     for(size_t c = 0U; c != manifest.m_columns.size(); ++c)
-        if(!is_result_column(manifest.m_columns[c]))
+        if(auto name = results_column_name(manifest.m_columns, c))
+        {
             kept.push_back(c);
+            header.push_back(std::move(*name));
+        }
 
     std::string out;
     const auto line = [&](const std::vector<std::string> &fields, const std::vector<std::string> &result)
@@ -341,7 +365,10 @@ std::string results_csv(const clip_manifest &manifest, bool changed_only)
         for(size_t i = 0U; i != result.size(); ++i)
             out += csv_escape(result[i]) + (i + 1U == result.size() ? "\n" : ",");
     };
-    line(manifest.m_columns, {std::begin(result_columns), std::end(result_columns)});
+    for(const auto &name : header)
+        out += csv_escape(name) + ",";
+    for(size_t i = 0U; i != result_count; ++i)
+        out += std::string{result_columns[i]} + (i + 1U == result_count ? "\n" : ",");
     for(const auto &r : manifest.m_rows)
     {
         if(!r.present() || (changed_only && !r.changed()))
@@ -361,7 +388,7 @@ void write_results(const clip_manifest &manifest, bool with_changes)
         write_file_atomically(changes_path(manifest.m_path), results_csv(manifest, true));
     const json sidecar{
         {"list", generic_utf8(manifest.m_path)},
-        {"list_hash", content_hash(read_whole_file(manifest.m_path))},
+        {"list_hash", manifest.m_list_hash},
         {"written", utc_now_iso8601()},
         {"app", "audio-labeller " AUDIOLAB_VERSION}};
     write_file_atomically(results_sidecar_path(manifest.m_path), sidecar.dump(2) + "\n");
@@ -503,16 +530,20 @@ private:
 };
 
 /// The list's header and rows, checked for the columns every list needs
+/// @param text Set to the file's contents
 std::vector<std::vector<std::string>> read_list_records(
     const fs::path &path,
     const clip_manifest_settings &settings,
-    list_columns &columns)
+    list_columns &columns,
+    std::string &text)
 {
-    std::ifstream in(path, std::ios::binary);
-    if(!in)
+    std::ifstream file(path, std::ios::binary);
+    if(!file)
         throw std::runtime_error(
             "Could not open the review list " + generic_utf8(path) +
             ": it doesn't exist or can't be read.");
+    text.assign(std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>());
+    std::istringstream in(text);
     auto records = read_csv(in);
     if(records.empty())
         throw std::runtime_error(
@@ -595,9 +626,12 @@ void read_results(
     // Each of the list's columns in the results file
     std::vector<std::optional<size_t>> from(manifest.m_columns.size());
     for(size_t c = 0U; c != manifest.m_columns.size(); ++c)
+    {
+        const auto name = results_column_name(manifest.m_columns, c);
         for(size_t h = 0U; h != header.size(); ++h)
-            if(lower(header[h]) == lower(manifest.m_columns[c]))
+            if(lower(header[h]) == lower(name.value_or(manifest.m_columns[c])))
                 from[c] = h;
+    }
 
     const row_reader reader(project, settings, manifest.m_index, manifest.m_path);
     std::map<std::string, row_verdict> verdicts;
@@ -633,7 +667,9 @@ clip_manifest load_clip_manifest(
     clip_manifest manifest;
     manifest.m_path = path;
     manifest.m_results_path = results_path(path);
-    auto records = read_list_records(path, settings, manifest.m_index);
+    std::string text;
+    auto records = read_list_records(path, settings, manifest.m_index, text);
+    manifest.m_list_hash = content_hash(text);
     manifest.m_columns = records.front();
 
     const row_reader reader(project, settings, manifest.m_index, path);

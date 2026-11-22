@@ -271,7 +271,6 @@ void waveform_view::follow_playhead(app_state &state)
     const double width = m_transform.view_duration();
     if(!state.m_settings.m_follow_playhead ||
        !advancing ||
-       state.m_playing_clip ||
        width <= 0. ||
        ImGui::IsMouseDown(ImGuiMouseButton_Middle) ||
        ImGui::IsMouseDown(ImGuiMouseButton_Right))

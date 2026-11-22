@@ -84,7 +84,7 @@ struct export_progress
 {
     std::atomic<size_t> m_done{};  ///< Files finished
     std::atomic<size_t> m_total{}; ///< Files to export
-    std::atomic<bool> m_cancel{};  ///< Set to stop after the current file, writing nothing more
+    std::atomic<bool> m_cancel{};  ///< Set to stop after the current file, writing nothing
 };
 
 /// Everything an export needs from the project, copied so that it can run on another thread while
@@ -128,7 +128,7 @@ struct export_outcome
     export_summary m_summary;
     std::vector<file_result> m_results;
     std::vector<std::filesystem::path> m_withdrawn; ///< Their export records are to be cleared
-    bool m_cancelled{}; ///< Nothing was recorded, though some clips may have been written
+    bool m_cancelled{}; ///< Nothing was recorded or written
 };
 
 export_job prepare_export(const project_model &project, const export_settings &settings);

@@ -151,7 +151,8 @@ back to their source.
 
 ### Label file version 2
 
-Version 1 files are migrated on load. Version 2 adds:
+Version 1 files aren't read (CONTRIBUTING.md); version 2 files read as
+version 3. Version 2 adds:
 
 - `"version": 2`
 - Keys `start_s` and `stop_s` in place of `"start [s]"` and `"stop [s]"`.
@@ -182,8 +183,7 @@ A label is a region: it marks a sound from where it starts to where it stops,
 as AudioSet's strong labels, DCASE and Audacity do. There's no separate onset
 kind, since an exact onset isn't always well defined by ear, and whatever uses
 the labels can find its own onset inside the span. Every palette class marks
-regions; an old palette's `"kind"` is ignored, with a notice
-(`project_model::notices`).
+regions.
 
 Zero-length labels (`is_onset`: a point in time, from an older label file or an
 imported point label) are still read and kept. They're drawn as narrow boxes
@@ -235,8 +235,6 @@ from where it was.
 
 A label plays from `pre_roll_s` (0.2 s) before its start to its stop; a
 zero-length label, with no stop, to `point_post_s` (0.5 s) after its start.
-Older projects' `onset_pre_s` and `onset_post_s` are read as those when they're
-missing.
 
 Snapping (A) moves a zero-length label to the sharpest rise in Teager-Kaiser
 energy within `snap_window_s`, as one undo step. A region's start moves only if
@@ -273,7 +271,8 @@ two kinds, both listed in one dropdown:
   into the app: any language works, no ABI is shared, a crash loses only that
   run, and a model can be changed without rebuilding. `io/process.cpp` starts
   the program without a shell (`CreateProcessW` or `fork`/`exec`), with UTF-8
-  arguments, its output logged to a file, and kills it on cancel or timeout. The
+  arguments, its output logged to a file, and kills it on cancel or timeout
+  (on POSIX with its process group, so whatever it started stops too). The
   command writes a label file in one of the label formats, read back as for
   annotation trees.
 - **Built-ins**, compiled in: currently loudness (`dsp/loudness.cpp`): frames
@@ -328,8 +327,9 @@ be made on a clip.
 
 Each verdict, move, note or added row is written to the results file beside the
 list (`run.results.csv`), atomically, with every column of the list and
-`verdict`, `new_label`, `new_start_s`, `new_stop_s` and `note`, and a sidecar
-(`run.results.json`) naming the list and a hash of its contents. The list
+`verdict`, `new_label`, `new_start_s`, `new_stop_s` and `note` (a list's own
+column of one of those names is kept as `list_<name>`), and a sidecar
+(`run.results.json`) naming the list and a hash of its contents as it was read. The list
 itself is never written, since a pipeline may replace it. An undo step carries
 the row's verdict before and after (`row_verdict_change` in `history`); an added
 row taken back keeps its place with no verdict and isn't written. Results are
@@ -520,16 +520,18 @@ Only files marked `done` are exported, from the File List's "Export clips"
 button. Clip start and stop times are rounded to whole samples, and the label
 times in the manifests are relative to the samples actually cut. Clips are
 written by `io/wav_writer.cpp`: PCM and float sources are copied byte for byte,
-other WAV formats are decoded to 32-bit float. The export currently runs on the
-UI thread.
+other WAV formats are decoded to 32-bit float.
 
 ### Background export
 
 `prepare_export` copies what the export needs from the project (files marked
 done, their confirmed labels, cached source IDs) into an `export_job`.
 `run_export` runs on a worker thread with only the job, reporting progress and
-checking for cancellation between files. When it finishes, the UI thread applies
-the results (source IDs, export records) to the project. Labelling carries on
+checking for cancellation between files. Clips are written beside their final
+names (`.part`) and moved into place only when every file is done, so a
+cancelled export changes nothing, and a file that fails keeps its earlier clips
+and entries. When it finishes, the UI thread applies the results (source IDs,
+export records) to the project. Labelling carries on
 meanwhile, and closing the app cancels and waits for it.
 
 ### Other label formats

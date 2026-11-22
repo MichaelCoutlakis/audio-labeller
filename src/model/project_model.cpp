@@ -5,6 +5,8 @@
 
 #include <algorithm>
 #include <atomic>
+#include <charconv>
+#include <cctype>
 #include <cmath>
 #include <chrono>
 #include <cstddef>
@@ -16,6 +18,7 @@
 #include <ios>
 #include <iterator>
 #include <map>
+#include <sstream>
 #include <stdexcept>
 #include <string>
 #include <utility>
@@ -57,28 +60,6 @@ std::int64_t mtime_of(const fs::path &p)
 {
     const auto t = fs::last_write_time(p).time_since_epoch();
     return std::chrono::duration_cast<std::chrono::seconds>(t).count();
-}
-
-/// Times are under different keys in version 1 label files
-double get_time(const json &record, const char *key, const char *v1_key)
-{
-    if(auto it = record.find(key); it != record.end())
-        return it->get<double>();
-    return record.at(v1_key).get<double>();
-}
-
-/// Upgrade the keys of a version 1 label record that's being kept verbatim
-json upgrade_label_record(json record)
-{
-    for(auto [v1_key, key] : {std::pair{"start [s]", "start_s"}, std::pair{"stop [s]", "stop_s"}})
-    {
-        if(auto it = record.find(v1_key); it != record.end())
-        {
-            record[key] = *it;
-            record.erase(v1_key);
-        }
-    }
-    return record;
 }
 
 /// The array under a key, or an empty one if absent
@@ -129,7 +110,15 @@ std::string to_hex(uint32_t u)
 
 uint32_t from_hex(std::string col)
 {
-    unsigned r{}, g{}, b{}, a{};
+    // #rrggbb (opaque) or #rrggbbaa
+    const bool hex = std::all_of(
+        col.begin() + std::min<std::ptrdiff_t>(1, std::ssize(col)),
+        col.end(),
+        [](unsigned char c) { return std::isxdigit(c) != 0; });
+    if(!col.starts_with('#') || (col.size() != 7U && col.size() != 9U) || !hex)
+        throw std::runtime_error(
+            "The colour \"" + col + "\" should be #rrggbb or #rrggbbaa, in hexadecimal.");
+    unsigned r{}, g{}, b{}, a{255U};
     std::sscanf(col.c_str(), "#%2x%2x%2x%2x", &r, &g, &b, &a);
     return pack_rgba(r, g, b, a);
 }
@@ -144,7 +133,6 @@ void from_json(const json &j, label_defn &d)
     j.at("class-id").get_to(d.m_id.m_id);
     j.at("class").get_to(d.m_class);
     d.m_color_rgba = from_hex(j.at("colour").get<std::string>());
-    // "kind" is ignored: every class marks regions. See project_model::notices.
 }
 
 void to_json(json &j, const label_dict &p)
@@ -349,26 +337,6 @@ project_model::project_model(const project_config &cfg) :
     auto j = json::parse(f);
     j.at("label-palette").get_to(m_label_dict);
 
-    // Palettes used to mark classes as onsets, labelled by a point in time
-    std::vector<std::string> point_classes;
-    for(const auto &defn : j.at("label-palette"))
-        if(defn.is_object() && defn.contains("kind") && defn["kind"] != "region")
-            point_classes.push_back(defn.value("class", std::string{}));
-    if(!point_classes.empty())
-    {
-        std::string names;
-        for(const auto &name : point_classes)
-            names += (names.empty() ? "" : ", ") + name;
-        m_notices.push_back(
-            fmt::format(
-                "The palette marks some classes as onsets ({}). Every class marks regions now, "
-                "from where the sound starts to where it stops, so \"kind\" is ignored and can be "
-                "removed from {}. Existing zero-length labels are kept; widen them by dragging an "
-                "edge, or with E.",
-                names,
-                generic_utf8(palette_path)));
-    }
-
     load_labels();
 }
 
@@ -387,7 +355,6 @@ project_model &project_model::operator=(project_model &&other)
     m_file_states = std::exchange(other.m_file_states, {});
     m_unresolved_labels = std::exchange(other.m_unresolved_labels, {});
     m_unresolved_files = std::exchange(other.m_unresolved_files, {});
-    m_notices = std::exchange(other.m_notices, {});
     m_revision = std::exchange(other.m_revision, 0U);
     m_saved_revision = std::exchange(other.m_saved_revision, 0U);
     return *this;
@@ -695,10 +662,7 @@ void project_model::export_csv()
     auto export_path = m_cfg.resolve_proj(m_cfg.m_export_prefix);
     export_path += ".csv";
 
-    std::ofstream f(export_path);
-    if(!f)
-        throw std::runtime_error("Failed to open CSV for export: " + generic_utf8(export_path));
-
+    std::ostringstream f;
     f << "filename,start_s,stop_s,class_label,class_id,dataset_root\n";
     f << std::fixed << std::setprecision(6);
 
@@ -714,6 +678,8 @@ void project_model::export_csv()
               << csv_escape(portable.m_root) << "\n";
         }
     }
+
+    write_file_atomically(export_path, f.str());
 
     if(!m_unresolved_labels.empty())
         spdlog::warn(
@@ -737,34 +703,10 @@ std::optional<fs::path> project_model::resolve_stored_path(
         return std::nullopt;
     }
 
-    // Older label files have no dataset root: Paths were relative to the working directory of
-    // whichever run saved them, usually with Windows separators.
-    auto stored_text = filename;
-    std::ranges::replace(stored_text, '\\', '/');
-    const auto stored = path_from_utf8(stored_text);
-
-    for(const auto &candidate : {fs::absolute(stored), m_cfg.m_filename.parent_path() / stored})
-        if(auto normal = candidate.lexically_normal(); known_files.contains(normal))
-            return normal;
-
-    // That working directory may be long gone, so accept a single file with a matching tail:
-    fs::path tail;
-    for(const auto &part : stored.relative_path())
-        if(part != ".." && part != ".")
-            tail /= part;
-    const auto suffix = "/" + generic_utf8(tail);
-
-    std::optional<fs::path> match;
-    for(const auto &file : m_files)
-    {
-        if(generic_utf8(file.m_path).ends_with(suffix))
-        {
-            if(match)
-                return std::nullopt; // Ambiguous, so don't guess
-            match = file.m_path;
-        }
-    }
-    return match;
+    // A file outside the dataset roots is written by its absolute path
+    if(auto normal = path_from_utf8(filename).lexically_normal(); known_files.contains(normal))
+        return normal;
+    return std::nullopt;
 }
 
 void project_model::load_labels()
@@ -807,7 +749,8 @@ void project_model::load_labels()
         throw std::runtime_error(
             "The label file " + generic_utf8(label_file) + " should be a JSON object, {...}.");
 
-    if(const int version = j.value("version", 1); version > label_file_version)
+    const int version = j.value("version", 1);
+    if(version > label_file_version)
         throw std::runtime_error(
             fmt::format(
                 "Label file {} is version {}, which needs a newer version of this app",
@@ -816,6 +759,14 @@ void project_model::load_labels()
 
     const auto &label_records = array_at(j, "labels");
     const auto &file_records = array_at(j, "files");
+    // Versions 2 and 3 differ only in keys a version 2 file doesn't have
+    if(version < 2 && !(label_records.empty() && file_records.empty()))
+        throw std::runtime_error(
+            fmt::format(
+                "Label file {} is version {}, which this app no longer reads. Open it with an "
+                "earlier version of the app and save it again.",
+                generic_utf8(label_file),
+                version));
 
     // If exactly one saved root has gone from the project and exactly one project root is unused
     // by the file, then the dataset was moved. Anything less clear-cut risks attaching labels to a
@@ -878,8 +829,8 @@ void project_model::load_labels()
     for(const auto &record : label_records)
     {
         const auto id = record.at("label-id").get<label_id>();
-        const auto start_s = get_time(record, "start_s", "start [s]");
-        const auto stop_s = get_time(record, "stop_s", "stop [s]");
+        const auto start_s = record.at("start_s").get<double>();
+        const auto stop_s = record.at("stop_s").get<double>();
         const auto class_id = record.at("class-id").get<uint32_t>();
         const auto class_name = record.at("class-name").get<std::string>();
 
@@ -890,7 +841,7 @@ void project_model::load_labels()
         if(!path)
         {
             used_ids.insert(id);
-            m_unresolved_labels.push_back(upgrade_label_record(record));
+            m_unresolved_labels.push_back(record);
             continue;
         }
 
@@ -965,9 +916,21 @@ void project_model::load_labels()
 
         if(auto it = record.find("channel"); it != record.end())
         {
-            const auto text = it->get<std::string>();
-            state.m_channel =
-                text == "mix" ? mixed_channels : static_cast<uint32_t>(std::stoul(text) - 1U);
+            // "mix", or a channel numbered from 1
+            const auto text = it->is_string() ? it->get<std::string>() : it->dump();
+            unsigned long channel{};
+            const auto [end, ec] = std::from_chars(text.data(), text.data() + text.size(), channel);
+            if(text == "mix")
+                state.m_channel = mixed_channels;
+            else if(ec == std::errc{} && end == text.data() + text.size() && channel >= 1U &&
+                    channel < mixed_channels)
+                state.m_channel = static_cast<uint32_t>(channel - 1U);
+            else
+                spdlog::error(
+                    "In the label file, {}'s channel is {}, not \"mix\" or a channel numbered "
+                    "from 1, so it's ignored",
+                    record.value("filename", std::string{}),
+                    it->dump());
         }
 
         if(auto it = record.find("export"); it != record.end())
@@ -995,7 +958,7 @@ void project_model::load_labels()
             "{} labels refer to audio files not found in the dataset. They will be preserved.",
             m_unresolved_labels.size());
 
-    // Any migration (older version, moved dataset, repaired IDs) is written at the next save:
+    // Any change (an older version, a moved dataset, repaired IDs) is written at the next save:
     if(serialize_labels() != text)
         ++m_revision;
 }

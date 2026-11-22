@@ -3,6 +3,7 @@
  * SPDX-FileCopyrightText: 2026 Michael Coutlakis
  *****************************************************************************/
 #include <chrono>
+#include <thread>
 #include <cmath>
 #include <numbers>
 
@@ -80,6 +81,16 @@ TEST_CASE("processes run without a shell, with exit codes, timeouts and output")
     CHECK(run_process(slow, dir.path(), out, out, &cancel).m_cancelled);
 
     CHECK_THROWS(run_process({"audio_labeller_no_such_program"}, dir.path(), out, out));
+
+#ifndef _WIN32
+    // What it started stops with it
+    const auto late = dir / "late.txt";
+    const std::vector<std::string> parent = {
+        "/bin/sh", "-c", "(sleep 0.5; echo late > late.txt) & wait"};
+    CHECK(run_process(parent, dir.path(), out, out, nullptr, 0.2).m_timed_out);
+    std::this_thread::sleep_for(std::chrono::seconds(1));
+    CHECK(!fs::exists(late));
+#endif
 }
 
 TEST_CASE("loud regions stand out from the noise floor")
@@ -106,9 +117,6 @@ TEST_CASE("loud regions stand out from the noise floor")
     CHECK(snapped[1].m_stop_s == doctest::Approx(1.26).epsilon(0.02));
     CHECK(snapped[2].m_stop_s == doctest::Approx(3.11).epsilon(0.02));
 
-    // Older projects' "onsets" option now snaps the regions' starts
-    CHECK(loudness_settings::from_json({{"onsets", true}}).m_snap_starts);
-    CHECK(!loudness_settings::from_json({{"onsets", true}, {"snap_starts", false}}).m_snap_starts);
     CHECK(loudness_settings::from_json(s.to_json()).m_snap_starts);
 
     // Silence has nothing above the absolute minimum

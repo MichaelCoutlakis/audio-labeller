@@ -6,6 +6,7 @@
 
 #include <nlohmann/json.hpp>
 
+#include "model/colour.h"
 #include "model/project_model.h"
 #include "test_utils.h"
 
@@ -116,23 +117,37 @@ TEST_CASE("loading repairs IDs and keeps labels it can't place")
     CHECK(j["labels"].dump().find("Removed") != std::string::npos);
 }
 
-TEST_CASE("version 1 label files are migrated")
+TEST_CASE("version 1 label files aren't read, and are left as they are")
 {
     test_project p(R"(["data"])", {"data/Dog goes woof.wav"});
-    p.write_labels(R"({"labels":[
-        {"filename":"..\\..\\..\\..\\Dog goes woof.wav","label-id":1,"start [s]":0.5,"stop [s]":1.5,"class-id":0,"class-name":"Dog"},
-        {"filename":"..\\nowhere.wav","label-id":2,"start [s]":2,"stop [s]":3,"class-id":0,"class-name":"Dog"}]})");
-    {
-        project_model m(p.config());
-        const auto &ls = m.get_labels(p.m_dir / "data/Dog goes woof.wav");
-        REQUIRE(ls.size() == 1);
-        CHECK(ls.begin()->m_stop_s == 1.5);
-    }
-    const auto j = p.saved();
-    CHECK(j["version"] == project_model::label_file_version);
-    CHECK(j["labels"][0]["filename"] == "Dog goes woof.wav");
-    CHECK(j["labels"][1]["start_s"] == 2.); // Unresolved, but its keys are upgraded
-    CHECK(!j["labels"][1].contains("start [s]"));
+    const auto v1 = R"({"labels":[
+        {"filename":"Dog goes woof.wav","label-id":1,"start [s]":0.5,"stop [s]":1.5,"class-id":0,"class-name":"Dog"}]})";
+    p.write_labels(v1);
+    CHECK_THROWS_WITH_AS(
+        project_model(p.config()),
+        doctest::Contains("no longer reads"),
+        std::runtime_error);
+    CHECK(read_text(p.m_dir / "labels.json") == v1);
+}
+
+TEST_CASE("bad palette colours and file channels are reported")
+{
+    test_project p(R"(["a"])", {"a/x.wav"});
+    write_text(
+        p.m_dir / "pal.json",
+        R"({"label-palette":[{"class-id":0,"class":"Dog","colour":"yellow"}]})");
+    CHECK_THROWS_WITH_AS(project_model(p.config()), doctest::Contains("#rrggbb"), std::runtime_error);
+
+    write_text(
+        p.m_dir / "pal.json",
+        R"({"label-palette":[{"class-id":0,"class":"Dog","colour":"#ccb42a"}]})");
+    p.write_labels(
+        R"({"version":3,"labels":[],"files":[
+        {"filename":"x.wav","dataset-root":"a","status":"done","channel":"0"}]})");
+    const project_model m(p.config());
+    const auto x = p.m_dir / "a/x.wav";
+    CHECK(m.get_status(x) == file_status::done);
+    CHECK(!m.find_file_state(x)->m_channel); // Ignored, rather than taken as a mix
 }
 
 TEST_CASE("labels follow an unambiguously moved dataset root only")
@@ -274,21 +289,21 @@ TEST_CASE("suggestions, scores, onsets and channels round trip")
     CHECK(!p.saved()["files"].dump().contains("channel"));
 }
 
-TEST_CASE("project default channel, and palettes that mark classes as onsets")
+TEST_CASE("project default channel, and palette colours")
 {
     test_project p(R"(["a"])", {"a/x.wav"});
     write_text(
         p.m_dir / "pal.json",
-        R"({"label-palette":[{"class-id":0,"class":"Dog","colour":"#ccb42aab","kind":"onset"},{"class-id":1,"class":"Rain","colour":"#ccb42aab"}]})");
+        R"({"label-palette":[{"class-id":0,"class":"Dog","colour":"#ccb42aab"},{"class-id":1,"class":"Rain","colour":"#3a9fbd"}]})");
     write_text(
         p.m_dir / "proj.json",
         R"({"dataset-roots":["a"],"export-prefix":"out","label-palette":"pal.json","label-file":"labels.json","channel":2})");
     const auto x = p.m_dir / "a/x.wav";
     project_model m(p.config());
-    // Every class marks regions: an old palette's "kind" is ignored, with a notice naming them
     CHECK(m.m_label_dict.size() == 2);
-    REQUIRE(m.notices().size() == 1);
-    CHECK(m.notices().front().contains("(Dog)"));
+    // Without an alpha, a colour is opaque
+    CHECK(m.m_label_dict.find_ptr(label_defn_id{1})->m_color_rgba == pack_rgba(0x3a, 0x9f, 0xbd, 0xff));
+    CHECK(m.m_label_dict.find_ptr(label_defn_id{0})->m_color_rgba == pack_rgba(0xcc, 0xb4, 0x2a, 0xab));
     CHECK(m.get_channel(x) == 1U);
     m.set_channel(x, std::nullopt); // An explicit mix overrides the project's channel
     CHECK(!m.get_channel(x));

@@ -107,6 +107,7 @@ struct clip_manifest
 
     std::filesystem::path m_path;         ///< The list
     std::filesystem::path m_results_path; ///< Beside it, see results_path
+    std::string m_list_hash; ///< Of the list as it was read, so results name what was reviewed
     std::vector<std::string> m_columns;
     list_columns m_index;
     std::vector<row> m_rows;

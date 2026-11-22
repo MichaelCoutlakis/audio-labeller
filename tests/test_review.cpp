@@ -83,21 +83,6 @@ TEST_CASE("labels play from the pre-roll to their stop, zero-length ones a littl
     CHECK(long_view.second == doctest::Approx(6.5));
 }
 
-TEST_CASE("review settings read the old onset keys")
-{
-    const auto old = review_settings::from_json({{"onset_pre_s", 0.05}, {"onset_post_s", 0.3}});
-    CHECK(old.m_pre_roll_s == 0.05);
-    CHECK(old.m_point_post_s == 0.3);
-    // The new keys win, and are what's written
-    const auto both = review_settings::from_json({{"onset_pre_s", 0.05}, {"pre_roll_s", 0.1}});
-    CHECK(both.m_pre_roll_s == 0.1);
-    const auto j = old.to_json();
-    CHECK(j.contains("pre_roll_s"));
-    CHECK(j.contains("point_post_s"));
-    CHECK(!j.contains("onset_pre_s"));
-    CHECK(!j.contains("onset_post_s"));
-}
-
 TEST_CASE("the review queue runs across files, by score if there is one")
 {
     review_project p;

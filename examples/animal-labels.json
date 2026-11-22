@@ -44,10 +44,10 @@
       "dataset-root": "audio",
       "filename": "farm.wav",
       "label-id": 5,
+      "score": 0.4099999964237213,
       "start_s": 10.0,
-      "stop_s": 10.26,
       "state": "suggested",
-      "score": 0.41
+      "stop_s": 10.26
     },
     {
       "class-id": 1,
@@ -55,10 +55,10 @@
       "dataset-root": "audio",
       "filename": "farm.wav",
       "label-id": 6,
+      "score": 0.8299999833106995,
       "start_s": 12.5,
-      "stop_s": 13.2,
       "state": "suggested",
-      "score": 0.83
+      "stop_s": 13.2
     },
     {
       "class-id": 1,
@@ -66,10 +66,10 @@
       "dataset-root": "audio",
       "filename": "farm.wav",
       "label-id": 7,
+      "score": 0.3499999940395355,
       "start_s": 15.2,
-      "stop_s": 15.6,
       "state": "suggested",
-      "score": 0.35
+      "stop_s": 15.6
     }
   ],
   "version": 3
